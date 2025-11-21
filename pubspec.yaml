@@ -14,6 +14,7 @@ dependencies:
   shared_preferences: ^2.2.2
   carousel_slider_plus: ^7.1.1
   cupertino_icons: ^1.0.8
+  scrollable_positioned_list: ^0.3.8 # Added for category scrolling
 
 dev_dependencies:
   flutter_test:
@@ -24,7 +25,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # [!] 에러 방지를 위해 assets 설정을 잠시 껐습니다.
-  # 앱이 정상 실행되는 것을 확인한 뒤, 나중에 주석(#)을 풀고 이미지를 등록하세요.
-  # assets:
-  #   - assets/images/
+  assets:
+    - assets/images/
