@@ -1,0 +1,30 @@
+name: needsfine_app
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  shared_preferences: ^2.2.2
+  carousel_slider_plus: ^7.1.1
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  # [!] 에러 방지를 위해 assets 설정을 잠시 껐습니다.
+  # 앱이 정상 실행되는 것을 확인한 뒤, 나중에 주석(#)을 풀고 이미지를 등록하세요.
+  # assets:
+  #   - assets/images/
