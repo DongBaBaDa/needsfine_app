@@ -52,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const Center(
               child: Text(
                 "NeedsFine",
-                style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: kNeedsFinePurple, fontFamily: 'GmarketSans'),
+                style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.black, fontFamily: 'GmarketSans'),
               ),
             ),
             const SizedBox(height: 8),
@@ -143,8 +143,6 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         elevation: 0,
       ),
-      // The Row was replaced by a simple Text widget to ensure perfect centering.
-      // The logo will be added back later.
       child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
     );
   }
