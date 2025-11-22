@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class CategoryList extends StatelessWidget {
@@ -17,12 +18,14 @@ class CategoryList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int itemCount = 1000; // A large number for infinite scroll effect
-    const double itemWidth = 100.0; // Fixed width for each category item
+    final int itemCount = 1000; 
+    const double itemWidth = 100.0;
+    final double screenWidth = MediaQuery.of(context).size.width;
 
     return SizedBox(
       height: 40,
       child: ScrollablePositionedList.builder(
+        padding: EdgeInsets.symmetric(horizontal: (screenWidth - itemWidth) / 2),
         initialScrollIndex: itemCount ~/ 2,
         itemScrollController: scrollController,
         scrollDirection: Axis.horizontal,
@@ -42,7 +45,7 @@ class CategoryList extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? Colors.blue : Colors.grey,
+                      color: isSelected ? kNeedsFinePurple : Colors.grey,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -50,7 +53,7 @@ class CategoryList extends StatelessWidget {
                     Container(
                       height: 2,
                       width: 40,
-                      color: Colors.blue,
+                      color: kNeedsFinePurple,
                     )
                 ],
               ),

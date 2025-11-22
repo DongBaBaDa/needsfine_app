@@ -1,10 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:needsfine_app/widgets/ranking_widget.dart'; // [!] '../widgets/' 경로로 수정
-import 'package:needsfine_app/main.dart'; // [!] 전역 변수(notificationCount) 때문에 임시로 Import
+import 'package:needsfine_app/widgets/ranking_widget.dart';
+import 'package:needsfine_app/main.dart'; // Reverted import
 
-// --- [ ✅ ✅ 3. '홈' '화면' ] ---
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  final List<Map<String, dynamic>> userRankings = const [
+    {'rank': 1, 'nickname': '리뷰의 신', 'score': 9850, 'icon': 'assets/images/painy.png'},
+    {'rank': 2, 'nickname': '맛잘알', 'score': 9700, 'icon': 'assets/images/painy2.png'},
+    {'rank': 3, 'nickname': '미식가', 'score': 9540, 'icon': 'assets/images/painy3.png'},
+    {'rank': 4, 'nickname': '탐험가', 'score': 9210, 'icon': 'assets/images/painy.png'},
+    {'rank': 5, 'nickname': '프로맛집러', 'score': 8900, 'icon': 'assets/images/painy2.png'},
+    {'rank': 6, 'nickname': '신입', 'score': 8750, 'icon': 'assets/images/painy3.png'},
+    {'rank': 7, 'nickname': 'NeedsFineUser123', 'score': 8600, 'icon': 'assets/images/painy.png'},
+    {'rank': 8, 'nickname': '숨은고수', 'score': 8450, 'icon': 'assets/images/painy2.png'},
+    {'rank': 9, 'nickname': '단골손님', 'score': 8200, 'icon': 'assets/images/painy3.png'},
+    {'rank': 10, 'nickname': '새내기', 'score': 8100, 'icon': 'assets/images/painy.png'},
+    {'rank': 11, 'nickname': '리뷰어', 'score': 7950, 'icon': 'assets/images/painy2.png'},
+    {'rank': 12, 'nickname': '맛집찾아삼만리', 'score': 7800, 'icon': 'assets/images/painy3.png'},
+    {'rank': 13, 'nickname': '냠냠', 'score': 7650, 'icon': 'assets/images/painy.png'},
+    {'rank': 14, 'nickname': '쩝쩝박사', 'score': 7500, 'icon': 'assets/images/painy2.png'},
+    {'rank': 15, 'nickname': '푸드파이터', 'score': 7350, 'icon': 'assets/images/painy3.png'},
+    {'rank': 16, 'nickname': '또왔어요', 'score': 7200, 'icon': 'assets/images/painy.png'},
+    {'rank': 17, 'nickname': '하이', 'score': 7050, 'icon': 'assets/images/painy2.png'},
+    {'rank': 18, 'nickname': '헬로', 'score': 6900, 'icon': 'assets/images/painy3.png'},
+    {'rank': 19, 'nickname': '반가워요', 'score': 6750, 'icon': 'assets/images/painy.png'},
+    {'rank': 20, 'nickname': '마지막주자', 'score': 6600, 'icon': 'assets/images/painy2.png'},
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +44,7 @@ class HomeScreen extends StatelessWidget {
             leadingWidth: 120,
             actions: [
               ValueListenableBuilder<int>(
-                valueListenable: notificationCount, // [!] main.dart의 전역 변수 참조
+                valueListenable: notificationCount, 
                 builder: (context, count, child) {
                   return Stack(
                     alignment: Alignment.center,
@@ -77,62 +99,44 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           SliverToBoxAdapter(
-            child: RankingWidget(), // [!] 분리된 위젯
-          ),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                return ListTile(
-                  leading: CircleAvatar(child: Text("${index + 1}")),
-                  title: Text("'AI'가 '검증'한 '매장' ${index + 1}"),
-                  subtitle: const Text("홀 4.5 / 배달 2.8"),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {},
-                );
-              },
-              childCount: 10,
-            ),
+            child: RankingWidget(), 
           ),
           SliverToBoxAdapter(
-            child: Container(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Top 10 NeedsFine 매장",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 120,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: 10,
-                      itemBuilder: (context, index) {
-                        return Card(
-                          margin: const EdgeInsets.only(right: 10),
-                          child: Container(
-                            width: 100,
-                            height: 100,
-                            alignment: Alignment.center,
-                            child: Text("매장 ${index+1}"),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+              child: Text(
+                "니즈파인 랭킹",
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: Container(
-              height: 100,
-              color: Colors.grey[300],
-              margin: const EdgeInsets.all(16.0),
-              alignment: Alignment.center,
-              child: const Text("'광고' '배너' ('AI 탐정' '인증' '존') '공간'"),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final user = userRankings[index];
+                return ListTile(
+                  leading: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 30, 
+                        child: Text(
+                          '${user["rank"]}',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      CircleAvatar(
+                        backgroundImage: AssetImage(user['icon']!),
+                      ),
+                    ],
+                  ),
+                  title: Text(user['nickname']!),
+                  subtitle: Text("${user['score']}점"),
+                  onTap: () {},
+                );
+              },
+              childCount: userRankings.length,
             ),
           ),
         ],

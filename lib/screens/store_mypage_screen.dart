@@ -1,28 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:needsfine_app/main.dart'; // For the global 'isLoggedIn'
+import 'package:needsfine_app/main.dart'; // Reverted import
 
-// '매장' '회원가입' '완료' '시' '이동'
 class StoreMyPageScreen extends StatelessWidget {
   const StoreMyPageScreen({super.key});
+
   @override
-  Widget build(BuildContext context) { // 오타 수정됨
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("매장 마이페이지")),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text("매장 마이페이지 (개발 중)"),
-            ElevatedButton(
-              onPressed: () {
-                isLoggedIn.value = false; // [!] main.dart의 전역 변수 참조
-                Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-              },
-              child: const Text("로그아웃 (테스트용)"),
-            )
-          ],
-        ),
+      appBar: AppBar(
+        title: const Text("가게 마이페이지"),
+        actions: [
+          IconButton(icon: const Icon(Icons.logout), onPressed: () {
+            isLoggedIn.value = false;
+            Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+          })
+        ],
       ),
+      body: const Center(child: Text("가게 마이페이지입니다.")),
     );
   }
 }

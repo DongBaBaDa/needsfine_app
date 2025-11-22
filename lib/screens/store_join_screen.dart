@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:needsfine_app/main.dart'; // For the global 'isLoggedIn'
+import 'package:needsfine_app/main.dart'; // Reverted import
 
-// --- [ ✅ ✅ 4-1-2-1. '매장' '회원가입' ] ---
 class StoreJoinScreen extends StatefulWidget {
   const StoreJoinScreen({super.key});
 
@@ -10,89 +9,60 @@ class StoreJoinScreen extends StatefulWidget {
 }
 
 class _StoreJoinScreenState extends State<StoreJoinScreen> {
-  final _emailCertController = TextEditingController();
 
-  void _sendCertCode() {
-    _emailCertController.text = "1234";
+  void _submit() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("더미 인증번호 [1234]가 발송되었습니다.")),
+      const SnackBar(content: Text("가게 회원가입이 완료되었습니다.")),
     );
-  }
-
-  void _searchAddress() {
-    showDialog(
-      context: context,
-      builder: (ctx) => const AddressSearchPopup(),
-    );
-  }
-
-  void _handleJoin() {
-    isLoggedIn.value = true; // [!] main.dart의 전역 변수 참조
+    isLoggedIn.value = true;
     Navigator.pushNamedAndRemoveUntil(context, '/store-mypage', (route) => false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("매장 회원가입"),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
-        ),
-      ),
+      appBar: AppBar(title: const Text("가게 회원가입")),
       body: ListView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(24),
         children: [
-          TextFormField(decoration: const InputDecoration(labelText: "아이디")),
-          TextFormField(decoration: const InputDecoration(labelText: "비밀번호"), obscureText: true),
-          TextFormField(decoration: const InputDecoration(labelText: "비밀번호 확인"), obscureText: true),
-          Row(
-            children: [
-              Expanded(child: TextFormField(decoration: const InputDecoration(labelText: "이메일"))),
-              ElevatedButton(onPressed: _sendCertCode, child: const Text("인증번호 받기")),
-            ],
-          ),
-          TextFormField(
-            controller: _emailCertController,
-            decoration: const InputDecoration(labelText: "인증번호 입력"),
-          ),
-          TextFormField(decoration: const InputDecoration(labelText: "매장 이름")),
-          Row(
-            children: [
-              Expanded(child: TextFormField(
-                  decoration: const InputDecoration(labelText: "매장 주소"),
-                  readOnly: true
-              )),
-              IconButton(onPressed: _searchAddress, icon: const Icon(Icons.search)),
-            ],
-          ),
-          TextFormField(decoration: const InputDecoration(labelText: "상세주소")),
-          TextFormField(decoration: const InputDecoration(labelText: "전화번호")),
-          const SizedBox(height: 30),
+          _buildSectionTitle("기본 정보"),
+          const TextField(decoration: InputDecoration(labelText: "아이디 (영문, 숫자 포함 6-12자)")),
+          const SizedBox(height: 12),
+          const TextField(decoration: InputDecoration(labelText: "비밀번호 (영문, 숫자, 특수문자 포함 8자 이상)")),
+          const SizedBox(height: 12),
+          const TextField(decoration: InputDecoration(labelText: "비밀번호 확인")),
+          const SizedBox(height: 32),
+
+          _buildSectionTitle("사업자 정보"),
+          const TextField(decoration: InputDecoration(labelText: "대표자명")),
+          const SizedBox(height: 12),
+          const TextField(decoration: InputDecoration(labelText: "사업자 등록번호")),
+          const SizedBox(height: 12),
+          const TextField(decoration: InputDecoration(labelText: "이메일")),
+          const SizedBox(height: 32),
+
+          _buildSectionTitle("가게 정보"),
+          const TextField(decoration: InputDecoration(labelText: "가게 이름")),
+          const SizedBox(height: 12),
+          const TextField(decoration: InputDecoration(labelText: "가게 주소")),
+          const SizedBox(height: 12),
+          const TextField(decoration: InputDecoration(labelText: "업종")),
+          const SizedBox(height: 40),
+
           ElevatedButton(
-            onPressed: _handleJoin,
-            style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-            child: const Text("회원가입"),
+            onPressed: _submit,
+            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 50)),
+            child: const Text("가입 완료"),
           ),
         ],
       ),
     );
   }
-}
 
-// '주소' '검색' '팝업' ('더미')
-class AddressSearchPopup extends StatelessWidget {
-  const AddressSearchPopup({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("주소 검색"),
-      content: const Text("('Daum' '주소' 'API' '연동' '필요')"),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("닫기")),
-      ],
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
     );
   }
 }
