@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
 
-// Screen imports must come after package imports
+import 'package:needsfine_app/screens/address_search_screen.dart';
 import 'package:needsfine_app/screens/splash_screen.dart';
 import 'package:needsfine_app/screens/initial_screen.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
@@ -16,13 +16,12 @@ import 'package:needsfine_app/screens/user_join_screen.dart';
 import 'package:needsfine_app/screens/user_mypage_screen.dart';
 import 'package:needsfine_app/screens/store_mypage_screen.dart';
 import 'package:needsfine_app/screens/sanctuary_screen.dart';
-import 'package:needsfine_app/screens/menu_screen.dart';
+import 'package:needsfine_app/screens/ranking_screen.dart'; 
 import 'package:needsfine_app/screens/store_detail_screen.dart';
 import 'package:needsfine_app/screens/write_review_screen.dart';
 import 'package:needsfine_app/screens/nearby_screen.dart';
 import 'package:needsfine_app/screens/my_taste_screen.dart';
 
-// Global variables declared after all imports
 final ValueNotifier<bool> isLoggedIn = ValueNotifier(false);
 final ValueNotifier<int> notificationCount = ValueNotifier(3);
 
@@ -39,18 +38,19 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'NeedsFine',
-      theme: needsFineTheme, 
+      theme: needsFineTheme,
       debugShowCheckedModeBanner: false,
       initialRoute: initialRoute,
       routes: {
         '/splash': (context) => const SplashScreen(),
         '/initial': (context) => const InitialScreen(),
-        '/home': (context) => const MainShell(), 
+        '/home': (context) => const MainShell(),
         '/location': (context) => const LocationScreen(),
         '/notification': (context) => const NotificationScreen(),
         '/notification-detail': (context) =>
-        const NotificationDetailScreen(message: "알림 상세 내용"),
+            const NotificationDetailScreen(message: "알림 상세 내용"),
         '/search': (context) => const SearchScreen(),
+        '/address-search': (context) => const AddressSearchScreen(),
         '/login': (context) => const LoginScreen(),
         '/find-account': (context) => const IDPWFindScreen(),
         '/join-select': (context) => const JoinSelectScreen(),
@@ -59,7 +59,7 @@ class MyApp extends StatelessWidget {
         '/user-mypage': (context) => const UserMyPageScreen(),
         '/store-mypage': (context) => const StoreMyPageScreen(),
         '/sanctuary': (context) => const SanctuaryScreen(),
-        '/menu': (context) => const MenuScreen(),
+        '/menu': (context) => const RankingScreen(), // Changed from MenuScreen
         '/store-detail': (context) => const StoreDetailScreen(),
         '/write-review': (context) => const WriteReviewScreen(),
         '/nearby': (context) => const NearbyScreen(),
@@ -69,7 +69,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Placeholder for NotificationDetailScreen
 class NotificationDetailScreen extends StatelessWidget {
   final String message;
   const NotificationDetailScreen({super.key, required this.message});

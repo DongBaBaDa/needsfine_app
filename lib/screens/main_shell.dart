@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-// 각 탭에 들어갈 화면들 import
-import 'home_screen.dart';
-import 'nearby_screen.dart';
-import 'user_mypage_screen.dart'; // 마이파인
-import 'sanctuary_screen.dart';   // 성지
-import 'menu_screen.dart';        // 메뉴
-import 'under_construction_screen.dart'; // 홈, 내 위치 (임시 연결)
+import 'package:needsfine_app/screens/home_screen.dart';
+import 'package:needsfine_app/screens/ranking_screen.dart'; 
+import 'package:needsfine_app/screens/nearby_screen.dart';
+import 'package:needsfine_app/screens/sanctuary_screen.dart';
+import 'package:needsfine_app/screens/user_mypage_screen.dart';
+import 'package:needsfine_app/main.dart'; 
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -17,38 +16,56 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
 
-  // 탭별 화면 리스트
-  final List<Widget> _screens = [
-    const HomeScreen(),       // 0: 홈 (아직 없으면 공사중)
-    const MenuScreen(),                                 // 1: 메뉴 (아이콘 격자)
-    const NearbyScreen(),    // 2: 내 위치 (아직 없으면 공사중)
-    const SanctuaryScreen(),                            // 3: 성지 (리스트)
-    const UserMyPageScreen(),                           // 4: 마이파인
+  static const List<Widget> _widgetOptions = <Widget>[
+    HomeScreen(),
+    RankingScreen(), // Changed from MenuScreen
+    NearbyScreen(),
+    SanctuaryScreen(),
+    UserMyPageScreen(),
   ];
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    if (index == 4 && !isLoggedIn.value) {
+      Navigator.pushNamed(context, '/login');
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex], // 선택된 화면 보여주기
+      body: Center(
+        child: _widgetOptions.elementAt(_selectedIndex),
+      ),
       bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed, // 탭이 4개 이상일 때 필수
+        items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: '홈',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.leaderboard_outlined), // Changed Icon
+            label: '랭킹', // Changed Label
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.map_outlined),
+            label: '내 주변',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shield_outlined),
+            label: '성지',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            label: '마이파인',
+          ),
+        ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view), label: '메뉴'),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: '내 위치'),
-          BottomNavigationBarItem(icon: Icon(Icons.flag), label: '성지'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '마이파인'),
-        ],
+        type: BottomNavigationBarType.fixed, 
       ),
     );
   }

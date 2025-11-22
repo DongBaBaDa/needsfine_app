@@ -14,7 +14,10 @@ dependencies:
   shared_preferences: ^2.2.2
   carousel_slider_plus: ^7.1.1
   cupertino_icons: ^1.0.8
-  scrollable_positioned_list: ^0.3.8 # Added for category scrolling
+  scrollable_positioned_list: ^0.3.8
+  google_maps_flutter: ^2.5.3
+  geolocator: ^11.0.0 # Added for location services
+  permission_handler: ^11.3.1 # Added for permission handling
 
 dev_dependencies:
   flutter_test:
@@ -25,5 +28,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  assets:
-    - assets/images/
+  # assets:
+  #   - assets/images/

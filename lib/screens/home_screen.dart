@@ -1,31 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/widgets/ranking_widget.dart';
-import 'package:needsfine_app/main.dart'; // Reverted import
+import 'package:needsfine_app/main.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  final List<Map<String, dynamic>> userRankings = const [
-    {'rank': 1, 'nickname': '리뷰의 신', 'score': 9850, 'icon': 'assets/images/painy.png'},
-    {'rank': 2, 'nickname': '맛잘알', 'score': 9700, 'icon': 'assets/images/painy2.png'},
-    {'rank': 3, 'nickname': '미식가', 'score': 9540, 'icon': 'assets/images/painy3.png'},
-    {'rank': 4, 'nickname': '탐험가', 'score': 9210, 'icon': 'assets/images/painy.png'},
-    {'rank': 5, 'nickname': '프로맛집러', 'score': 8900, 'icon': 'assets/images/painy2.png'},
-    {'rank': 6, 'nickname': '신입', 'score': 8750, 'icon': 'assets/images/painy3.png'},
-    {'rank': 7, 'nickname': 'NeedsFineUser123', 'score': 8600, 'icon': 'assets/images/painy.png'},
-    {'rank': 8, 'nickname': '숨은고수', 'score': 8450, 'icon': 'assets/images/painy2.png'},
-    {'rank': 9, 'nickname': '단골손님', 'score': 8200, 'icon': 'assets/images/painy3.png'},
-    {'rank': 10, 'nickname': '새내기', 'score': 8100, 'icon': 'assets/images/painy.png'},
-    {'rank': 11, 'nickname': '리뷰어', 'score': 7950, 'icon': 'assets/images/painy2.png'},
-    {'rank': 12, 'nickname': '맛집찾아삼만리', 'score': 7800, 'icon': 'assets/images/painy3.png'},
-    {'rank': 13, 'nickname': '냠냠', 'score': 7650, 'icon': 'assets/images/painy.png'},
-    {'rank': 14, 'nickname': '쩝쩝박사', 'score': 7500, 'icon': 'assets/images/painy2.png'},
-    {'rank': 15, 'nickname': '푸드파이터', 'score': 7350, 'icon': 'assets/images/painy3.png'},
-    {'rank': 16, 'nickname': '또왔어요', 'score': 7200, 'icon': 'assets/images/painy.png'},
-    {'rank': 17, 'nickname': '하이', 'score': 7050, 'icon': 'assets/images/painy2.png'},
-    {'rank': 18, 'nickname': '헬로', 'score': 6900, 'icon': 'assets/images/painy3.png'},
-    {'rank': 19, 'nickname': '반가워요', 'score': 6750, 'icon': 'assets/images/painy.png'},
-    {'rank': 20, 'nickname': '마지막주자', 'score': 6600, 'icon': 'assets/images/painy2.png'},
+  // Data for menu categories
+  final List<Map<String, dynamic>> menuCategories = const [
+    {'icon': Icons.person_outline, 'label': '1인분'},
+    {'icon': Icons.local_pizza_outlined, 'label': '피자'},
+    {'icon': Icons.fastfood_outlined, 'label': '치킨'},
+    {'icon': Icons.ramen_dining_outlined, 'label': '일식'},
+    {'icon': Icons.tapas_outlined, 'label': '중식'},
+    {'icon': Icons.rice_bowl_outlined, 'label': '한식'},
+    {'icon': Icons.cake_outlined, 'label': '디저트'},
+    {'icon': Icons.nightlife, 'label': '야식'},
+    {'icon': Icons.local_bar_outlined, 'label': '술집'},
+    {'icon': Icons.more_horiz, 'label': '더보기'},
   ];
 
   @override
@@ -44,7 +35,7 @@ class HomeScreen extends StatelessWidget {
             leadingWidth: 120,
             actions: [
               ValueListenableBuilder<int>(
-                valueListenable: notificationCount, 
+                valueListenable: notificationCount,
                 builder: (context, count, child) {
                   return Stack(
                     alignment: Alignment.center,
@@ -98,45 +89,40 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ),
+          // Real-time search ranking widget
           SliverToBoxAdapter(
-            child: RankingWidget(), 
+            child: RankingWidget(),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-              child: Text(
-                "니즈파인 랭킹",
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          // Menu Category Grid
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                crossAxisSpacing: 8.0,
+                mainAxisSpacing: 16.0,
+                childAspectRatio: 0.9,
               ),
-            ),
-          ),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final user = userRankings[index];
-                return ListTile(
-                  leading: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 30, 
-                        child: Text(
-                          '${user["rank"]}',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      CircleAvatar(
-                        backgroundImage: AssetImage(user['icon']!),
-                      ),
-                    ],
-                  ),
-                  title: Text(user['nickname']!),
-                  subtitle: Text("${user['score']}점"),
-                  onTap: () {},
-                );
-              },
-              childCount: userRankings.length,
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final category = menuCategories[index];
+                  return InkWell(
+                    onTap: () {
+                      // TODO: Navigate to category-specific screen
+                    },
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(category['icon'] as IconData, size: 32),
+                        const SizedBox(height: 8),
+                        Text(category['label'] as String),
+                      ],
+                    ),
+                  );
+                },
+                childCount: menuCategories.length,
+              ),
             ),
           ),
         ],
