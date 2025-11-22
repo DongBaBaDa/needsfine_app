@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:carousel_slider_plus/carousel_slider_plus.dart';
 
-// --- '요구사항' 4. '검색어' '순위' '위젯' ('별도' '분리') ---
 class RankingWidget extends StatelessWidget {
   RankingWidget({super.key});
 
@@ -19,22 +18,22 @@ class RankingWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // '데이터'를 '3개'씩 '청크(chunk)'
     List<List<Map<String, dynamic>>> chunks = [];
     for (var i = 0; i < rankings.length; i += 3) {
       chunks.add(rankings.sublist(i, i + 3 > rankings.length ? rankings.length : i + 3));
     }
 
     return Container(
-      height: 150, // '슬라이드' '높이' '지정'
+      height: 150,
       padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: CarouselSlider(
         options: CarouselOptions(
           height: 130,
-          autoPlay: true, // '자동' '넘김'
+          autoPlay: true,
           enlargeCenterPage: false,
-          viewportFraction: 1.0, // '하나'의 '페이지'가 '꽉' '차게'
+          viewportFraction: 1.0,
           autoPlayInterval: const Duration(seconds: 5),
+          pauseAutoPlayOnTouch: true, // 2. Pause auto-play on touch
         ),
         items: chunks.map((chunk) {
           return Builder(
@@ -54,7 +53,6 @@ class RankingWidget extends StatelessWidget {
   }
 }
 
-// '검색어' '순위' '항목' 'UI'
 class RankingItem extends StatelessWidget {
   final Map<String, dynamic> item;
   const RankingItem({super.key, required this.item});
@@ -80,13 +78,19 @@ class RankingItem extends StatelessWidget {
       changeWidget = const Text("-", style: TextStyle(color: Colors.grey));
     }
 
-    return Row(
-      children: [
-        Text("${item['rank']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        const SizedBox(width: 12),
-        Expanded(child: Text(item['term'], style: const TextStyle(fontSize: 16))),
-        changeWidget,
-      ],
+    return InkWell(
+      onTap: () {
+        // 3. Navigate to search screen with the search term
+        Navigator.pushNamed(context, '/search', arguments: item['term']);
+      },
+      child: Row(
+        children: [
+          Text("${item['rank']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(item['term'], style: const TextStyle(fontSize: 16))),
+          changeWidget,
+        ],
+      ),
     );
   }
 }
