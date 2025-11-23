@@ -16,11 +16,12 @@ import 'package:needsfine_app/screens/user_join_screen.dart';
 import 'package:needsfine_app/screens/user_mypage_screen.dart';
 import 'package:needsfine_app/screens/store_mypage_screen.dart';
 import 'package:needsfine_app/screens/sanctuary_screen.dart';
-import 'package:needsfine_app/screens/ranking_screen.dart'; 
+import 'package:needsfine_app/screens/ranking_screen.dart';
 import 'package:needsfine_app/screens/store_detail_screen.dart';
 import 'package:needsfine_app/screens/write_review_screen.dart';
 import 'package:needsfine_app/screens/nearby_screen.dart';
 import 'package:needsfine_app/screens/my_taste_screen.dart';
+import 'package:needsfine_app/screens/public_profile_screen.dart';
 
 final ValueNotifier<bool> isLoggedIn = ValueNotifier(false);
 final ValueNotifier<int> notificationCount = ValueNotifier(3);
@@ -48,7 +49,7 @@ class MyApp extends StatelessWidget {
         '/location': (context) => const LocationScreen(),
         '/notification': (context) => const NotificationScreen(),
         '/notification-detail': (context) =>
-            const NotificationDetailScreen(message: "알림 상세 내용"),
+        const NotificationDetailScreen(message: "알림 상세 내용"),
         '/search': (context) => const SearchScreen(),
         '/address-search': (context) => const AddressSearchScreen(),
         '/login': (context) => const LoginScreen(),
@@ -59,11 +60,12 @@ class MyApp extends StatelessWidget {
         '/user-mypage': (context) => const UserMyPageScreen(),
         '/store-mypage': (context) => const StoreMyPageScreen(),
         '/sanctuary': (context) => const SanctuaryScreen(),
-        '/menu': (context) => const RankingScreen(), // Changed from MenuScreen
+        '/menu': (context) => const RankingScreen(),
         '/store-detail': (context) => const StoreDetailScreen(),
         '/write-review': (context) => const WriteReviewScreen(),
         '/nearby': (context) => const NearbyScreen(),
         '/mytaste': (context) => const MyTasteScreen(),
+        '/public-profile': (context) => PublicProfileScreen(),
       },
     );
   }
