@@ -11,11 +11,18 @@ class NearbyScreen extends StatefulWidget {
   State<NearbyScreen> createState() => _NearbyScreenState();
 }
 
-class _NearbyScreenState extends State<NearbyScreen> {
+class _NearbyScreenState extends State<NearbyScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final Completer<GoogleMapController> _controller = Completer();
   final Set<Marker> _markers = {};
 
-  // 초기 카메라 위치 (서울 시청)
+  // 고유 Key (탭 전환시 재생성 방지)
+  final Key _mapKey = const ValueKey('NearbyGoogleMap');
+
+  // 초기 위치
   static const CameraPosition _initialPosition = CameraPosition(
     target: LatLng(37.5665, 126.9780),
     zoom: 14.0,
@@ -27,20 +34,19 @@ class _NearbyScreenState extends State<NearbyScreen> {
     _requestLocationPermission();
   }
 
-  // 1. 위치 정보 권한 요청
   Future<void> _requestLocationPermission() async {
     final status = await Permission.location.request();
     if (status == PermissionStatus.granted) {
       _getCurrentLocation();
     } else {
-      // 권한이 거부되었을 때 사용자에게 알림
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('위치 권한이 거부되었습니다. 지도 기능을 사용할 수 없습니다.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('위치 권한이 거부되어 지도 기능을 사용할 수 없습니다.')),
+        );
+      }
     }
   }
 
-  // 2. 현재 위치 가져오기
   Future<void> _getCurrentLocation() async {
     try {
       Position position = await Geolocator.getCurrentPosition(
@@ -49,52 +55,56 @@ class _NearbyScreenState extends State<NearbyScreen> {
       _moveCameraToCurrentLocation(position);
       _addMarkerForCurrentLocation(position);
     } catch (e) {
-      print("현재 위치를 가져오는 데 실패했습니다: $e");
-      // 위치를 가져올 수 없을 때 사용자에게 알림
-       ScaffoldMessenger.of(context).showSnackBar(
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('현재 위치를 가져올 수 없습니다.')),
       );
     }
   }
 
-  // 3. 지도를 현재 위치로 이동
   Future<void> _moveCameraToCurrentLocation(Position position) async {
-    final GoogleMapController controller = await _controller.future;
-    final newCameraPosition = CameraPosition(
-      target: LatLng(position.latitude, position.longitude),
-      zoom: 16.0, // 더 가까이 확대
+    if (!_controller.isCompleted) return;
+    final controller = await _controller.future;
+    controller.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(position.latitude, position.longitude),
+          zoom: 16.0,
+        ),
+      ),
     );
-    controller.animateCamera(CameraUpdate.newCameraPosition(newCameraPosition));
   }
 
-  // 4. 현재 위치에 마커 추가
   void _addMarkerForCurrentLocation(Position position) {
-    setState(() {
-      _markers.add(
-        Marker(
-          markerId: const MarkerId('currentLocation'),
-          position: LatLng(position.latitude, position.longitude),
-          infoWindow: const InfoWindow(title: '현재 위치'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-        ),
-      );
-    });
+    _markers.add(
+      Marker(
+        markerId: const MarkerId('currentLocation'),
+        position: LatLng(position.latitude, position.longitude),
+        infoWindow: const InfoWindow(title: '현재 위치'),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('내 주변'),
-        centerTitle: false,
-      ),
+      appBar: AppBar(title: const Text('내 주변')),
       body: GoogleMap(
+        key: _mapKey,
         mapType: MapType.normal,
         initialCameraPosition: _initialPosition,
-        onMapCreated: (GoogleMapController controller) {
-          _controller.complete(controller);
+        onMapCreated: (controller) {
+          if (!_controller.isCompleted) {
+            _controller.complete(controller);
+          }
         },
-        markers: _markers, 
+        markers: _markers,
+        myLocationButtonEnabled: true,
+        zoomGesturesEnabled: true,
+        compassEnabled: true,
       ),
     );
   }
