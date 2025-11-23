@@ -10,8 +10,13 @@ class RankingScreen extends StatefulWidget {
 
 enum RankingType { personal, store }
 
-class _RankingScreenState extends State<RankingScreen> {
+class _RankingScreenState extends State<RankingScreen>
+    with SingleTickerProviderStateMixin {
   RankingType _selectedRanking = RankingType.personal;
+
+  // 반짝 애니메이션용 컨트롤러
+  late AnimationController _controller;
+  late Animation<double> _glowAnimation;
 
   final List<Map<String, dynamic>> userRankings = const [
     {'rank': 1, 'nickname': '리뷰의 신', 'score': 9850},
@@ -30,27 +35,52 @@ class _RankingScreenState extends State<RankingScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _glowAnimation = Tween(begin: 0.4, end: 1.0).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final rankings = _selectedRanking == RankingType.personal ? userRankings : storeRankings;
+    final rankings = _selectedRanking == RankingType.personal
+        ? userRankings
+        : storeRankings;
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(title: const Text("랭킹")),
       body: Column(
         children: [
+          // 이 부분만 수정됨
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text(
-                  "⏱ 실시간 업데이트 자동 반영 중",
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                FadeTransition(
+                  opacity: _glowAnimation,
+                  child: const Text(
+                    "⏱ 실시간 업데이트 자동 반영 중",
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ),
-                SizedBox(height: 36, child: _buildToggle()),
+                _buildToggle(),
               ],
             ),
           ),
+          const SizedBox(height: 4),
 
           Expanded(
             child: ListView.builder(
@@ -93,8 +123,11 @@ class _RankingScreenState extends State<RankingScreen> {
       margin: const EdgeInsets.symmetric(vertical: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
-        onTap: () => Navigator.pushNamed(context, _selectedRanking == RankingType.personal ? '/public-profile' : '/store-detail'),
         borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.pushNamed(context,
+            _selectedRanking == RankingType.personal
+                ? '/public-profile'
+                : '/store-detail'),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -103,10 +136,9 @@ class _RankingScreenState extends State<RankingScreen> {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.person, size: 38, color: Colors.grey),
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.person, size: 40, color: Colors.grey),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -117,7 +149,8 @@ class _RankingScreenState extends State<RankingScreen> {
                     const SizedBox(height: 4),
                     Text(
                       item['nickname'] ?? item['name'],
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -140,8 +173,15 @@ class _RankingScreenState extends State<RankingScreen> {
     const badges = ["🥇 1위", "🥈 2위", "🥉 3위"];
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: kNeedsFinePurple, borderRadius: BorderRadius.circular(6)),
-      child: Text(badges[rank - 1], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+      decoration: BoxDecoration(
+        color: kNeedsFinePurple,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        badges[rank - 1],
+        style: const TextStyle(
+            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+      ),
     );
   }
 
@@ -151,14 +191,23 @@ class _RankingScreenState extends State<RankingScreen> {
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: Text("${item['rank']}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kNeedsFinePurple)),
+        contentPadding:
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: Text(
+          "${item['rank']}",
+          style: const TextStyle(
+              fontSize: 20, fontWeight: FontWeight.bold, color: kNeedsFinePurple),
+        ),
         title: Text(item['nickname'] ?? item['name']),
         subtitle: _selectedRanking == RankingType.personal
             ? Text("점수: ${item['score']}")
             : Text("${item['category']} • ${item['score']}점"),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
-        onTap: () => Navigator.pushNamed(context, _selectedRanking == RankingType.personal ? '/public-profile' : '/store-detail'),
+        trailing: const Icon(Icons.arrow_forward_ios,
+            size: 14, color: Colors.grey),
+        onTap: () => Navigator.pushNamed(context,
+            _selectedRanking == RankingType.personal
+                ? '/public-profile'
+                : '/store-detail'),
       ),
     );
   }
