@@ -16,8 +16,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   scrollable_positioned_list: ^0.3.8
   google_maps_flutter: ^2.5.3
-  geolocator: ^11.0.0 # Added for location services
-  permission_handler: ^11.3.1 # Added for permission handling
+  geolocator: ^11.0.0
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
@@ -25,8 +25,15 @@ dev_dependencies:
 
   flutter_lints: ^5.0.0
 
+  flutter_launcher_icons: ^0.13.1
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.png"
+
 flutter:
   uses-material-design: true
 
-  # assets:
-  #   - assets/images/
+  assets:
+    - assets/images/ # Declaring the folder for our logos and images
