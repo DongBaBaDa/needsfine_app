@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/app_data.dart';
+import '../utils/review_scorer.dart'; // 새로 만든 점수 계산기 import
 
 class WriteReviewScreen extends StatefulWidget {
   const WriteReviewScreen({super.key});
@@ -14,7 +15,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // arguments로 가게 ID를 받음
     final String storeId = ModalRoute.of(context)!.settings.arguments as String;
     final store = AppData().stores.firstWhere((s) => s.id == storeId);
 
@@ -26,8 +26,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           children: [
             Text("${store.name} 어떠셨나요?", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
-
-            // 별점 선택 (슬라이더로 대체)
             Row(
               children: [
                 const Text("별점: "),
@@ -45,8 +43,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
               ],
             ),
             const SizedBox(height: 20),
-
-            // 내용 입력
             TextField(
               controller: _controller,
               maxLines: 5,
@@ -56,13 +52,20 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
             ElevatedButton(
               onPressed: () {
                 if (_controller.text.isEmpty) return;
 
-                // 로직 실행
-                AppData().addReview(storeId, _controller.text, _rating);
+                // 1. 새로운 점수 계산 로직 호출
+                final scoreData = calculateNeedsFineScore(_controller.text, _rating);
+
+                // 2. 기존 리뷰 추가 로직에 새로운 데이터를 전달
+                AppData().addReview(
+                  storeId,
+                  _controller.text,
+                  _rating,
+                  scoreData, // needsfine_score, trust_level 등이 담긴 맵
+                );
 
                 Navigator.pop(context); // 뒤로가기
                 ScaffoldMessenger.of(context).showSnackBar(

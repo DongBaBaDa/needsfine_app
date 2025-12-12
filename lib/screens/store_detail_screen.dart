@@ -11,8 +11,9 @@ class StoreDetailScreen extends StatefulWidget {
 class _StoreDetailScreenState extends State<StoreDetailScreen> {
   @override
   Widget build(BuildContext context) {
-    // 예시로 첫 번째 가게 데이터를 가져옴 (실제로는 ID를 받아야 함)
-    final store = AppData().stores[0];
+    // arguments로 가게 ID를 받음 (이전 오류 수정)
+    final String storeId = ModalRoute.of(context)!.settings.arguments as String;
+    final store = AppData().stores.firstWhere((s) => s.id == storeId);
 
     return Scaffold(
       appBar: AppBar(title: Text(store.name)),
@@ -60,14 +61,28 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(review.content),
-                  Text("Q_R점수: ${review.qrScore.toStringAsFixed(1)}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  const SizedBox(height: 5),
+                  // [오류 수정] qrScore 대신 needsfineScore와 trustLevel 표시
+                  Row(
+                    children: [
+                      Text(
+                        "F ${review.needsfineScore.toStringAsFixed(1)}",
+                        style: const TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        "신뢰도 ${review.trustLevel}%",
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.star, color: Colors.amber, size: 16),
-                  Text(review.rating.toString()),
+                  Text(review.rating.toStringAsFixed(1)),
                 ],
               ),
             ),

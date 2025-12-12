@@ -1,20 +1,29 @@
-import 'package:flutter/material.dart';
 import 'dart:math';
 
-// 1. 리뷰 모델
+// 1. 리뷰 모델 (서버 로직에 맞춰 필드 수정)
 class Review {
   final String userName;
   final String content;
-  final double rating;
-  final double qrScore; // 리뷰 퀄리티 점수 (파이썬 로직)
+  final double rating; // 사용자가 입력한 별점
   final String date;
+
+  // calculateNeedsFineScore 함수에서 계산된 값들
+  final double needsfineScore; // 최종 니즈파인 점수 (별점 * 신뢰도)
+  final int trustLevel; // 신뢰도 레벨 (0-100)
+  final bool authenticity; // 진정성
+  final bool advertisingWords; // 광고성 단어 포함 여부
+  final bool emotionalBalance; // 감정적 균형
 
   Review({
     required this.userName,
     required this.content,
     required this.rating,
-    required this.qrScore,
     required this.date,
+    required this.needsfineScore,
+    required this.trustLevel,
+    required this.authenticity,
+    required this.advertisingWords,
+    required this.emotionalBalance,
   });
 }
 
@@ -23,9 +32,9 @@ class Store {
   final String id;
   final String name;
   final String category;
-  final List<String> tags; // 매장 등록 태그
-  double userRating; // 별점
-  double needsFineScore; // 니즈파인 지수
+  final List<String> tags;
+  double userRating;      // 리뷰들의 평점 평균
+  double needsFineScore;  // 리뷰들의 니즈파인 점수 평균
   int reviewCount;
   List<Review> reviews;
 
@@ -41,13 +50,12 @@ class Store {
   });
 }
 
-// 3. [전역 데이터] - 앱 끄면 사라지지만 실행 중엔 유지됨 (DB 역할)
+// 3. [전역 데이터]
 class AppData {
   static final AppData _instance = AppData._internal();
   factory AppData() => _instance;
   AppData._internal();
 
-  // 더미 가게 데이터 (엑셀 대신 사용)
   List<Store> stores = [
     Store(
       id: '1',
@@ -71,79 +79,54 @@ class AppData {
     ),
   ];
 
-  // 내 리뷰 모음
   List<Map<String, dynamic>> myReviews = [];
 
-  // --- [🔥 파이썬 로직 이식: 리뷰 등록 및 점수 계산] ---
-  void addReview(String storeId, String content, double rating) {
-    Store? store = stores.firstWhere((s) => s.id == storeId);
+  // --- [🔥 새로운 리뷰 등록 및 점수 계산 로직] ---
+  void addReview(String storeId, String content, double rating, Map<String, dynamic> scoreData) {
+    final store = stores.firstWhere((s) => s.id == storeId);
 
-    // 1. 리뷰 퀄리티(Q_R) 계산 (파이썬 로직 단순화)
-    double qrScore = _calculateQR(content, store.tags);
-
-    // 2. 리뷰 추가
-    Review newReview = Review(
+    // 1. 리뷰 객체 생성 (scoreData에서 값 추출)
+    final newReview = Review(
       userName: "니즈파인", // 현재 로그인한 유저
       content: content,
       rating: rating,
-      qrScore: qrScore,
       date: DateTime.now().toString().split(' ')[0],
+      needsfineScore: scoreData['needsfine_score'] as double,
+      trustLevel: scoreData['trust_level'] as int,
+      authenticity: scoreData['authenticity'] as bool,
+      advertisingWords: scoreData['advertising_words'] as bool,
+      emotionalBalance: scoreData['emotional_balance'] as bool,
     );
     store.reviews.insert(0, newReview);
     store.reviewCount++;
 
-    // 3. 내 리뷰 목록에도 추가
+    // 2. 내 리뷰 목록에도 추가 (상세 정보 포함)
     myReviews.insert(0, {
       "storeName": store.name,
       "content": content,
       "rating": rating,
       "date": newReview.date,
+      "needsfineScore": newReview.needsfineScore,
     });
 
-    // 4. 가게 점수(별점, 니즈파인 지수) 업데이트
+    // 3. 가게 점수(별점, 니즈파인 지수) 전체 평균으로 업데이트
     _updateStoreScores(store);
   }
 
-  // (파이썬 calculate_q_r 함수 Dart 버전)
-  double _calculateQR(String text, List<String> storeTags) {
-    double score = 0;
-    int len = text.length;
-
-    // 길이 점수
-    if (len < 10) score += 0.1;
-    else if (len > 100) score += 1.0;
-    else score += 0.5;
-
-    // 태그 일치 보너스 (단순 매칭)
-    int matchCount = 0;
-    for (var tag in storeTags) {
-      if (text.contains(tag)) matchCount++;
-    }
-    score += (0.5 * matchCount);
-
-    return score;
-  }
-
-  // 점수 업데이트 로직
+  // 점수 업데이트 로직 (전체 평균 계산 방식으로 변경)
   void _updateStoreScores(Store store) {
-    // 1. 별점 평균 재계산
-    double totalRating = 0;
-    double totalQR = 0;
-    for (var r in store.reviews) {
-      totalRating += r.rating;
-      totalQR += r.qrScore;
+    if (store.reviews.isEmpty) {
+      store.userRating = 0;
+      store.needsFineScore = 0;
+      return;
     }
+
+    // 1. 별점 평균 재계산
+    double totalRating = store.reviews.fold(0, (sum, r) => sum + r.rating);
     store.userRating = totalRating / store.reviewCount;
 
-    // 2. 니즈파인 지수 계산 (파이썬 공식 참고)
-    // 신뢰도 총점 = 기본(0.5) + 리뷰퀄리티(로그함수 대체 정규화) + 매칭(생략)
-    double avgQR = totalQR / store.reviewCount;
-    double trustScore = 0.5 + (avgQR * 0.2); // 약식 공식
-    if (trustScore > 1.0) trustScore = 1.0;
-
-    // 최종 니즈파인 지수 (별점 * 신뢰도 * 20 -> 100점 만점 환산)
-    store.needsFineScore = (store.userRating * trustScore) * 20;
-    // 보기 좋게 100점 안 넘게 조정
-    if (store.needsFineScore > 99.9) store.needsFineScore = 99.9;
+    // 2. 니즈파인 지수 평균 재계산
+    double totalNeedsFineScore = store.reviews.fold(0, (sum, r) => sum + r.needsfineScore);
+    store.needsFineScore = totalNeedsFineScore / store.reviewCount;
   }
 }
