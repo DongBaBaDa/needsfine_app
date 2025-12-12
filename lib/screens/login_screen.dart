@@ -118,11 +118,11 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 12),
             _buildSocialLoginButton(image: 'assets/images/apple_logo.png', text: 'Apple로 로그인', color: Colors.black, textColor: Colors.white),
             const SizedBox(height: 48),
-            const Text(
-              "계속 진행하시면 NeedsFine의 서비스 이용약관 및 개인정보 처리방침에 동의하는 것으로 간주됩니다.",
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
+            // const Text(
+            //   "계속 진행하시면 NeedsFine의 서비스 이용약관 및 개인정보 처리방침에 동의하는 것으로 간주됩니다.",
+            //   textAlign: TextAlign.center,
+            //   style: TextStyle(fontSize: 12, color: Colors.grey),
+            // ),
              const SizedBox(height: 24),
           ],
         ),
