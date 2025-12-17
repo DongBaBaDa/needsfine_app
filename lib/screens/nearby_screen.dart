@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart'; 
+import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'package:needsfine_app/models/app_data.dart';
@@ -108,7 +108,7 @@ class _NearbyScreenState extends State<NearbyScreen>
 
     String newDisplayLocation;
     try {
-      // [오류 수정] localeIdentifier 파라미터 제거
+      // [최종 오류 수정] localeIdentifier 파라미터를 사용하지 않는 방식으로 호출합니다.
       List<Placemark> placemarks = await placemarkFromCoordinates(location.latitude, location.longitude);
       if (placemarks.isNotEmpty) {
         final p = placemarks.first;
