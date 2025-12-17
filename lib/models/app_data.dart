@@ -1,18 +1,16 @@
 import 'dart:math';
 
-// 1. 리뷰 모델 (서버 로직에 맞춰 필드 수정)
+// 1. 리뷰 모델
 class Review {
   final String userName;
   final String content;
-  final double rating; // 사용자가 입력한 별점
+  final double rating;
   final String date;
-
-  // calculateNeedsFineScore 함수에서 계산된 값들
-  final double needsfineScore; // 최종 니즈파인 점수 (별점 * 신뢰도)
-  final int trustLevel; // 신뢰도 레벨 (0-100)
-  final bool authenticity; // 진정성
-  final bool advertisingWords; // 광고성 단어 포함 여부
-  final bool emotionalBalance; // 감정적 균형
+  final double needsfineScore;
+  final int trustLevel;
+  final bool authenticity;
+  final bool advertisingWords;
+  final bool emotionalBalance;
 
   Review({
     required this.userName,
@@ -27,14 +25,16 @@ class Review {
   });
 }
 
-// 2. 가게 모델
+// 2. 가게 모델 ( [수정] 위도/경도 필드 추가 )
 class Store {
   final String id;
   final String name;
   final String category;
   final List<String> tags;
-  double userRating;      // 리뷰들의 평점 평균
-  double needsFineScore;  // 리뷰들의 니즈파인 점수 평균
+  final double latitude;  // 가게 위도
+  final double longitude; // 가게 경도
+  double userRating;
+  double needsFineScore;
   int reviewCount;
   List<Review> reviews;
 
@@ -43,6 +43,8 @@ class Store {
     required this.name,
     required this.category,
     required this.tags,
+    required this.latitude,
+    required this.longitude,
     this.userRating = 0.0,
     this.needsFineScore = 0.0,
     this.reviewCount = 0,
@@ -62,6 +64,8 @@ class AppData {
       name: "족발야시장 강남점",
       category: "족발·보쌈",
       tags: ["맛있는", "친절한", "푸짐한", "깨끗한", "가성비"],
+      latitude: 37.5013,  // [수정] 강남역 근처 실제 좌표
+      longitude: 127.025, // [수정] 강남역 근처 실제 좌표
       userRating: 4.5,
       needsFineScore: 88.5,
       reviewCount: 120,
@@ -72,6 +76,8 @@ class AppData {
       name: "엽기떡볶이 본점",
       category: "분식",
       tags: ["매운", "스트레스", "중독성", "빠른", "배달"],
+      latitude: 37.5755,  // [수정] 동대문 근처 실제 좌표
+      longitude: 127.028, // [수정] 동대문 근처 실제 좌표
       userRating: 4.8,
       needsFineScore: 92.0,
       reviewCount: 350,
@@ -81,13 +87,10 @@ class AppData {
 
   List<Map<String, dynamic>> myReviews = [];
 
-  // --- [🔥 새로운 리뷰 등록 및 점수 계산 로직] ---
   void addReview(String storeId, String content, double rating, Map<String, dynamic> scoreData) {
     final store = stores.firstWhere((s) => s.id == storeId);
-
-    // 1. 리뷰 객체 생성 (scoreData에서 값 추출)
     final newReview = Review(
-      userName: "니즈파인", // 현재 로그인한 유저
+      userName: "니즈파인",
       content: content,
       rating: rating,
       date: DateTime.now().toString().split(' ')[0],
@@ -99,8 +102,6 @@ class AppData {
     );
     store.reviews.insert(0, newReview);
     store.reviewCount++;
-
-    // 2. 내 리뷰 목록에도 추가 (상세 정보 포함)
     myReviews.insert(0, {
       "storeName": store.name,
       "content": content,
@@ -108,24 +109,17 @@ class AppData {
       "date": newReview.date,
       "needsfineScore": newReview.needsfineScore,
     });
-
-    // 3. 가게 점수(별점, 니즈파인 지수) 전체 평균으로 업데이트
     _updateStoreScores(store);
   }
 
-  // 점수 업데이트 로직 (전체 평균 계산 방식으로 변경)
   void _updateStoreScores(Store store) {
     if (store.reviews.isEmpty) {
       store.userRating = 0;
       store.needsFineScore = 0;
       return;
     }
-
-    // 1. 별점 평균 재계산
     double totalRating = store.reviews.fold(0, (sum, r) => sum + r.rating);
     store.userRating = totalRating / store.reviewCount;
-
-    // 2. 니즈파인 지수 평균 재계산
     double totalNeedsFineScore = store.reviews.fold(0, (sum, r) => sum + r.needsfineScore);
     store.needsFineScore = totalNeedsFineScore / store.reviewCount;
   }
