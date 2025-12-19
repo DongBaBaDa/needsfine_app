@@ -5,36 +5,34 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.9.2
+  sdk: '>=3.4.3 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
 
-  shared_preferences: ^2.2.2
-  carousel_slider_plus: ^7.1.1
-  cupertino_icons: ^1.0.8
-  scrollable_positioned_list: ^0.3.8
-  google_maps_flutter: ^2.5.3
+  # 지도 패키지는 안정적인 Google 지도를 유지합니다.
+  google_maps_flutter: ^2.5.0
+  flutter_naver_map: ^1.2.3 # 네이버 지도 SDK 추가
+
+  # [오류 수정] carousel_slider를 충돌이 해결된 버전으로 업그레이드합니다.
+  carousel_slider: ^5.0.0
+
+  # 나머지 패키지들
+  cupertino_icons: ^1.0.6
   geolocator: ^11.0.0
+  geocoding: ^3.0.0
   permission_handler: ^11.3.1
-  geocoding: ^4.0.0
+  shared_preferences: ^2.2.3
+  http: ^1.2.1
+  scrollable_positioned_list: ^0.3.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  flutter_lints: ^5.0.0
-
-  flutter_launcher_icons: ^0.13.1
-
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/icon.png"
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
-
   assets:
-    - assets/images/ # Declaring the folder for our logos and images
+    - assets/images/

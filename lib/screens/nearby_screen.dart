@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart'; // 네이버 지도 패키지
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
+// 구글 지도 LatLng 호환을 위해 별칭 사용 (나중에 AddressSearchScreen도 네이버로 바꾸면 제거 가능)
+import 'package:google_maps_flutter/google_maps_flutter.dart' as google_maps; 
 
 import 'package:needsfine_app/models/app_data.dart';
 
@@ -20,17 +23,19 @@ class _NearbyScreenState extends State<NearbyScreen>
   @override
   bool get wantKeepAlive => true;
 
-  final Completer<GoogleMapController> _controller = Completer();
-  Set<Marker> _markers = {};
-  LatLng? _currentMapCenter;
-
+  final Completer<NaverMapController> _controller = Completer();
+  // 마커는 컨트롤러를 통해 관리하므로 Set<Marker> 변수는 제거하고, 현재 상태 유지를 위한 리스트만 사용 가능하나
+  // 네이버 맵은 controller.addOverlay로 즉시 반영합니다.
+  
+  NLatLng? _currentMapCenter;
   StreamSubscription<Position>? _positionStreamSubscription;
   bool _isFirstLocationUpdate = true;
   bool _showRecenterButton = false;
   String _displayLocation = '위치 확인 중...';
 
-  static const CameraPosition _initialPosition = CameraPosition(
-    target: LatLng(37.5665, 126.9780), // Default to Seoul
+  // 초기 위치 (서울 시청)
+  static const NCameraPosition _initialPosition = NCameraPosition(
+    target: NLatLng(37.5665, 126.9780),
     zoom: 14.0, 
   );
 
@@ -59,7 +64,7 @@ class _NearbyScreenState extends State<NearbyScreen>
     const locationSettings = LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10);
     _positionStreamSubscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
       (Position position) {
-        final newPosition = LatLng(position.latitude, position.longitude);
+        final newPosition = NLatLng(position.latitude, position.longitude);
         if (_isFirstLocationUpdate && mounted) {
           _isFirstLocationUpdate = false;
           _updateLocationAndMarkers(newPosition, moveCamera: true);
@@ -69,8 +74,10 @@ class _NearbyScreenState extends State<NearbyScreen>
     );
   }
 
-  Set<Marker> _generateMarkers(LatLng center) {
-    final newMarkers = <Marker>{};
+  // 마커 생성 및 지도에 추가
+  Future<void> _updateMarkers(NaverMapController controller, NLatLng center) async {
+    final newMarkers = <NMarker>{};
+    
     for (var store in AppData().stores) {
       final distance = Geolocator.distanceBetween(
         center.latitude,
@@ -80,42 +87,65 @@ class _NearbyScreenState extends State<NearbyScreen>
       );
 
       if (distance <= 2000) { // 2km 이내
-        newMarkers.add(
-          Marker(
-            markerId: MarkerId(store.id),
-            position: LatLng(store.latitude, store.longitude),
-            infoWindow: InfoWindow(title: store.name),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet), 
-          ),
+        final marker = NMarker(
+          id: store.id,
+          position: NLatLng(store.latitude, store.longitude),
+          iconTintColor: Colors.deepPurpleAccent, // Violet 색상 효과
         );
+        
+        // 마커 클릭 시 정보창 표시
+        marker.setOnTapListener((overlay) {
+           final infoWindow = NInfoWindow.onMarker(id: marker.info.id, text: store.name);
+           marker.openInfoWindow(infoWindow);
+           return true;
+        });
+
+        newMarkers.add(marker);
       }
     }
-    return newMarkers;
+    
+    // 기존 마커 지우고 새로 추가 (효율성을 위해 diff를 계산할 수도 있지만 간단히 구현)
+    controller.clearOverlays();
+    controller.addOverlayAll(newMarkers);
   }
 
-  Future<void> _moveCamera(LatLng position) async {
+  Future<void> _moveCamera(NLatLng position) async {
     if (!_controller.isCompleted) return;
     final controller = await _controller.future;
-    controller.animateCamera(CameraUpdate.newCameraPosition(CameraPosition(target: position, zoom: 14.5)));
+    
+    final cameraUpdate = NCameraUpdate.scrollAndZoomTo(
+      target: position,
+      zoom: 14.5,
+    )..setAnimation(animation: NCameraAnimation.easing);
+    
+    await controller.updateCamera(cameraUpdate);
   }
 
-  Future<void> _updateLocationAndMarkers(LatLng location, {bool moveCamera = false}) async {
+  Future<void> _updateLocationAndMarkers(NLatLng location, {bool moveCamera = false}) async {
     if (!mounted) return;
 
     if (moveCamera) {
       await _moveCamera(location);
     }
+    
+    // 마커 업데이트
+    if (_controller.isCompleted) {
+      final controller = await _controller.future;
+      await _updateMarkers(controller, location);
+    }
 
     String newDisplayLocation;
     try {
-      // [최종 오류 수정] localeIdentifier 파라미터를 사용하지 않는 방식으로 호출합니다.
+      // 좌표 -> 주소 변환 (Reverse Geocoding)
+      // 네이버 SDK 자체 기능을 쓸 수도 있지만, 기존 geocoding 패키지를 그대로 사용 (플랫폼 종속적)
+      // 정확도를 위해 추후 네이버 Reverse Geocoding API 호출로 변경 권장
       List<Placemark> placemarks = await placemarkFromCoordinates(location.latitude, location.longitude);
       if (placemarks.isNotEmpty) {
         final p = placemarks.first;
-        newDisplayLocation = "${p.locality} ${p.thoroughfare}".trim();
-        if (newDisplayLocation.isEmpty) {
-          newDisplayLocation = p.street ?? '주소 정보 없음';
-        }
+        final addressParts = [p.administrativeArea, p.locality, p.subLocality, p.thoroughfare, p.subThoroughfare]
+            .where((part) => part != null && part.isNotEmpty)
+            .join(' ');
+        newDisplayLocation = addressParts.isEmpty ? (p.street ?? '주소 정보 없음') : addressParts;
       } else {
         newDisplayLocation = '주소를 찾을 수 없음';
       }
@@ -124,20 +154,22 @@ class _NearbyScreenState extends State<NearbyScreen>
       print("주소 변환 오류: $e");
     }
 
-    final newMarkers = _generateMarkers(location);
-
     setState(() {
       _currentMapCenter = location;
       _displayLocation = newDisplayLocation;
-      _markers = newMarkers;
       _showRecenterButton = false;
     });
   }
 
   Future<void> _navigateToAddressSearch() async {
     final result = await Navigator.pushNamed(context, '/address-search');
-    if (result is LatLng) {
-      _updateLocationAndMarkers(result, moveCamera: true);
+    
+    // Google LatLng가 반환될 경우 처리
+    if (result is google_maps.LatLng) {
+       final nLatLng = NLatLng(result.latitude, result.longitude);
+       _updateLocationAndMarkers(nLatLng, moveCamera: true);
+    } else if (result is NLatLng) {
+       _updateLocationAndMarkers(result, moveCamera: true);
     }
   }
 
@@ -160,32 +192,62 @@ class _NearbyScreenState extends State<NearbyScreen>
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
               child: GestureDetector(
                   onTap: _navigateToAddressSearch,
+                  onLongPress: () {
+                    Clipboard.setData(ClipboardData(text: _displayLocation));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('주소가 복사되었습니다.')),
+                    );
+                  },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                    decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(20)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.search, size: 16, color: Colors.black54),
-                      const SizedBox(width: 4),
-                      Flexible(child: Text(_displayLocation, style: const TextStyle(fontSize: 14, color: Colors.black87), overflow: TextOverflow.ellipsis)),
+                    width: double.infinity, 
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(12)),
+                    child: Row(children: [
+                      const Icon(Icons.search, size: 20, color: Colors.black54),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(_displayLocation, 
+                          style: const TextStyle(fontSize: 14, color: Colors.black87), 
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ]),
                   )),
             )),
       ),
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: _initialPosition,
-            onMapCreated: (controller) {
-              if (!_controller.isCompleted) _controller.complete(controller);
+          NaverMap(
+            options: const NaverMapViewOptions(
+              initialCameraPosition: _initialPosition,
+              locationButtonEnable: true, // 현위치 버튼 활성화
+              scaleBarEnable: false,
+            ),
+            onMapReady: (controller) {
+              if (!_controller.isCompleted) {
+                _controller.complete(controller);
+                // 맵 로드 시 초기 마커 생성 (현재 위치 기준이 없다면 초기 위치 기준)
+                if (_currentMapCenter == null) {
+                  _updateMarkers(controller, _initialPosition.target);
+                }
+              }
             },
-            markers: _markers,
-            padding: const EdgeInsets.only(top: 50),
-            myLocationButtonEnabled: true, 
-            myLocationEnabled: true,
-            onCameraMoveStarted: () {
-              if (mounted) setState(() => _showRecenterButton = true);
+            onCameraChange: (reason, animated) {
+               // 카메라 이동 시작 시 재검색 버튼 표시 로직
+               // 네이버 맵은 moveStarted 이벤트가 명시적이지 않을 수 있어 change로 감지
+               if (reason == NCameraUpdateReason.gesture) {
+                 if (mounted && !_showRecenterButton) {
+                   setState(() => _showRecenterButton = true);
+                 }
+               }
             },
-            onCameraMove: (position) => _currentMapCenter = position.target,
+            onCameraIdle: () async {
+               if (_controller.isCompleted) {
+                 final controller = await _controller.future;
+                 final cameraPosition = await controller.getCameraPosition();
+                 _currentMapCenter = cameraPosition.target;
+               }
+            },
           ),
           const IgnorePointer(child: Center(child: Icon(Icons.location_pin, color: Colors.red, size: 50))),
           if (_showRecenterButton)

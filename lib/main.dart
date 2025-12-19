@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart'; // 네이버 지도 SDK import
 import 'package:needsfine_app/core/needsfine_theme.dart';
 
 import 'package:needsfine_app/screens/address_search_screen.dart';
@@ -28,6 +29,16 @@ final ValueNotifier<int> notificationCount = ValueNotifier(3);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 네이버 지도 SDK 초기화
+  await NaverMapSdk.instance.initialize(
+    clientId: 'peiu5pezpj', 
+    onAuthFailed: (ex) {
+      print("********* 네이버 지도 인증 실패 *********");
+      print(ex);
+    },
+  );
+
   runApp(const MyApp(initialRoute: '/splash'));
 }
 
@@ -49,7 +60,7 @@ class MyApp extends StatelessWidget {
         '/location': (context) => const LocationScreen(),
         '/notification': (context) => const NotificationScreen(),
         '/notification-detail': (context) =>
-        const NotificationDetailScreen(message: "알림 상세 내용"),
+            const NotificationDetailScreen(message: "알림 상세 내용"),
         '/search': (context) => const SearchScreen(),
         '/address-search': (context) => const AddressSearchScreen(),
         '/login': (context) => const LoginScreen(),
