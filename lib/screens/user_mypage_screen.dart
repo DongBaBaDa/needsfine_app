@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import 'profile_edit_screen.dart';
+import 'info_edit_screen.dart';
+import 'follow_list_screen.dart'; // 팔로우 리스트 화면 import
 import 'dart:math';
 
 class UserMyPageScreen extends StatefulWidget {
@@ -16,8 +18,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   @override
   void initState() {
     super.initState();
-
-    // 레벨1 + 경험치 초기화
     _userProfile = UserProfile(
       nickname: "니즈파인",
       title: "맛잘알🔥",
@@ -31,421 +31,136 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     );
   }
 
-  // 프로필 편집 이동
   Future<void> _navigateAndEditProfile() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProfileEditScreen(currentProfile: _userProfile),
-      ),
-    );
-    if (result != null) {
-      setState(() => _userProfile = result);
-    }
+    Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileEditScreen()));
+  }
+  
+  void _navigateToFollowList() {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => const FollowListScreen()));
   }
 
-  // 화면 없는 경우 기본 템플릿 이동
   void _goToPlaceholderPage(String title) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(title: Text(title)),
-          body: Center(
-            child: Text(
-              "$title 화면 (추후 개발 예정)",
-              style: const TextStyle(fontSize: 16),
-            ),
-          ),
-        ),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => Scaffold(appBar: AppBar(title: Text(title)), body: Center(child: Text("$title 화면 (추후 개발 예정)")))));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // 톱니바퀴 제거
         title: const Text("마이파인"),
+        actions: [
+          IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InfoEditScreen())))
+        ],
       ),
       body: ListView(
         children: [
           _buildProfileHeader(context),
           _buildSelfIntroduction(_userProfile.introduction),
-
           const SizedBox(height: 20),
           _buildInfoBoxes(context),
-
-          const SizedBox(height: 20),
           const Divider(thickness: 8, color: Color(0xFFF0F0F0)),
-
-          // 내 리뷰 Top 3
           _buildReviewTop3Section(),
-
           const Divider(thickness: 8, color: Color(0xFFF0F0F0)),
-
-          // "나의 입맛"
-          _buildMenuListItem(
-            icon: Icons.restaurant_menu,
-            title: "나의 입맛",
-            onTap: () =>
-                Navigator.pushNamed(context, '/mytaste'),
-          ),
-
-          _buildMenuListItem(
-            icon: Icons.payment,
-            title: "결제관리",
-            onTap: () => _goToPlaceholderPage("결제관리"),
-          ),
-          _buildMenuListItem(
-            icon: Icons.support_agent,
-            title: "고객센터",
-            onTap: () => _goToPlaceholderPage("고객센터"),
-          ),
-          _buildMenuListItem(
-            icon: Icons.event,
-            title: "이벤트",
-            onTap: () => _goToPlaceholderPage("이벤트"),
-          ),
-          _buildMenuListItem(
-            icon: Icons.policy_outlined,
-            title: "약관 및 정책",
-            onTap: () => _goToPlaceholderPage("약관 및 정책"),
-          ),
-          _buildMenuListItem(
-            icon: Icons.settings,
-            title: "설정",
-            onTap: () => _goToPlaceholderPage("설정"),
-          ),
-
+          _buildMenuListItem(icon: Icons.restaurant_menu, title: "나의 입맛", onTap: () => Navigator.pushNamed(context, '/mytaste')),
+          _buildMenuListItem(icon: Icons.payment, title: "결제관리", onTap: () => _goToPlaceholderPage("결제관리")),
+          _buildMenuListItem(icon: Icons.support_agent, title: "고객센터", onTap: () => _goToPlaceholderPage("고객센터")),
+          _buildMenuListItem(icon: Icons.event, title: "이벤트", onTap: () => _goToPlaceholderPage("이벤트")),
+          _buildMenuListItem(icon: Icons.policy_outlined, title: "약관 및 정책", onTap: () => _goToPlaceholderPage("약관 및 정책")),
+          _buildMenuListItem(icon: Icons.settings, title: "설정", onTap: () => _goToPlaceholderPage("설정")),
           const SizedBox(height: 40),
         ],
       ),
     );
   }
 
-  // =========================
-  // 프로필 헤더
-  // =========================
-
   Widget _buildProfileHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Column(
         children: [
           Row(
             children: [
-              const CircleAvatar(
-                radius: 50,
-                child: Icon(Icons.person, size: 50),
-              ),
+              const CircleAvatar(radius: 40, child: Icon(Icons.person, size: 40)),
               const SizedBox(width: 16),
-
-              // 칭호 + 아이콘 + 닉네임 한 줄
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          _userProfile.title,
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.emoji_events,
-                            color: Colors.amber, size: 20),
-                        const SizedBox(width: 6),
-                        Text(
-                          _userProfile.nickname,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    Row(
-                      children: [
-                        // 신뢰도 표시 (LV 대신)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.deepPurple, // 신뢰 상징 색상
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.verified_user, size: 12, color: Colors.white),
-                              SizedBox(width: 4),
-                              Text(
-                                "신뢰도 94%", // 고정값 예시
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(width: 10),
-
-                        // 신뢰도 바 (경험치 바 대신)
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              _buildTrustBar(0.94), // 94%
-                              const SizedBox(height: 4),
-                              const Text(
-                                "상위 1% 판별사",
-                                style: TextStyle(
-                                    fontSize: 10, color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                    Text(_userProfile.nickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                     Row(children: [
+                        Text("신뢰도 94%", style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 8),
+                        const Text("상위 1% 판별사", style: TextStyle(color: Colors.grey)),
+                     ]),
                   ],
                 ),
               ),
             ],
           ),
-
-          // "내 정보 보기" & "프로필 변경" 버튼 (위로 조금 더 올림)
-          Positioned(
-            top: -26, // ← 여기 때문에 닉네임과 안 겹치도록 위로 올렸다
-            right: 0,
-            child: Row(
-              children: [
-                TextButton(
-                  onPressed: () => _goToPlaceholderPage("내 정보 보기"),
-                  child: const Text(
-                    "내 정보 보기",
-                    style: TextStyle(fontSize: 12, color: Colors.blue),
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 12,
-                  color: Colors.grey[300],
-                ),
-                TextButton(
-                  onPressed: _navigateAndEditProfile,
-                  child: const Text(
-                    "프로필 변경",
-                    style: TextStyle(fontSize: 12, color: Colors.blue),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 16),
+          ElevatedButton(onPressed: _navigateAndEditProfile, child: const Text("프로필 변경"))
         ],
       ),
     );
   }
 
-  // =========================
-  // 신뢰도 바 (기존 경험치바 대체)
-  // =========================
-
-  Widget _buildTrustBar(double percent) {
-    percent = percent.clamp(0.0, 1.0);
-
-    // 신뢰도에 따른 색상 변화 (낮을수록 회색, 높을수록 딥퍼플/골드)
-    final barColor = percent >= 0.9 
-        ? Colors.deepPurple 
-        : percent >= 0.7 
-            ? Colors.blue 
-            : Colors.grey;
-
-    return Stack(
-      children: [
-        Container(
-          height: 16,
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        FractionallySizedBox(
-          widthFactor: percent,
-          child: Container(
-            height: 16,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: barColor,
-            ),
-          ),
-        ),
-        // 퍼센트 텍스트 제거 (바 안에 텍스트가 지저분할 수 있음)
-      ],
-    );
-  }
-
-  // =========================
-  // 자기소개
-  // =========================
-
   Widget _buildSelfIntroduction(String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey[700]),
-        ),
-      ),
+      child: Text(text, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[700])),
     );
   }
-
-  // =========================
-  // 구독자 / 포인트 (영향력 -> 구독자 변경)
-  // =========================
 
   Widget _buildInfoBoxes(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Expanded(
-            child: _buildInfoBox(
-              title: "나의 구독자", // 영향력 -> 구독자
-              value: "${_userProfile.influence}명", 
-              onTap: () => _goToPlaceholderPage("나의 구독자"),
-            ),
-          ),
+          Expanded(child: _buildInfoBox(title: "나의 구독자", value: "${_userProfile.influence}명", onTap: _navigateToFollowList)),
           const SizedBox(width: 16),
-          Expanded(
-            child: _buildInfoBox(
-              title: "마이 포인트",
-              value: "${_userProfile.points} P",
-              onTap: () => _goToPlaceholderPage("포인트"),
-            ),
-          ),
+          Expanded(child: _buildInfoBox(title: "마이 포인트", value: "${_userProfile.points} P", onTap: () {})),
         ],
       ),
     );
   }
 
-  Widget _buildInfoBox({
-    required String title,
-    required String value,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildInfoBox({required String title, required String value, required VoidCallback onTap,}) {
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!), borderRadius: BorderRadius.circular(8)),
         child: Column(
           children: [
-            Text(
-              value,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+            Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text(
-              title,
-              style: const TextStyle(color: Colors.grey, fontSize: 13),
-            ),
+            Text(title, style: const TextStyle(color: Colors.grey, fontSize: 13)),
           ],
         ),
       ),
     );
   }
-
-  // =========================
-  // 내 리뷰 Top 3 + 더보기
-  // =========================
-
+  
   Widget _buildReviewTop3Section() {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "내 리뷰 Top 3",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              TextButton(
-                onPressed: () => _goToPlaceholderPage("리뷰 관리"),
-                child: const Text("+ 더보기"),
-              ),
-            ],
-          ),
+          const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("내 리뷰 Top 3", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), Text("+ 더보기")]),
           const SizedBox(height: 12),
-          // 신뢰도 점수로 변경
           _buildReviewItem("인생 맛집 찾았다", "신뢰도 98점", 102, true),
-          _buildReviewItem("다신 안 시킨다", "신뢰도 85점", 89, false),
-          _buildReviewItem("존맛탱 노트북", "신뢰도 92점", 75, true),
         ],
       ),
     );
   }
 
   Widget _buildReviewItem(String title, String subtitle, int likes, bool highTrust) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: highTrust 
-        ? BoxDecoration(
-            border: Border.all(color: Colors.deepPurple.withOpacity(0.3), width: 1.5),
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.deepPurple.withOpacity(0.03)
-          )
-        : null,
-      child: ListTile(
-        leading: Icon(Icons.rate_review, color: highTrust ? Colors.deepPurple : Colors.grey),
-        title: Text(title, style: TextStyle(fontWeight: highTrust ? FontWeight.bold : FontWeight.normal)),
-        subtitle: Text(subtitle, style: TextStyle(color: highTrust ? Colors.deepPurple : Colors.grey)),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (highTrust) const Padding(
-              padding: EdgeInsets.only(right: 8.0),
-              child: Icon(Icons.verified, size: 16, color: Colors.deepPurple),
-            ),
-            Text("👍 $likes"),
-          ],
-        ),
-      ),
-    );
+     return ListTile(leading: Icon(Icons.rate_review, color: highTrust ? Colors.deepPurple : Colors.grey), title: Text(title), subtitle: Text(subtitle), trailing: Text("👍 $likes"));
   }
-
-  // =========================
-  // 하단 메뉴 아이템
-  // =========================
-
-  Widget _buildMenuListItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
+  
+  Widget _buildMenuListItem({required IconData icon, required String title, required VoidCallback onTap}) {
     return ListTile(
       leading: Icon(icon, color: Colors.grey[700]),
       title: Text(title),

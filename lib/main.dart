@@ -30,9 +30,9 @@ final ValueNotifier<int> notificationCount = ValueNotifier(3);
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 네이버 지도 SDK 초기화
+  // [수정] 새로운 지도 전용 Client ID로 SDK 초기화
   await NaverMapSdk.instance.initialize(
-    clientId: 'peiu5pezpj', 
+    clientId: '1rst5nv703', 
     onAuthFailed: (ex) {
       print("********* 네이버 지도 인증 실패 *********");
       print(ex);

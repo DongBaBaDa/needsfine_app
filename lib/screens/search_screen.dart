@@ -11,19 +11,29 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   late final TextEditingController _searchController;
+  bool _showSearchResults = false;
 
-  // Dummy data based on the provided design
-  final List<String> _popularSearches = [
-    '데이트 맛집', '회식 장소', '혼밥 추천', '한식 뷔페', '스시 오마카세', '이자카야',
-  ];
-  List<String> _recentSearches = [
-    '강남역 맛집', '압구정 카페', '홍대 술집', '성수동 브런치',
+  // Dummy data 
+  final List<String> _popularSearches = ['데이트 맛집', '회식 장소', '혼밥 추천', '한식 뷔페'];
+  List<String> _recentSearches = ['강남역 맛집', '압구정 카페', '홍대 술집'];
+  final List<Map<String, dynamic>> _suggestedSearches = [
+    {'type': 'related', 'text': '흑백요리사 시즌2 식당', 'icon': Icons.restaurant_menu},
+    {'type': 'history', 'text': '성남뒷길', 'icon': Icons.history},
+    {'type': 'location', 'text': '성남동 34', 'subtext': '경기도 성남시 중원구', 'icon': Icons.location_on_outlined},
+    {'type': 'location', 'text': '성남동 2', 'subtext': '강원특별자치도 강릉시', 'icon': Icons.location_on_outlined},
+    {'type': 'location', 'text': '성남동 1', 'subtext': '울산광역시 중구', 'icon': Icons.location_on_outlined},
+    {'type': 'search', 'text': '성남시 분당/성남시 판교/성남 돌짜장', 'icon': Icons.search},
   ];
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: widget.initialSearchTerm);
+    _searchController.addListener(() {
+      setState(() {
+        _showSearchResults = _searchController.text.isNotEmpty;
+      });
+    });
   }
 
   @override
@@ -37,24 +47,11 @@ class _SearchScreenState extends State<SearchScreen> {
       setState(() {
         _recentSearches.remove(query);
         _recentSearches.insert(0, query);
-        if (_recentSearches.length > 10) { // Limit recent searches
-          _recentSearches.removeLast();
-        }
+        if (_recentSearches.length > 10) _recentSearches.removeLast();
       });
-      Navigator.pushNamed(context, '/search-result', arguments: query.trim());
+      // Navigator.pushNamed(context, '/search-result', arguments: query.trim());
+      print("Searching for: ${query.trim()}");
     }
-  }
-
-  void _deleteRecentSearch(String query) {
-    setState(() {
-      _recentSearches.remove(query);
-    });
-  }
-
-  void _clearAllRecentSearches() {
-    setState(() {
-      _recentSearches.clear();
-    });
   }
 
   @override
@@ -64,142 +61,100 @@ class _SearchScreenState extends State<SearchScreen> {
       appBar: AppBar(
         leading: const BackButton(color: Colors.black),
         titleSpacing: 0,
-        title: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-          child: TextField(
-            controller: _searchController,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: "'진짜' '맛집'을 '검색'하세요",
-              prefixIcon: const Icon(Icons.search, color: Colors.grey),
-              filled: true,
-              fillColor: Colors.grey[100],
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(30),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _searchController,
-                builder: (context, value, child) {
-                  return value.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.grey, size: 20),
-                        onPressed: () => _searchController.clear(),
-                      )
-                    : const SizedBox.shrink();
-                },
-              ),
-            ),
-            onSubmitted: _performSearch,
+        title: TextField(
+          controller: _searchController,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: "검색어를 입력하세요",
+            border: InputBorder.none,
+            suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.cancel, color: Colors.grey, size: 20),
+                  onPressed: () => _searchController.clear(),
+                )
+              : null,
           ),
+          onSubmitted: _performSearch,
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0, left: 4.0),
-            child: ElevatedButton(
-              onPressed: () => _performSearch(_searchController.text),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kNeedsFinePurple,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-              ),
-              child: const Text('검색'),
-            ),
-          ),
-        ],
       ),
-      body: ListView(
+      body: _showSearchResults ? _buildSuggestionList() : _buildInitialScreen(),
+    );
+  }
+
+  Widget _buildInitialScreen() {
+    return ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           if (_recentSearches.isNotEmpty)
             _buildSection(
-              icon: Icons.history,
               title: '최근 검색어',
-              action: TextButton(
-                onPressed: _clearAllRecentSearches,
-                child: const Text('전체 삭제', style: TextStyle(color: Colors.grey, fontSize: 12)),
-              ),
+              action: TextButton(onPressed: () => setState(() => _recentSearches.clear()), child: const Text('전체 삭제')),
               child: Column(
                 children: _recentSearches.map((term) => ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                  title: Text(term, style: const TextStyle(fontSize: 16)),
+                  leading: const Icon(Icons.history, color: Colors.grey),
+                  title: Text(term),
                   onTap: () => _performSearch(term),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.grey, size: 18),
-                    onPressed: () => _deleteRecentSearch(term),
-                  ),
+                  trailing: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => setState(() => _recentSearches.remove(term))),
                 )).toList(),
               ),
             ),
           const SizedBox(height: 24),
           _buildSection(
-            icon: Icons.trending_up, 
-            iconColor: kNeedsFinePurple,
             title: '인기 검색어',
             child: Wrap(
               spacing: 8.0,
-              runSpacing: 8.0,
-              children: _popularSearches.asMap().entries.map((entry) {
-                int idx = entry.key;
-                String term = entry.value;
-                return ActionChip(
-                  label: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                       Text('${idx + 1}', style: const TextStyle(color: kNeedsFinePurple, fontWeight: FontWeight.bold)),
-                       const SizedBox(width: 6),
-                       Text(term),
-                    ],
-                  ),
-                  onPressed: () => _performSearch(term),
-                  backgroundColor: Colors.grey[100],
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0F6FF), // A light blue color
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('💡 검색 팁', style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text('• 카테고리명으로 검색하면 해당 카테고리 맛집을 볼 수 있어요', style: TextStyle(color: Colors.blue[700], fontSize: 12)),
-                Text('• 매장명을 검색하면 관련 매장과 비슷한 매장을 추천해드려요', style: TextStyle(color: Colors.blue[700], fontSize: 12)),
-                Text('• 지역명과 함께 검색하면 더 정확한 결과를 얻을 수 있어요', style: TextStyle(color: Colors.blue[700], fontSize: 12)),
-              ],
+              children: _popularSearches.map((term) => ActionChip(label: Text(term), onPressed: () => _performSearch(term))).toList(),
             ),
           ),
         ],
-      ),
+      );
+  }
+
+  Widget _buildSuggestionList() {
+    return ListView.builder(
+      itemCount: _suggestedSearches.length,
+      itemBuilder: (context, index) {
+        final item = _suggestedSearches[index];
+        switch (item['type']) {
+          case 'related':
+            return ListTile(
+              leading: const CircleAvatar(backgroundImage: NetworkImage('https://via.placeholder.com/150')), // Replace with actual image
+              title: Text(item['text']),
+              subtitle: const Text('식당'),
+              trailing: const Icon(Icons.add_circle_outline, color: Colors.deepPurple),
+            );
+          case 'history':
+            return ListTile(
+              leading: const Icon(Icons.history, color: Colors.grey),
+              title: Text(item['text']),
+              trailing: const Icon(Icons.north_west, color: Colors.grey),
+            );
+          case 'location':
+            return ListTile(
+              leading: const Icon(Icons.location_on_outlined, color: Colors.grey),
+              title: Text(item['text']),
+              subtitle: Text(item['subtext']),
+            );
+          case 'search':
+            return ListTile(
+              leading: const Icon(Icons.search, color: Colors.grey),
+              title: Text(item['text']),
+            );
+          default:
+            return const SizedBox.shrink();
+        }
+      },
     );
   }
 
-  Widget _buildSection({required IconData icon, required String title, Widget? action, required Widget child, Color? iconColor}) {
+  Widget _buildSection({required String title, Widget? action, required Widget child}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Icon(icon, color: iconColor ?? Colors.grey[600], size: 20),
-                const SizedBox(width: 8),
-                Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ],
-            ),
+            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             if (action != null) action,
           ],
         ),

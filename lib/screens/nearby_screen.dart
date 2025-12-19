@@ -96,6 +96,10 @@ class _NearbyScreenState extends State<NearbyScreen>
         // 마커 클릭 시 정보창 표시
         marker.setOnTapListener((overlay) {
            final infoWindow = NInfoWindow.onMarker(id: marker.info.id, text: store.name);
+           // 정보창 클릭 리스너 설정
+           infoWindow.setOnTapListener((overlay) {
+             Navigator.pushNamed(context, '/store-detail', arguments: store.id);
+           });
            marker.openInfoWindow(infoWindow);
            return true;
         });

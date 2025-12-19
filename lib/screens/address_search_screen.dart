@@ -48,35 +48,24 @@ class SavedAddress {
 
 // 네이버 검색 API 결과 모델
 class NaverSearchResult {
-  final String title;
-  final String address;
   final String roadAddress;
-  final double mapx;
-  final double mapy;
+  final String jibunAddress;
+  final double x; // 경도 (Longitude)
+  final double y; // 위도 (Latitude)
 
   NaverSearchResult({
-    required this.title,
-    required this.address,
     required this.roadAddress,
-    required this.mapx,
-    required this.mapy,
+    required this.jibunAddress,
+    required this.x,
+    required this.y,
   });
 
   factory NaverSearchResult.fromJson(Map<String, dynamic> json) {
-    // mapx, mapy는 카텍 좌표계로 올 수 있으므로 주의 필요 (API 문서 확인 중요)
-    // 네이버 검색 API (지역)의 mapx, mapy는 정수형 문자열일 수 있음
     return NaverSearchResult(
-      title: (json['title'] as String).replaceAll('<b>', '').replaceAll('</b>', ''),
-      address: json['address'] ?? '',
       roadAddress: json['roadAddress'] ?? '',
-      // 네이버 지역 검색 API의 mapx, mapy는 12841399와 같은 형태로, 1/10,000,000 위경도 값이 아님. 
-      // KATECH 좌표계 등으로 제공될 수 있어, Geocoding API를 별도로 호출하거나 좌표 변환이 필요할 수 있음.
-      // 여기서는 Geocoding API를 사용한다고 가정하고 구조만 잡거나,
-      // 간단한 테스트를 위해 네이버 지도 API Geocoding을 호출하는 로직을 별도로 구현해야 함.
-      // *중요*: 네이버 검색 API는 좌표를 바로 쓸 수 있는 위경도(LatLng)로 주지 않는 경우가 많음.
-      // 따라서 네이버 클라우드 플랫폼의 "Geocoding" API를 직접 호출하는 것이 가장 정확함.
-      mapx: 0.0, 
-      mapy: 0.0,
+      jibunAddress: json['jibunAddress'] ?? '',
+      x: double.tryParse(json['x'] ?? '0') ?? 0.0,
+      y: double.tryParse(json['y'] ?? '0') ?? 0.0,
     );
   }
 }
@@ -87,9 +76,9 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
   List<NaverSearchResult> _searchResults = [];
   bool _isSearching = false;
 
-  // 네이버 클라우드 플랫폼 Client ID & Secret
-  final String _clientId = 'peiu5pezpj'; 
-  final String _clientSecret = '3scnYomd8nIOfDG3Ds8B5STJbJgmDbV3YaMrY3uv'; 
+  // [수정] 새로운 지도 전용 Client ID와 Secret으로 교체
+  final String _clientId = '1rst5nv703'; 
+  final String _clientSecret = 'FTC0ifJsvXdQQOI91bzqFbIhZ8pZUWAKb3MToqsW'; 
 
   @override
   void initState() {
@@ -129,31 +118,53 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
       final url = Uri.parse(
           'https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?query=$query');
       
-      final response = await http.get(url, headers: {
-        'X-NCP-APIGW-API-KEY-ID': _clientId,
-        'X-NCP-APIGW-API-KEY': _clientSecret,
-      });
+      // [수정] Referer 헤더 제거 (Web URL 등록 안했으므로)
+      final headers = {
+        'X-NCP-APIGW-API-KEY-ID': _clientId.trim(),
+        'X-NCP-APIGW-API-KEY': _clientSecret.trim(),
+        'Accept': 'application/json',
+      };
 
+      print("Requesting: $url");
+      final response = await http.get(url, headers: headers);
+      print("API Response Code: ${response.statusCode}");
+      
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final addresses = data['addresses'] as List;
-        
-        setState(() {
-          _searchResults = addresses.map((item) {
-            return NaverSearchResult(
-              title: item['roadAddress'] ?? item['jibunAddress'],
-              address: item['jibunAddress'] ?? '',
-              roadAddress: item['roadAddress'] ?? '',
-              // API는 문자열로 좌표를 줌
-              mapx: double.parse(item['x']), // 경도 (Longitude)
-              mapy: double.parse(item['y']), // 위도 (Latitude)
-            );
-          }).toList();
-        });
+        if (data['addresses'] != null && (data['addresses'] as List).isNotEmpty) {
+          final addresses = data['addresses'] as List;
+          setState(() {
+            _searchResults = addresses.map((item) {
+              return NaverSearchResult.fromJson(item);
+            }).toList();
+          });
+        } else {
+           setState(() => _searchResults = []);
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("검색 결과가 없습니다.")),
+          );
+        }
       } else {
-         print('Geocoding Error: ${response.statusCode} ${response.body}');
+         // 에러 메시지 상세 파싱
+         String errorCode = "";
+         String errorMsg = "";
+         try {
+           final errorBody = jsonDecode(response.body);
+           if (errorBody is Map && errorBody.containsKey('error')) {
+             errorCode = errorBody['error']['errorCode']?.toString() ?? "";
+             errorMsg = errorBody['error']['message'] ?? "";
+           }
+         } catch (_) {}
+
+         if (errorMsg.isEmpty) errorMsg = response.reasonPhrase ?? "Unknown Error";
+
+         print('Geocoding Error: ${response.statusCode} [$errorCode] $errorMsg');
+         
          ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("주소 검색 실패: ${response.statusCode}")),
+          SnackBar(
+            content: Text("오류 $errorCode: $errorMsg"),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } catch (e) {
@@ -186,10 +197,8 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
   }
   
   void _onSearchResultTap(NaverSearchResult result) {
-      // 검색 결과를 선택했을 때 다이얼로그 혹은 바로 이동
-      // 좌표계: Geocoding API 결과는 위도(y), 경도(x)
-      final lat = result.mapy;
-      final lng = result.mapx;
+      final lat = result.y;
+      final lng = result.x;
       
       showDialog(
       context: context,
@@ -231,7 +240,7 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
     );
   }
 
-  // 집/회사 추가 다이얼로그 (단순 텍스트 입력 대신 검색 유도 가능하나, 여기서는 유지)
+  // 집/회사 추가 다이얼로그
   void _showAddAddressDialog(String type) {
     final textController = TextEditingController();
     showDialog(
@@ -252,8 +261,6 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
                 TextButton(
                   onPressed: () {
-                      // 실제로는 검색 로직을 타야 하지만, 임시로 현재 위치 저장 로직 등으로 대체 가능
-                      // 여기서는 생략
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("상단 검색창을 이용해 주소를 검색해주세요.")));
                   },
@@ -300,10 +307,15 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
                  itemCount: _searchResults.length,
                  itemBuilder: (context, index) {
                    final item = _searchResults[index];
-                   return ListTile(
-                     title: Text(item.roadAddress),
-                     subtitle: Text(item.address), // 지번 주소
-                     onTap: () => _onSearchResultTap(item),
+                   return Column(
+                     children: [
+                       ListTile(
+                         title: Text(item.roadAddress),
+                         subtitle: Text(item.jibunAddress),
+                         onTap: () => _onSearchResultTap(item),
+                       ),
+                       const Divider(height: 1),
+                     ],
                    );
                  },
                ),

@@ -8,15 +8,10 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- Google Maps API Key -->
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="${MAPS_API_KEY}" />
-
-        <!-- Naver Map Client ID -->
+        <!-- [수정] 새로운 지도 전용 Client ID로 교체 -->
         <meta-data
             android:name="com.naver.maps.map.CLIENT_ID"
-            android:value="peiu5pezpj" />
+            android:value="1rst5nv703" />
 
         <activity
             android:name=".MainActivity"

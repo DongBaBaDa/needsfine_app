@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:needsfine_app/widgets/ranking_widget.dart';
 import 'package:needsfine_app/main.dart';
 
-// 홈 화면이 탭 전환 시 초기화되지 않도록 함
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -11,236 +10,425 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   @override
   bool get wantKeepAlive => true;
 
-  MainCategory _selectedCategory = MainCategory.food;
+  final List<String> _filterTabs = ["지역", "음식 종류", "가격", "테이블 타입", "분위기", "편의시설"];
+  late final TabController _filterTabController;
 
-  // --- Data for new UI ---
-  final List<Map<String, dynamic>> coreFoodCategories = const [
-    {'icon': Icons.rice_bowl_outlined, 'label': '한식'},
-    {'icon': Icons.ramen_dining_outlined, 'label': '일식'},
-    {'icon': Icons.tapas_outlined, 'label': '중식'},
-    {'icon': Icons.local_pizza_outlined, 'label': '양식'},
-    {'icon': Icons.public_outlined, 'label': '아시아'},
-    {'icon': Icons.kebab_dining_outlined, 'label': '고기'},
-    {'icon': Icons.set_meal_outlined, 'label': '해산물'},
-    {'icon': Icons.eco_outlined, 'label': '샐러드'},
-    {'icon': Icons.delivery_dining_outlined, 'label': '피자'},
-    {'icon': Icons.cake_outlined, 'label': '카페'},
-    {'icon': Icons.room_service_outlined, 'label': '파인다이닝'},
-    {'icon': Icons.dinner_dining_outlined, 'label': '뷔페'},
-    {'icon': Icons.fastfood_outlined, 'label': '치킨'},
-    {'icon': Icons.lunch_dining_outlined, 'label': '패스트푸드'},
-  ];
+  final Set<String> _selectedFilters = {};
+  RangeValues _priceRange = const RangeValues(0, 400000);
 
-  final List<Map<String, dynamic>> coreDrinkCategories = const [
-    {'icon': Icons.sports_bar_outlined, 'label': '호프/수제맥주'},
-    {'icon': Icons.wine_bar_outlined, 'label': '바'},
-    {'icon': Icons.storefront_outlined, 'label': '이자카야'},
-    {'icon': Icons.set_meal_outlined, 'label': '해산물주점'},
-    {'icon': Icons.flatware_outlined, 'label': '전/파전 주점'},
-    {'icon': Icons.holiday_village_outlined, 'label': '포차'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _filterTabController = TabController(length: _filterTabs.length, vsync: this);
+  }
 
-  final List<String> situationalTags = const [
-    '#데이트 성공확률 높음',
-    '#조용한 자리',
-    '#혼밥 100% 가능',
-    '#줄서먹는집',
-    '#가성비갑',
-    '#친절함',
-    '#사진보다 맛이 진짜임',
-    '#술과 같이 하기 좋음'
-  ];
+  @override
+  void dispose() {
+    _filterTabController.dispose();
+    super.dispose();
+  }
+
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.9,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 12),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    TabBar(
+                      controller: _filterTabController,
+                      isScrollable: true,
+                      tabs: _filterTabs.map((String tab) => Tab(text: tab)).toList(),
+                      labelColor: Colors.black,
+                      unselectedLabelColor: Colors.grey,
+                      indicatorColor: Colors.black,
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: TabBarView(
+                        controller: _filterTabController,
+                        children: [
+                          _buildRegionFilter(scrollController, setModalState),
+                          _buildFoodTypeFilter(scrollController, setModalState),
+                          _buildPriceFilter(scrollController, setModalState),
+                          _buildTableTypeFilter(scrollController, setModalState),
+                          _buildMoodFilter(scrollController, setModalState),
+                          _buildAmenitiesFilter(scrollController, setModalState),
+                        ],
+                      ),
+                    ),
+                    _buildBottomActionArea(setModalState),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    final theme = Theme.of(context);
-    final currentCategories = _selectedCategory == MainCategory.food
-        ? coreFoodCategories
-        : coreDrinkCategories;
-
     return Scaffold(
       backgroundColor: Colors.white,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            floating: true,
-            backgroundColor: Colors.white,
-            leading: TextButton.icon(
-              onPressed: () => Navigator.pushNamed(context, '/location'),
-              icon: const Icon(Icons.location_on, size: 18, color: Colors.black),
-              label: const Text("현재 위치", style: TextStyle(color: Colors.black)),
-            ),
-            leadingWidth: 120,
-            actions: [
-              ValueListenableBuilder<int>(
-                valueListenable: notificationCount,
-                builder: (context, count, child) {
-                  return Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications_none,
-                            color: Colors.black),
-                        onPressed: () =>
-                            Navigator.pushNamed(context, '/notification'),
-                      ),
-                      if (count > 0)
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                                color: Colors.red, shape: BoxShape.circle),
-                            child: Text(count.toString(),
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 10)),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              )
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(60.0),
-              child: Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 1,
+        titleSpacing: 0,
+        leadingWidth: 0,
+        leading: const SizedBox.shrink(),
+        title: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            children: [
+              Expanded(
                 child: GestureDetector(
                   onTap: () => Navigator.pushNamed(context, '/search'),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0, vertical: 12.0),
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(30.0)),
-                    child: const Row(children: [
-                      Icon(Icons.search, color: Colors.grey),
-                      SizedBox(width: 8),
-                      Text("'진짜' '맛집'을 '검색'하세요",
-                          style: TextStyle(color: Colors.grey))
-                    ]),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.arrow_back, color: Colors.black),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "순천시 성남뒷길 84",
+                            style: TextStyle(color: Colors.black, fontSize: 15),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-
-          // 🔥 실시간 랭킹
-          SliverToBoxAdapter(child: RankingWidget()),
-
-          // 🔥 식사/술 카테고리 토글
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              child: Row(
-                children: [
-                  _buildMainCategoryToggle(theme, "식사 🍽️", MainCategory.food),
-                  const SizedBox(width: 12),
-                  _buildMainCategoryToggle(theme, "술 🍷", MainCategory.drink),
-                ],
-              ),
-            ),
-          ),
-
-          // 🔥 카테고리 아이콘
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                crossAxisSpacing: 8.0,
-                mainAxisSpacing: 16.0,
-                childAspectRatio: 0.9,
-              ),
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final category = currentCategories[index];
-                return InkWell(
-                  onTap: () {},
-                  borderRadius: BorderRadius.circular(8.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {},
+                child: Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: const Row(
                     children: [
-                      Icon(category['icon'] as IconData,
-                          size: 32, color: Colors.grey[700]),
-                      const SizedBox(height: 8),
-                      Text(category['label'] as String,
-                          style: const TextStyle(fontSize: 12)),
+                      Icon(Icons.calendar_today, size: 16, color: Colors.blue),
+                      SizedBox(width: 4),
+                      Text("날짜 · 인원", style: TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                );
-              }, childCount: currentCategories.length),
-            ),
-          ),
-
-          // 🔥 태그 추천
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
-              child: Text(
-                "지금 이런 곳은 어때요?",
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 40,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: situationalTags.length,
-                itemBuilder: (context, index) => Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: Chip(label: Text(situationalTags[index])),
                 ),
               ),
+            ],
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(50),
+          child: SizedBox(
+            height: 50,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              itemCount: _filterTabs.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 24),
+              itemBuilder: (context, index) {
+                return GestureDetector(
+                  onTap: () {
+                    _filterTabController.index = index;
+                    _showFilterBottomSheet();
+                  },
+                  child: Center(
+                    child: Text(
+                      _filterTabs[index],
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.normal,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
+        ),
+      ),
+      // [수정] SliverToBoxAdapter로 RankingWidget을 감싸줍니다.
+      body: CustomScrollView(slivers: [SliverToBoxAdapter(child: RankingWidget())]), 
+    );
+  }
 
-          const SliverToBoxAdapter(child: SizedBox(height: 40)),
+  Widget _buildFilterSection({required String title, required List<String> items, required StateSetter setState}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: items.map((item) {
+              final isSelected = _selectedFilters.contains(item);
+              return ChoiceChip(
+                label: Text(item),
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedFilters.add(item);
+                    } else {
+                      _selectedFilters.remove(item);
+                    }
+                  });
+                },
+                selectedColor: Colors.deepPurple[50],
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isSelected ? Colors.deepPurple : Colors.grey.shade300)),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMainCategoryToggle(
-      ThemeData theme, String text, MainCategory category) {
-    final isSelected = _selectedCategory == category;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedCategory = category),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? theme.primaryColor.withOpacity(0.1)
-                : Colors.grey[100],
-            border: Border.all(
-                color: isSelected ? theme.primaryColor : Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(12),
+  Widget _buildRegionFilter(ScrollController controller, StateSetter setState) {
+    return ListView(
+      controller: controller,
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildFilterSection(title: "핫플레이스", items: ["서울", "경기", "인천", "부산", "제주"], setState: setState),
+        _buildFilterSection(title: "서울 상세", items: ["강남/역삼/선릉", "강남구청", "건대/군자/구의", "금호/옥수/신당"], setState: setState),
+      ],
+    );
+  }
+
+  Widget _buildFoodTypeFilter(ScrollController controller, StateSetter setState) {
+    return ListView(
+      controller: controller,
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildFilterSection(title: "🔥 인기메뉴", items: ["스시오마카세", "한우오마카세", "스테이크", "한식"], setState: setState),
+        _buildFilterSection(title: "국가별", items: ["한식", "중식", "일식", "양식", "이탈리아음식"], setState: setState),
+        _buildFilterSection(title: "종류별", items: ["레스토랑", "포차", "뷔페"], setState: setState),
+      ],
+    );
+  }
+
+  Widget _buildPriceFilter(ScrollController controller, StateSetter setState) {
+    return ListView(
+      controller: controller,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [ 
+          Text("가격", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          Text("0원 ~ 40만원", style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold))
+        ]),
+        const SizedBox(height: 16),
+        RangeSlider(
+          values: _priceRange,
+          min: 0,
+          max: 400000,
+          divisions: 40,
+          labels: RangeLabels('${(_priceRange.start/10000).toStringAsFixed(0)}만원', '${(_priceRange.end/10000).toStringAsFixed(0)}만원 이상'),
+          onChanged: (values) {
+            setState(() {
+              _priceRange = values;
+            });
+          },
+          activeColor: Colors.deepPurple,
+          inactiveColor: Colors.grey[300],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTableTypeFilter(ScrollController controller, StateSetter setState) {
+    final items = [
+      {'icon': Icons.door_front_door_outlined, 'label': '룸'},
+      {'icon': Icons.countertops_outlined, 'label': '바'},
+      {'icon': Icons.table_restaurant_outlined, 'label': '홀'},
+      {'icon': Icons.deck_outlined, 'label': '테라스'},
+      {'icon': Icons.window_outlined, 'label': '창가'},
+      {'icon': Icons.meeting_room_outlined, 'label': '대관'},
+    ];
+    return GridView.builder(
+      controller: controller,
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 0.9,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final isSelected = _selectedFilters.contains(item['label']);
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              if (isSelected) _selectedFilters.remove(item['label']);
+              else _selectedFilters.add(item['label'] as String);
+            });
+          },
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: isSelected ? Colors.deepPurple : Colors.grey.shade300, width: isSelected ? 2: 1),
+                  borderRadius: BorderRadius.circular(12),
+                  color: isSelected ? Colors.deepPurple[50] : Colors.white,
+                ),
+                child: Icon(item['icon'] as IconData, size: 32, color: isSelected ? Colors.deepPurple : Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              Text(item['label'] as String, style: TextStyle(color: isSelected ? Colors.deepPurple : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+            ],
           ),
-          child: Center(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? theme.primaryColor : Colors.black54,
+        );
+      },
+    );
+  }
+
+  Widget _buildMoodFilter(ScrollController controller, StateSetter setState) {
+    return ListView(
+      controller: controller,
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildFilterSection(title: "분위기", items: ["데이트", "비즈니스미팅", "기념일", "단체회식", "가족모임", "분위기맛집", "상견례", "조용한"], setState: setState),
+      ],
+    );
+  }
+
+  Widget _buildAmenitiesFilter(ScrollController controller, StateSetter setState) {
+    final items = [
+      {'icon': Icons.local_parking, 'label': '주차가능'},
+      {'icon': Icons.directions_car, 'label': '발렛가능'},
+      {'icon': Icons.wine_bar, 'label': '콜키지가능'},
+      {'icon': Icons.liquor, 'label': '콜키지프리'},
+    ];
+    return GridView.builder(
+        controller: controller,
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          childAspectRatio: 0.9,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+        final item = items[index];
+        final isSelected = _selectedFilters.contains(item['label']);
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              if (isSelected) _selectedFilters.remove(item['label']);
+              else _selectedFilters.add(item['label'] as String);
+            });
+          },
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: isSelected ? Colors.deepPurple : Colors.grey.shade300, width: isSelected ? 2: 1),
+                  borderRadius: BorderRadius.circular(12),
+                  color: isSelected ? Colors.deepPurple[50] : Colors.white,
+                ),
+                child: Icon(item['icon'] as IconData, size: 32, color: isSelected ? Colors.deepPurple : Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              Text(item['label'] as String, style: TextStyle(color: isSelected ? Colors.deepPurple : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomActionArea(StateSetter setState) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -4))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_selectedFilters.isNotEmpty)
+            SizedBox(
+              height: 32,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: _selectedFilters.map((filter) => Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Chip(
+                    label: Text(filter, style: const TextStyle(fontSize: 12, color: Colors.deepPurple)),
+                    backgroundColor: Colors.deepPurple.withOpacity(0.1),
+                    deleteIcon: const Icon(Icons.close, size: 14, color: Colors.deepPurple),
+                    onDeleted: () {
+                      setState(() {
+                        _selectedFilters.remove(filter);
+                      });
+                    },
+                  ),
+                )).toList(),
               ),
             ),
+          if (_selectedFilters.isNotEmpty) const SizedBox(height: 12),
+          Row(
+            children: [
+              OutlinedButton.icon(icon: const Icon(Icons.refresh), label: const Text("초기화"), onPressed: () => setState(() => _selectedFilters.clear())),
+              const SizedBox(width: 8),
+              Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context), style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange, foregroundColor: Colors.white), child: const Text("결과 보기"))),
+            ],
           ),
-        ),
+        ],
       ),
     );
   }
 }
-
-enum MainCategory { food, drink }
