@@ -25,7 +25,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       currentExp: 0,
       maxExp: 100,
       introduction: "'안녕하세요', '니즈파인입니다'.",
-      influence: 12345,
+      influence: 2300,
       points: 17231,
       profileImagePath: null,
     );
@@ -175,36 +175,42 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
 
                     Row(
                       children: [
-                        // LV
+                        // 신뢰도 표시 (LV 대신)
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.black87,
+                            color: Colors.deepPurple, // 신뢰 상징 색상
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Text(
-                            "LV.${_userProfile.level}",
-                            style: const TextStyle(
-                              color: Colors.yellowAccent,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.verified_user, size: 12, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text(
+                                "신뢰도 94%", // 고정값 예시
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
 
                         const SizedBox(width: 10),
 
-                        // 경험치바
+                        // 신뢰도 바 (경험치 바 대신)
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              _buildExpBar(_userProfile.expPercent),
+                              _buildTrustBar(0.94), // 94%
                               const SizedBox(height: 4),
-                              Text(
-                                "${_userProfile.currentExp.toInt()} / ${_userProfile.maxExp.toInt()} EXP",
-                                style: const TextStyle(
+                              const Text(
+                                "상위 1% 판별사",
+                                style: TextStyle(
                                     fontSize: 10, color: Colors.grey),
                               ),
                             ],
@@ -252,26 +258,18 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   }
 
   // =========================
-  // 경험치바
+  // 신뢰도 바 (기존 경험치바 대체)
   // =========================
 
-  Widget _buildExpBar(double percent) {
+  Widget _buildTrustBar(double percent) {
     percent = percent.clamp(0.0, 1.0);
 
-    final colors = <Color>[
-      Colors.green,
-      Colors.lightGreen,
-      Colors.yellow,
-      Colors.orange,
-      Colors.red,
-    ];
-
-    final index = percent * (colors.length - 1);
-    final low = index.floor();
-    final high = min(low + 1, colors.length - 1);
-    final t = index - low;
-
-    final barColor = Color.lerp(colors[low], colors[high], t)!;
+    // 신뢰도에 따른 색상 변화 (낮을수록 회색, 높을수록 딥퍼플/골드)
+    final barColor = percent >= 0.9 
+        ? Colors.deepPurple 
+        : percent >= 0.7 
+            ? Colors.blue 
+            : Colors.grey;
 
     return Stack(
       children: [
@@ -292,14 +290,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             ),
           ),
         ),
-        Positioned.fill(
-          child: Center(
-            child: Text(
-              "${(percent * 100).toStringAsFixed(1)}%",
-              style: const TextStyle(fontSize: 10),
-            ),
-          ),
-        ),
+        // 퍼센트 텍스트 제거 (바 안에 텍스트가 지저분할 수 있음)
       ],
     );
   }
@@ -327,7 +318,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   }
 
   // =========================
-  // 영향력 / 포인트
+  // 구독자 / 포인트 (영향력 -> 구독자 변경)
   // =========================
 
   Widget _buildInfoBoxes(BuildContext context) {
@@ -337,9 +328,9 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
         children: [
           Expanded(
             child: _buildInfoBox(
-              title: "나의 영향력",
-              value: "${_userProfile.influence}명",
-              onTap: () => _goToPlaceholderPage("나의 영향력"),
+              title: "나의 구독자", // 영향력 -> 구독자
+              value: "${_userProfile.influence}명", 
+              onTap: () => _goToPlaceholderPage("나의 구독자"),
             ),
           ),
           const SizedBox(width: 16),
@@ -409,20 +400,40 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          _buildReviewItem("인생 맛집 찾았다", "니즈파인 점수 4.8", 102),
-          _buildReviewItem("다신 안 시킨다", "니즈파인 점수 4.1", 89),
-          _buildReviewItem("존맛탱 노트북", "니즈파인 점수 4.5", 75),
+          // 신뢰도 점수로 변경
+          _buildReviewItem("인생 맛집 찾았다", "신뢰도 98점", 102, true),
+          _buildReviewItem("다신 안 시킨다", "신뢰도 85점", 89, false),
+          _buildReviewItem("존맛탱 노트북", "신뢰도 92점", 75, true),
         ],
       ),
     );
   }
 
-  Widget _buildReviewItem(String title, String subtitle, int likes) {
-    return ListTile(
-      leading: const Icon(Icons.store),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: Text("👍 $likes"),
+  Widget _buildReviewItem(String title, String subtitle, int likes, bool highTrust) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: highTrust 
+        ? BoxDecoration(
+            border: Border.all(color: Colors.deepPurple.withOpacity(0.3), width: 1.5),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.deepPurple.withOpacity(0.03)
+          )
+        : null,
+      child: ListTile(
+        leading: Icon(Icons.rate_review, color: highTrust ? Colors.deepPurple : Colors.grey),
+        title: Text(title, style: TextStyle(fontWeight: highTrust ? FontWeight.bold : FontWeight.normal)),
+        subtitle: Text(subtitle, style: TextStyle(color: highTrust ? Colors.deepPurple : Colors.grey)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (highTrust) const Padding(
+              padding: EdgeInsets.only(right: 8.0),
+              child: Icon(Icons.verified, size: 16, color: Colors.deepPurple),
+            ),
+            Text("👍 $likes"),
+          ],
+        ),
+      ),
     );
   }
 
