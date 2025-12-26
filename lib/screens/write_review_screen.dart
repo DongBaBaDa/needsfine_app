@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/app_data.dart';
-import '../utils/review_scorer.dart'; // 새로 만든 점수 계산기 import
+import 'package:needsfine_app/models/app_data.dart';
 
 class WriteReviewScreen extends StatefulWidget {
   const WriteReviewScreen({super.key});
@@ -10,75 +9,62 @@ class WriteReviewScreen extends StatefulWidget {
 }
 
 class _WriteReviewScreenState extends State<WriteReviewScreen> {
-  final TextEditingController _controller = TextEditingController();
-  double _rating = 5.0;
+  final _reviewController = TextEditingController();
+  double _rating = 3.0;
 
   @override
   Widget build(BuildContext context) {
     final String storeId = ModalRoute.of(context)!.settings.arguments as String;
-    final store = AppData().stores.firstWhere((s) => s.id == storeId);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("리뷰 쓰기")),
+      appBar: AppBar(
+        title: const Text('리뷰 작성'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (_reviewController.text.length < 10) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('리뷰는 10자 이상 작성해주세요.')),
+                );
+                return;
+              }
+              // [수정] 변경된 addReview 메서드 호출
+              AppData().addReview(storeId, _reviewController.text, _rating);
+              Navigator.pop(context);
+            },
+            child: const Text('게시', style: TextStyle(color: Colors.blue)),
+          )
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Text("${store.name} 어떠셨나요?", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                const Text("별점: "),
-                Expanded(
-                  child: Slider(
-                    value: _rating,
-                    min: 1,
-                    max: 5,
-                    divisions: 4,
-                    label: _rating.toString(),
-                    onChanged: (val) => setState(() => _rating = val),
-                  ),
-                ),
-                Text("$_rating점"),
-              ],
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _controller,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                hintText: "솔직한 리뷰를 남겨주세요. (구체적으로 쓰면 니즈파인 점수가 올라갑니다!)",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                if (_controller.text.isEmpty) return;
-
-                // 1. 새로운 점수 계산 로직 호출
-                final scoreData = calculateNeedsFineScore(_controller.text, _rating);
-
-                // 2. 기존 리뷰 추가 로직에 새로운 데이터를 전달
-                AppData().addReview(
-                  storeId,
-                  _controller.text,
-                  _rating,
-                  scoreData, // needsfine_score, trust_level 등이 담긴 맵
-                );
-
-                Navigator.pop(context); // 뒤로가기
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("리뷰가 등록되었습니다! F점수가 갱신됩니다.")),
-                );
+            Text('별점: $_rating', style: const TextStyle(fontSize: 16)),
+            Slider(
+              value: _rating,
+              min: 1.0,
+              max: 5.0,
+              divisions: 8,
+              label: _rating.toString(),
+              onChanged: (double value) {
+                setState(() {
+                  _rating = value;
+                });
               },
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 50),
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: TextField(
+                controller: _reviewController,
+                maxLines: null,
+                expands: true,
+                decoration: const InputDecoration(
+                  hintText: '솔직한 리뷰를 작성해주세요...',
+                  border: OutlineInputBorder(),
+                ),
               ),
-              child: const Text("등록하기"),
-            )
+            ),
           ],
         ),
       ),

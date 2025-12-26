@@ -1,38 +1,42 @@
-import 'dart:math';
+import 'package:needsfine_app/utils/score_calculator.dart';
 
-// 1. 리뷰 모델
 class Review {
   final String userName;
   final String content;
   final double rating;
   final String date;
-  final double needsfineScore;
-  final int trustLevel;
-  final bool authenticity;
-  final bool advertisingWords;
-  final bool emotionalBalance;
+  late final double needsfineScore;
+  late final int trustLevel;
+  late final bool authenticity;
+  late final bool advertisingWords;
+  late final bool isCritical;
+  late final bool isHidden;
+  late final List<String> tags;
 
   Review({
     required this.userName,
     required this.content,
     required this.rating,
     required this.date,
-    required this.needsfineScore,
-    required this.trustLevel,
-    required this.authenticity,
-    required this.advertisingWords,
-    required this.emotionalBalance,
-  });
+  }) {
+    final scoreResult = calculateNeedsFineScore(content, rating);
+    needsfineScore = scoreResult['needsfine_score'];
+    trustLevel = scoreResult['trust_level'];
+    tags = scoreResult['tags'];
+    isCritical = scoreResult['is_critical'];
+    isHidden = scoreResult['is_hidden'];
+    authenticity = trustLevel >= 70;
+    advertisingWords = false;
+  }
 }
 
-// 2. 가게 모델 ( [수정] 위도/경도 필드 추가 )
 class Store {
   final String id;
   final String name;
   final String category;
   final List<String> tags;
-  final double latitude;  // 가게 위도
-  final double longitude; // 가게 경도
+  final double latitude;
+  final double longitude;
   double userRating;
   double needsFineScore;
   int reviewCount;
@@ -52,75 +56,43 @@ class Store {
   });
 }
 
-// 3. [전역 데이터]
 class AppData {
   static final AppData _instance = AppData._internal();
   factory AppData() => _instance;
   AppData._internal();
 
   List<Store> stores = [
-    Store(
-      id: '1',
-      name: "족발야시장 강남점",
-      category: "족발·보쌈",
-      tags: ["맛있는", "친절한", "푸짐한", "깨끗한", "가성비"],
-      latitude: 37.5013,  // [수정] 강남역 근처 실제 좌표
-      longitude: 127.025, // [수정] 강남역 근처 실제 좌표
-      userRating: 4.5,
-      needsFineScore: 88.5,
-      reviewCount: 120,
-      reviews: [],
-    ),
-    Store(
-      id: '2',
-      name: "엽기떡볶이 본점",
-      category: "분식",
-      tags: ["매운", "스트레스", "중독성", "빠른", "배달"],
-      latitude: 37.5755,  // [수정] 동대문 근처 실제 좌표
-      longitude: 127.028, // [수정] 동대문 근처 실제 좌표
-      userRating: 4.8,
-      needsFineScore: 92.0,
-      reviewCount: 350,
-      reviews: [],
-    ),
+    Store(id: '1', name: "족발야시장 강남점", category: "족발·보쌈", tags: ["맛있는"], latitude: 37.5013, longitude: 127.025, reviews: []),
+    Store(id: '2', name: "엽기떡볶이 본점", category: "분식", tags: ["매운"], latitude: 37.5755, longitude: 127.028, reviews: []),
   ];
 
-  List<Map<String, dynamic>> myReviews = [];
-
-  void addReview(String storeId, String content, double rating, Map<String, dynamic> scoreData) {
-    final store = stores.firstWhere((s) => s.id == storeId);
-    final newReview = Review(
-      userName: "니즈파인",
-      content: content,
-      rating: rating,
-      date: DateTime.now().toString().split(' ')[0],
-      needsfineScore: scoreData['needsfine_score'] as double,
-      trustLevel: scoreData['trust_level'] as int,
-      authenticity: scoreData['authenticity'] as bool,
-      advertisingWords: scoreData['advertising_words'] as bool,
-      emotionalBalance: scoreData['emotional_balance'] as bool,
-    );
-    store.reviews.insert(0, newReview);
-    store.reviewCount++;
-    myReviews.insert(0, {
-      "storeName": store.name,
-      "content": content,
-      "rating": rating,
-      "date": newReview.date,
-      "needsfineScore": newReview.needsfineScore,
-    });
-    _updateStoreScores(store);
+  // [복원 및 수정] addReview 메서드
+  void addReview(String storeId, String content, double rating) {
+    try {
+      final store = stores.firstWhere((s) => s.id == storeId);
+      final newReview = Review(
+        userName: "니즈파인(User)", // 임시 사용자 이름
+        content: content,
+        rating: rating,
+        date: DateTime.now().toIso8601String().substring(0, 10),
+      );
+      
+      store.reviews.insert(0, newReview);
+      _updateStoreScores(store);
+    } catch (e) {
+      print("Error adding review: $e");
+    }
   }
 
   void _updateStoreScores(Store store) {
     if (store.reviews.isEmpty) {
       store.userRating = 0;
       store.needsFineScore = 0;
+      store.reviewCount = 0;
       return;
     }
-    double totalRating = store.reviews.fold(0, (sum, r) => sum + r.rating);
-    store.userRating = totalRating / store.reviewCount;
-    double totalNeedsFineScore = store.reviews.fold(0, (sum, r) => sum + r.needsfineScore);
-    store.needsFineScore = totalNeedsFineScore / store.reviewCount;
+    store.reviewCount = store.reviews.length;
+    store.userRating = store.reviews.map((r) => r.rating).reduce((a, b) => a + b) / store.reviewCount;
+    store.needsFineScore = store.reviews.map((r) => r.needsfineScore).reduce((a, b) => a + b) / store.reviewCount;
   }
 }

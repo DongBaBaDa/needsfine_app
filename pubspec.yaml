@@ -11,21 +11,23 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # 지도 패키지는 안정적인 Google 지도를 유지합니다.
-  google_maps_flutter: ^2.5.0
-  flutter_naver_map: ^1.2.3 # 네이버 지도 SDK 추가
-
-  # [오류 수정] carousel_slider를 충돌이 해결된 버전으로 업그레이드합니다.
-  carousel_slider: ^5.0.0
-
-  # 나머지 패키지들
-  cupertino_icons: ^1.0.6
+  # 지도 패키지
+  flutter_naver_map: ^1.2.3
   geolocator: ^11.0.0
   geocoding: ^3.0.0
   permission_handler: ^11.3.1
+
+  # UI & 유틸리티
+  carousel_slider: ^5.0.0
   shared_preferences: ^2.2.3
   http: ^1.2.1
   scrollable_positioned_list: ^0.3.8
+  image_picker: ^1.0.0
+  intl: ^0.18.1
+  unorm_dart: ^0.2.0 # [추가] NFC 정규화용
+
+  # 기타
+  cupertino_icons: ^1.0.6
 
 dev_dependencies:
   flutter_test:
