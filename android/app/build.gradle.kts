@@ -1,23 +1,12 @@
-import java.util.Properties
-import java.io.FileInputStream
-
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val localProperties = Properties()
-val localPropertiesFile = rootProject.file("local.properties") 
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.inputStream().use { stream ->
-        localProperties.load(stream)
-    }
-}
-
 android {
     namespace = "com.example.needsfine_app"
-    compileSdk = 36 // Updated to 36
+    compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -26,18 +15,15 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = "1.8" 
+        jvmTarget = "1.8"
     }
 
     defaultConfig {
         applicationId = "com.example.needsfine_app"
-        minSdk = flutter.minSdkVersion 
-        targetSdk = 36 // Updated to 36
-        versionCode = 1
-        versionName = "1.0"
-        multiDexEnabled = true
-
-        manifestPlaceholders["MAPS_API_KEY"] = localProperties.getProperty("MAPS_API_KEY")
+        minSdk = 21
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     buildTypes {
@@ -46,8 +32,6 @@ android {
         }
     }
 }
-
-dependencies {}
 
 flutter {
     source = "../.."

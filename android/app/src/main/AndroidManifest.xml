@@ -1,18 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Location Permissions -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.needsfine_app">
     <application
         android:label="needsfine_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-
-        <!-- [수정] 새로운 지도 전용 Client ID로 교체 -->
+        
+        <!-- [추가] 네이버 지도 클라이언트 ID -->
         <meta-data
             android:name="com.naver.maps.map.CLIENT_ID"
             android:value="1rst5nv703" />
-
+            
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -30,7 +27,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

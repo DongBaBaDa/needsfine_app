@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:needsfine_app/models/app_data.dart';
+import 'package:needsfine_app/core/needsfine_theme.dart';
 
 class NearbyScreen extends StatefulWidget {
   const NearbyScreen({super.key});
@@ -21,15 +22,14 @@ class _NearbyScreenState extends State<NearbyScreen>
   bool get wantKeepAlive => true;
 
   final Completer<NaverMapController> _controller = Completer();
-  NLatLng? _currentMapCenter;
   StreamSubscription<Position>? _positionStreamSubscription;
   bool _isFirstLocationUpdate = true;
-  String _displayLocation = '강남구 역삼동'; // 임시 기본값
+  String _displayLocation = '강남구 역삼동'; 
 
   Store? _selectedStore;
 
   static const NCameraPosition _initialPosition = NCameraPosition(
-    target: NLatLng(37.5008, 127.036), // 역삼동 근처
+    target: NLatLng(37.5008, 127.036), 
     zoom: 15.0, 
   );
 
@@ -73,12 +73,17 @@ class _NearbyScreenState extends State<NearbyScreen>
     final newMarkers = <NMarker>{};
     
     for (var store in AppData().stores) {
+      final iconImage = await NOverlayImage.fromWidget(
+        widget: _buildMarkerWidget(store), 
+        context: context
+      );
+
       final marker = NMarker(
         id: store.id,
         position: NLatLng(store.latitude, store.longitude),
-        caption: NOverlayCaption(text: store.name, minZoom: 14),
-        // [수정] width, height 대신 size 파라미터 사용
-        size: const Size(40, 50), 
+        icon: iconImage,
+        size: const Size(120, 50),
+        anchor: const NPoint(0.5, 0.5),
       );
       
       marker.setOnTapListener((overlay) {
@@ -93,6 +98,32 @@ class _NearbyScreenState extends State<NearbyScreen>
     
     controller.clearOverlays();
     controller.addOverlayAll(newMarkers);
+  }
+  
+  Widget _buildMarkerWidget(Store store) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: kNeedsFinePurple, width: 2)
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircleAvatar(radius: 10, child: Text("🇰🇷", style: TextStyle(fontSize: 12))),
+          const SizedBox(width: 4),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(store.name, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+              const Text("100,000원", style: TextStyle(fontSize: 9, color: Colors.black)),
+            ],
+          )
+        ],
+      ),
+    );
   }
 
   Future<void> _moveCamera(NLatLng position) async {
@@ -110,12 +141,44 @@ class _NearbyScreenState extends State<NearbyScreen>
     await _updateMarkers(controller, location);
 
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(location.latitude, location.longitude);
+      // [수정됨] 한국어 주소 강제 변환 및 상세 주소 조합 로직 개선
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        location.latitude, 
+        location.longitude,
+      ).timeout(const Duration(seconds: 5));
+
       if (placemarks.isNotEmpty) {
         final p = placemarks.first;
-        setState(() => _displayLocation = "${p.locality} ${p.subLocality}");
+        
+        String address = '';
+
+        // 시/도 + 구/군 조합 우선
+        if (p.locality != null && p.locality!.isNotEmpty) {
+          address += "${p.locality} ";
+        } else if (p.administrativeArea != null && p.administrativeArea!.isNotEmpty) {
+          address += "${p.administrativeArea} ";
+        }
+
+        // 동/읍/면 + 도로명 조합 우선
+        if (p.subLocality != null && p.subLocality!.isNotEmpty) {
+          address += p.subLocality!;
+        } else if (p.thoroughfare != null && p.thoroughfare!.isNotEmpty) {
+          address += p.thoroughfare!;
+        }
+
+        // 그래도 비어있다면 전체 주소 사용
+        if (address.trim().isEmpty) {
+            address = p.street ?? "주소 정보 없음";
+        }
+
+        if(mounted) setState(() => _displayLocation = address.trim());
       }
-    } catch (e) { print("주소 변환 실패"); }
+    } on TimeoutException {
+       if(mounted) setState(() => _displayLocation = "위치 확인 지연됨");
+    } catch (e) {
+      debugPrint("주소 변환 에러: $e");
+      if(mounted) setState(() => _displayLocation = "위치 확인 불가");
+    }
   }
 
   @override
@@ -124,8 +187,10 @@ class _NearbyScreenState extends State<NearbyScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(_displayLocation, style: const TextStyle(fontWeight: FontWeight.bold)),
-        leading: const BackButton(),
-        actions: [IconButton(onPressed: () => Navigator.pushNamed(context, '/search'), icon: const Icon(Icons.search))],
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(onPressed: () => Navigator.pushNamed(context, '/search'), icon: const Icon(Icons.search))
+        ],
       ),
       body: Stack(
         children: [
@@ -177,13 +242,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Chip(label: const Text('추천'), backgroundColor: Colors.orange, padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
-                      const SizedBox(width: 4),
-                      Chip(label: const Text('인기HOT'), backgroundColor: Colors.red, padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
-                    ],
-                  ),
+                  Row(children: [Chip(label: const Text('추천', style: TextStyle(color: Colors.white, fontSize: 10)), backgroundColor: Colors.orange, padding: EdgeInsets.zero, visualDensity: VisualDensity.compact)]),
                   const SizedBox(height: 4),
                   Text(store.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
@@ -191,20 +250,11 @@ class _NearbyScreenState extends State<NearbyScreen>
                   const SizedBox(height: 4),
                   Row(children: [const Icon(Icons.star, color: Colors.amber, size: 16), Text(" ${store.userRating.toStringAsFixed(1)} · 방문자 리뷰 ${store.reviewCount}")]),
                   const SizedBox(height: 8),
-                  const Row(
-                    children: [
-                      Text("100,000원", style: TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey)),
-                      SizedBox(width: 8),
-                      Text("95,000원", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
-                    ],
-                  )
+                  const Row(children: [Text("100,000원", style: TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey)), SizedBox(width: 8), Text("95,000원", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red))])
                 ],
               ),
             ),
-            Align(
-              alignment: Alignment.topRight,
-              child: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selectedStore = null)),
-            )
+            Align(alignment: Alignment.topRight, child: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _selectedStore = null)))
           ],
         ),
       ),
