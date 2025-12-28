@@ -24,17 +24,16 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.example.needsfine_app"
-    compileSdk 36
+    compileSdk 36 // [수정] 36으로 변경
 
     defaultConfig {
         applicationId "com.example.needsfine_app"
         minSdkVersion flutter.minSdkVersion
-        targetSdk 36
+        targetSdk 36 // [수정] 36으로 변경
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
     }
 
-    // [수정] JVM 타겟 호환성 오류 해결을 위해 Java 17/1.8 버전 명시
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -56,5 +55,5 @@ flutter {
 }
 
 dependencies {
-    // No custom dependencies
+    // 의존성
 }
