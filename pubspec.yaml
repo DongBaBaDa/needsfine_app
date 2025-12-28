@@ -31,14 +31,15 @@ dependencies:
   cached_network_image: ^3.3.0
   flutter_svg: ^2.0.9
   uuid: ^4.1.0
-  url_launcher: ^6.1.12 # [추가] 소셜 로그인을 위해
+  url_launcher: ^6.1.12
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.13.1 # [추가]
 
+# [추가] 앱 아이콘 생성 설정
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:needsfine_app/main.dart';
-import 'package:needsfine_app/core/needsfine_theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:needsfine_app/screens/main_shell.dart';
+import 'package:needsfine_app/screens/user_join_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -10,140 +11,91 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _idController = TextEditingController();
-  final TextEditingController _pwController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
-  @override
-  void dispose() {
-    _idController.dispose();
-    _pwController.dispose();
-    super.dispose();
+  final _supabase = Supabase.instance.client;
+
+  Future<void> _signIn() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+
+    try {
+      await _supabase.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+    } on AuthException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('알 수 없는 오류가 발생했습니다: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  void _onLogin() {
-    if (_idController.text == "user" && _pwController.text == "1234") {
-      // isLoggedIn.value = true; // [수정] 이 부분은 더 이상 사용하지 않으므로 주석 처리 또는 삭제합니다.
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-    } else {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("로그인 실패"),
-          content: const Text("아이디 또는 비밀번호가 일치하지 않습니다."),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("확인")),
-          ],
-        ),
-      );
-    }
+  @override
+  void initState() {
+    super.initState();
+    _supabase.auth.onAuthStateChange.listen((data) {
+      final session = data.session;
+      if (session != null && mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const MainShell()),
+          (route) => false,
+        );
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(backgroundColor: Colors.white, elevation: 0, leading: const BackButton(color: Colors.black)),
+      appBar: AppBar(title: const Text('이메일로 로그인')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 20),
-            const Center(
-              child: Text(
-                "NeedsFine",
-                style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.black, fontFamily: 'GmarketSans'),
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 40),
+              TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: '이메일'),
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) => (value == null || !value.contains('@')) ? '유효한 이메일을 입력해주세요' : null,
               ),
-            ),
-            const SizedBox(height: 8),
-            const Center(
-              child: Text(
-                "사람의 경험과 데이터의 검증이 만나는 곳",
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                decoration: const InputDecoration(labelText: '비밀번호'),
+                obscureText: true,
+                validator: (value) => (value == null || value.length < 6) ? '6자리 이상 입력해주세요' : null,
               ),
-            ),
-            const SizedBox(height: 48),
-            TextField(
-              controller: _idController,
-              decoration: const InputDecoration(
-                labelText: '아이디',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _signIn,
+                child: _isLoading ? const CircularProgressIndicator() : const Text('로그인'),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _pwController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: '비밀번호',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _onLogin,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kNeedsFinePurple,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(0, 52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text("로그인", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TextButton(onPressed: () {}, child: const Text("아이디 찾기", style: TextStyle(color: Colors.grey))),
-                const Text(" | ", style: TextStyle(color: Colors.grey)),
-                TextButton(onPressed: () {}, child: const Text("비밀번호 찾기", style: TextStyle(color: Colors.grey))),
-                const Text(" | ", style: TextStyle(color: Colors.grey)),
-                TextButton(onPressed: () => Navigator.pushNamed(context, '/join-select'), child: const Text("회원가입", style: TextStyle(color: Colors.grey))),
-              ],
-            ),
-            const SizedBox(height: 32),
-            const Row(
-              children: [
-                Expanded(child: Divider()),
-                Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text("또는", style: TextStyle(color: Colors.grey))),
-                Expanded(child: Divider()),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _buildSocialLoginButton(image: 'assets/images/kakao_logo.png', text: '카카오로 로그인', color: const Color(0xFFFEE500), textColor: Colors.black87),
-            const SizedBox(height: 12),
-            _buildSocialLoginButton(image: 'assets/images/naver_logo.png', text: '네이버로 로그인', color: const Color(0xFF03C75A), textColor: Colors.white),
-            const SizedBox(height: 12),
-            _buildSocialLoginButton(image: 'assets/images/google_logo.png', text: 'Google로 로그인', color: Colors.white, textColor: Colors.black54, hasBorder: true),
-            const SizedBox(height: 12),
-            _buildSocialLoginButton(image: 'assets/images/apple_logo.png', text: 'Apple로 로그인', color: Colors.black, textColor: Colors.white),
-            const SizedBox(height: 48),
-            // const Text(
-            //   "계속 진행하시면 NeedsFine의 서비스 이용약관 및 개인정보 처리방침에 동의하는 것으로 간주됩니다.",
-            //   textAlign: TextAlign.center,
-            //   style: TextStyle(fontSize: 12, color: Colors.grey),
-            // ),
-             const SizedBox(height: 24),
-          ],
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UserJoinScreen())),
+                child: const Text('계정이 없으신가요? 회원가입'),
+              )
+            ],
+          ),
         ),
       ),
     );
   }
-
-  Widget _buildSocialLoginButton({required String image, required String text, required Color color, required Color textColor, bool hasBorder = false}) {
-    return ElevatedButton(
-      onPressed: () {},
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: textColor,
-        minimumSize: const Size(double.infinity, 50),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: hasBorder ? const BorderSide(color: Colors.grey) : BorderSide.none,
-        ),
-        elevation: 0,
-      ),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-    );
+  
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }

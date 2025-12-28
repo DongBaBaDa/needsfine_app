@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
-import 'package:needsfine_app/screens/new_search_screen.dart';
-import 'package:needsfine_app/screens/splash_screen.dart';
-import 'package:needsfine_app/screens/initial_screen.dart'; // [추가]
+import 'package:needsfine_app/screens/user_join_screen.dart'; // [수정]
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/config/supabase_config.dart';
 
@@ -33,13 +31,10 @@ class MyApp extends StatelessWidget {
       title: 'NeedsFine',
       theme: needsFineTheme,
       debugShowCheckedModeBanner: false,
-      // [수정] SplashScreen을 첫 화면으로 명시
-      home: const SplashScreen(),
+      // [수정] 첫 화면을 UserJoinScreen으로 변경
+      home: const UserJoinScreen(),
       routes: {
-        // [수정] 라우팅 테이블에 initial_screen 추가
-        '/initial': (context) => const InitialScreen(), 
         '/home': (context) => const MainShell(),
-        '/search': (context) => const NewSearchScreen(),
       },
     );
   }
