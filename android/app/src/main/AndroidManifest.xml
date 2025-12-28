@@ -2,12 +2,12 @@
     <application
         android:label="needsfine_app"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
-        
+        android:icon="@mipmap/ic_launcher">
+
         <meta-data
             android:name="com.naver.maps.map.CLIENT_ID"
             android:value="1rst5nv703" />
-            
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -17,12 +17,23 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
             <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- [추가] 소셜 로그인 후 앱으로 복귀하기 위한 딥링크 설정 -->
+        <activity
+            android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
+            android:exported="true">
+            <intent-filter android:label="flutter_web_auth_2">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="needsfine" />
             </intent-filter>
         </activity>
 

@@ -11,6 +11,9 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Supabase
+  supabase_flutter: ^2.0.0
+
   # 지도 패키지
   flutter_naver_map: ^1.2.3
   geolocator: ^11.0.0
@@ -28,6 +31,7 @@ dependencies:
   cached_network_image: ^3.3.0
   flutter_svg: ^2.0.9
   uuid: ^4.1.0
+  url_launcher: ^6.1.12 # [추가] 소셜 로그인을 위해
 
 dev_dependencies:
   flutter_test:
@@ -45,4 +49,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
-    - assets/icon.png # [수정] 올바른 파일만 남김
+    - assets/icon.png

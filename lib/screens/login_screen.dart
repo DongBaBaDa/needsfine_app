@@ -22,7 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _onLogin() {
     if (_idController.text == "user" && _pwController.text == "1234") {
-      isLoggedIn.value = true;
+      // isLoggedIn.value = true; // [수정] 이 부분은 더 이상 사용하지 않으므로 주석 처리 또는 삭제합니다.
       Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
     } else {
       showDialog(

@@ -1,73 +1,66 @@
-import 'dart:async'; // Timer, Duration 등 기본 기능
-import 'package:flutter/material.dart'; // UI 기본 도구
-import 'package:shared_preferences/shared_preferences.dart'; // SharedPreferences
+import 'package:flutter/material.dart';
+import 'package:needsfine_app/screens/user_join_screen.dart'; // 회원가입 화면
+import 'package:needsfine_app/screens/login_screen.dart'; // 일반 로그인 화면
 
-// --- [ ✅ ✅ 2. '초기' '화면' ('온보딩' '팝업') ] ---
-class InitialScreen extends StatefulWidget {
+class InitialScreen extends StatelessWidget {
   const InitialScreen({super.key});
 
   @override
-  State<InitialScreen> createState() => _InitialScreenState();
-}
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 로고 이미지
+              Image.asset('assets/icon.png', height: 150),
+              const SizedBox(height: 60),
 
-class _InitialScreenState extends State<InitialScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showOnboardingPopup();
-    });
-  }
+              // [수정] 일반 회원 로그인 버튼 -> 회원가입/로그인 화면으로 통합
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const UserJoinScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF9C7CFF),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                ),
+                child: const Text('이메일로 시작하기', style: TextStyle(color: Colors.white)),
+              ),
+              const SizedBox(height: 20),
 
-  void _goToHome() {
-    Navigator.pushReplacementNamed(context, '/home');
-  }
-
-  void _setHidePopup() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final hideUntil = DateTime.now().add(const Duration(days: 7));
-      prefs.setString('hideOnboardingUntil', hideUntil.toIso8601String());
-    } catch(e) {
-      print("SharedPreferences '저장' '오류': $e");
-    }
-    _goToHome();
-  }
-
-  void _showOnboardingPopup() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("니즈파인 점수 설명"),
-          content: const Text(
-              "'AI 탐정'이 '가짜 5점'을 '박살'내고 '진짜' '점수'만 '보여줍니다'. "
-                  "'홀' '점수'와 '배달' '점수'를 '분리'하여 '검증'하십시오. "
-                  "( '더미' '텍스트' '입니다'. )"
+              // [추가] 소셜 로그인 버튼 영역
+              const Row(children: [Expanded(child: Divider()), Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('SNS 계정으로 시작하기')), Expanded(child: Divider())]),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // TODO: 각 소셜 로그인 기능 연결
+                  _buildSocialLoginButton('assets/images/kakao_icon.png', () {}),
+                  const SizedBox(width: 24),
+                  _buildSocialLoginButton('assets/images/naver_icon.png', () {}),
+                  const SizedBox(width: 24),
+                  _buildSocialLoginButton('assets/images/google_icon.png', () {}),
+                ],
+              )
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: _setHidePopup,
-              child: const Text("일주일간 보지 않기"),
-            ),
-            TextButton(
-              onPressed: _goToHome,
-              child: const Text("닫기"),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
+  Widget _buildSocialLoginButton(String assetPath, VoidCallback onPressed) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Image.asset(assetPath, width: 50, height: 50),
     );
   }
 }
