@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:needsfine_app/data/korean_regions.dart'; // 방금 만든 데이터 임포트
 
 class UserJoinScreen extends StatefulWidget {
   const UserJoinScreen({super.key});
@@ -16,11 +15,12 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
   final _authCodeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _addressController = TextEditingController();
 
-  // TODO: 발급받은 실제 키값을 입력하세요.
-  final String _naverClientId = "YOUR_CLIENT_ID";
-  final String _naverClientSecret = "YOUR_CLIENT_SECRET";
+  // 지역 선택을 위한 변수들
+  String? _selectedSido;
+  String? _selectedSigungu;
+  List<String> _sidoList = [];
+  List<String> _sigunguList = [];
 
   DateTime? _selectedDate;
   String? _selectedGender;
@@ -34,11 +34,13 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
   @override
   void initState() {
     super.initState();
+    // 초기 시/도 목록 로드
+    _sidoList = koreanRegions.keys.toList();
     _passwordController.addListener(() => _validatePassword(_passwordController.text));
     _confirmPasswordController.addListener(() => _validateConfirmPassword(_confirmPasswordController.text));
   }
 
-  // --- 기존 로직 (비밀번호 및 이메일 인증) ---
+  // --- 비밀번호 유효성 검사 로직 (기존 유지) ---
   void _validatePassword(String password) {
     final RegExp upperCase = RegExp(r'[A-Z]');
     final RegExp lowerCase = RegExp(r'[a-z]');
@@ -64,6 +66,7 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     setState(() => _confirmPasswordMessage = message);
   }
 
+  // --- 이메일 인증번호 발송 (기존 유지) ---
   Future<void> _sendAuthCode() async {
     if (_emailController.text.isEmpty || !_emailController.text.contains('@')){
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('올바른 이메일을 먼저 입력해주세요.'), backgroundColor: Colors.red,));
@@ -83,116 +86,11 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     }
   }
 
-  // --- 주소 검색 로직 (인코딩 및 검색성 개선) ---
-  Future<void> _searchAddress() async {
-    final searchController = TextEditingController();
-    List<dynamic> results = [];
-    bool isSearching = false;
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('주소 검색', style: TextStyle(fontWeight: FontWeight.bold)),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: searchController,
-                      decoration: InputDecoration(
-                        hintText: '도로명이나 지번을 입력하세요',
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search),
-                          onPressed: () async {
-                            setDialogState(() => isSearching = true);
-                            final fetched = await _fetchNaverAddress(searchController.text);
-                            setDialogState(() {
-                              results = fetched;
-                              isSearching = false;
-                            });
-                          },
-                        ),
-                      ),
-                      onSubmitted: (value) async {
-                        setDialogState(() => isSearching = true);
-                        final fetched = await _fetchNaverAddress(value);
-                        setDialogState(() {
-                          results = fetched;
-                          isSearching = false;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    if (isSearching)
-                      const CircularProgressIndicator()
-                    else if (results.isEmpty && searchController.text.isNotEmpty)
-                      const Text('검색 결과가 없습니다.')
-                    else
-                      Expanded(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: results.length,
-                          separatorBuilder: (context, index) => const Divider(),
-                          itemBuilder: (context, index) {
-                            final item = results[index];
-                            return ListTile(
-                              title: Text(item['roadAddress'] ?? '도로명 주소 없음'),
-                              subtitle: Text(item['jibunAddress'] ?? ''),
-                              onTap: () {
-                                _addressController.text = item['roadAddress'];
-                                Navigator.pop(context);
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('닫기')),
-              ],
-            );
-          }
-      ),
-    );
-  }
-
-  Future<List<dynamic>> _fetchNaverAddress(String query) async {
-    if (query.isEmpty) return [];
-
-    // 중요: Uri.https를 사용해야 한글 쿼리가 자동으로 퍼센트 인코딩됩니다.
-    final url = Uri.https("naveropenapi.apigw.ntruss.com", "/map-geocode/v2/geocode", {
-      "query": query,
-    });
-
-    try {
-      final response = await http.get(url, headers: {
-        "X-NCP-APIGW-API-KEY-ID": _naverClientId,
-        "X-NCP-APIGW-API-KEY": _naverClientSecret,
-      });
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['addresses'] ?? [];
-      } else {
-        debugPrint("Naver API Error: ${response.statusCode} ${response.body}");
-        return [];
-      }
-    } catch (e) {
-      debugPrint("Fetch Error: $e");
-      return [];
-    }
-  }
-
-  // --- 회원가입 제출 로직 ---
+  // --- 회원가입 제출 로직 (수정: 드롭다운 데이터 반영) ---
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_addressController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('주소를 검색해 주세요.')));
+    if (_selectedSido == null || _selectedSigungu == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('사는 지역을 선택해 주세요.')));
       return;
     }
 
@@ -207,10 +105,12 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
       if (authResponse.user != null) {
         final age = _selectedDate != null ? DateTime.now().year - _selectedDate!.year + 1 : null;
 
+        // Supabase profiles 테이블 업데이트
         await _supabase.from('profiles').update({
           'age': age,
           'gender': _selectedGender,
-          'address': _addressController.text, // DB 컬럼명 확인 필요
+          'city': _selectedSido,      // 시/도 저장
+          'district': _selectedSigungu, // 시/군/구 저장
           'birth_date': _selectedDate?.toIso8601String(),
         }).eq('id', authResponse.user!.id);
 
@@ -249,6 +149,7 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 1. 이메일 및 인증 섹션
               Row(
                 children: [
                   Expanded(child: TextFormField(controller: _emailController, decoration: const InputDecoration(labelText: '이메일'), keyboardType: TextInputType.emailAddress)),
@@ -258,7 +159,9 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
               ),
               const SizedBox(height: 12),
               TextFormField(controller: _authCodeController, decoration: const InputDecoration(labelText: '인증번호'), keyboardType: TextInputType.number),
+
               const SizedBox(height: 24),
+              // 2. 비밀번호 섹션
               TextFormField(controller: _passwordController, decoration: const InputDecoration(labelText: '비밀번호'), obscureText: true),
               Padding(
                 padding: const EdgeInsets.only(top: 4, left: 4),
@@ -270,7 +173,9 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
                 padding: const EdgeInsets.only(top: 4, left: 4),
                 child: Text(_confirmPasswordMessage, style: TextStyle(color: _confirmPasswordMessage.contains('일치합') ? Colors.green : Colors.red, fontSize: 12)),
               ),
+
               const SizedBox(height: 24),
+              // 3. 생년월일 및 성별 섹션
               TextFormField(
                 readOnly: true,
                 decoration: InputDecoration(
@@ -291,26 +196,41 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
                   const Text('여성'),
                 ],
               ),
+
               const SizedBox(height: 24),
-              const Text('사는 지역', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _addressController,
-                      readOnly: true,
-                      decoration: const InputDecoration(hintText: '주소를 검색해 주세요'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _searchAddress,
-                    child: const Text('주소 찾기'),
-                  ),
-                ],
+              // 4. 사는 지역 섹션 (2단계 드롭다운으로 변경됨)
+              const Text('사는 지역 선택', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+
+              // 시/도 드롭다운
+              DropdownButtonFormField<String>(
+                value: _selectedSido,
+                hint: const Text('시/도 선택'),
+                items: _sidoList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedSido = value;
+                    _selectedSigungu = null; // 시/도 변경 시 하위 목록 초기화
+                    _sigunguList = koreanRegions[value!] ?? [];
+                  });
+                },
+                decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4)),
               ),
+              const SizedBox(height: 12),
+
+              // 시/군/구 드롭다운
+              DropdownButtonFormField<String>(
+                value: _selectedSigungu,
+                hint: const Text('시/군/구 선택'),
+                items: _sigunguList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                onChanged: _selectedSido == null ? null : (value) {
+                  setState(() => _selectedSigungu = value);
+                },
+                decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4)),
+              ),
+
               const SizedBox(height: 40),
+              // 5. 완료 버튼
               ElevatedButton(
                 onPressed: _isLoading ? null : _signUp,
                 style: ElevatedButton.styleFrom(minimumSize: const Size(0, 52)),
@@ -329,7 +249,6 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     _authCodeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _addressController.dispose();
     super.dispose();
   }
 }
