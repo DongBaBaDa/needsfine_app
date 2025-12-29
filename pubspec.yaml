@@ -23,7 +23,7 @@ dependencies:
   # UI & 유틸리티
   carousel_slider: ^5.0.0
   shared_preferences: ^2.2.3
-  http: ^1.2.1
+  http: ^1.6.0
   scrollable_positioned_list: ^0.3.8
   image_picker: ^1.0.0
   intl: ^0.18.1
