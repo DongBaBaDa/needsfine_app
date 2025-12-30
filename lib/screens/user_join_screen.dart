@@ -25,6 +25,7 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
   String? _selectedGender;
   bool _isLoading = false;
   bool _isAuthCodeSent = false;
+  bool _isEmailVerified = false; // 이메일 인증 완료 여부
   String _passwordValidationMessage = '';
   String _confirmPasswordMessage = '';
 
@@ -56,6 +57,7 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     });
   }
 
+  // 인증번호 발송 로직
   Future<void> _sendAuthCode() async {
     if (_emailController.text.isEmpty || !_emailController.text.contains('@')){
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('올바른 이메일을 입력해주세요.'), backgroundColor: Colors.red));
@@ -64,15 +66,10 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final tempPassword = _passwordController.text.isNotEmpty
-          ? _passwordController.text.trim()
-          : "NeedsFine_Temp_1234!";
-
       await _supabase.auth.signUp(
         email: _emailController.text.trim(),
-        password: tempPassword,
+        password: "NeedsFine_Temp_1234!", // 임시 비밀번호
       );
-
       if(mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('니즈파인 인증번호가 발송되었습니다.')));
         setState(() => _isAuthCodeSent = true);
@@ -84,43 +81,57 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     }
   }
 
-  Future<void> _signUp() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedSido == null || _selectedSigungu == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('지역을 선택해 주세요.')));
-      return;
-    }
-    if (_authCodeController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('인증번호를 입력해 주세요.')));
+  // 인증번호 8자리 확인 로직
+  Future<void> _verifyAuthCode() async {
+    if (_authCodeController.text.length != 8) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('인증번호 8자리를 입력해주세요.')));
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      final authResponse = await _supabase.auth.verifyOTP(
+      await _supabase.auth.verifyOTP(
         type: OtpType.signup,
         token: _authCodeController.text.trim(),
         email: _emailController.text.trim(),
       );
+      setState(() {
+        _isEmailVerified = true;
+        _isLoading = false;
+      });
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이메일 인증이 완료되었습니다.')));
+    } catch (e) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('인증 실패: $e'), backgroundColor: Colors.red));
+      setState(() => _isLoading = false);
+    }
+  }
 
-      if (authResponse.user != null) {
-        if (_passwordController.text.isNotEmpty) {
-          await _supabase.auth.updateUser(UserAttributes(password: _passwordController.text.trim()));
-        }
+  Future<void> _signUp() async {
+    if (!_isEmailVerified) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('이메일 인증을 먼저 완료해주세요.')));
+      return;
+    }
+    if (!_formKey.currentState!.validate()) return;
 
-        final age = _selectedDate != null ? DateTime.now().year - _selectedDate!.year + 1 : null;
-        await _supabase.from('profiles').update({
-          'age': age,
-          'gender': _selectedGender,
-          'city': _selectedSido,
-          'district': _selectedSigungu,
-          'birth_date': _selectedDate?.toIso8601String(),
-        }).eq('id', authResponse.user!.id);
+    setState(() => _isLoading = true);
+    try {
+      // 실제 비밀번호로 업데이트
+      await _supabase.auth.updateUser(UserAttributes(password: _passwordController.text.trim()));
 
-        if(mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('회원가입이 완료되었습니다!')));
-          Navigator.of(context).pop();
-        }
+      final age = _selectedDate != null ? DateTime.now().year - _selectedDate!.year + 1 : null;
+      final userId = _supabase.auth.currentUser!.id;
+
+      await _supabase.from('profiles').update({
+        'age': age,
+        'gender': _selectedGender,
+        'city': _selectedSido,
+        'district': _selectedSigungu,
+        'birth_date': _selectedDate?.toIso8601String(),
+      }).eq('id', userId);
+
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('회원가입이 완료되었습니다!')));
+        Navigator.of(context).pop();
       }
     } catch (e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('회원가입 실패: $e'), backgroundColor: Colors.red));
@@ -153,19 +164,32 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 이메일 입력 및 인증번호 받기
               Row(
                 children: [
-                  Expanded(child: TextFormField(controller: _emailController, decoration: const InputDecoration(labelText: '이메일'), keyboardType: TextInputType.emailAddress)),
+                  Expanded(child: TextFormField(controller: _emailController, decoration: const InputDecoration(labelText: '이메일'), keyboardType: TextInputType.emailAddress, enabled: !_isEmailVerified)),
                   const SizedBox(width: 8),
-                  ElevatedButton(onPressed: _isLoading ? null : _sendAuthCode, child: const Text('인증번호 받기')),
+                  ElevatedButton(onPressed: (_isLoading || _isEmailVerified) ? null : _sendAuthCode, child: const Text('인증번호 받기')),
                 ],
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _authCodeController,
-                decoration: const InputDecoration(labelText: '인증번호 6자리', hintText: '메일로 받은 코드를 입력하세요'),
-                keyboardType: TextInputType.number,
-                enabled: _isAuthCodeSent,
+              // 인증번호 8자리 입력 및 확인 버튼
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _authCodeController,
+                      decoration: const InputDecoration(labelText: '인증번호 8자리', hintText: '8자리 코드 입력'),
+                      keyboardType: TextInputType.number,
+                      enabled: _isAuthCodeSent && !_isEmailVerified,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                      onPressed: (_isLoading || !_isAuthCodeSent || _isEmailVerified) ? null : _verifyAuthCode,
+                      child: const Text('확인')
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
               TextFormField(controller: _passwordController, decoration: const InputDecoration(labelText: '비밀번호'), obscureText: true),
@@ -217,9 +241,14 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
               ),
               const SizedBox(height: 40),
               ElevatedButton(
-                onPressed: _isLoading ? null : _signUp,
-                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 52)),
-                child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('회원가입 완료'),
+                onPressed: (_isLoading || !_isEmailVerified) ? null : _signUp,
+                style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    backgroundColor: const Color(0xFF9C7CFF)
+                ),
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('회원가입 완료', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),

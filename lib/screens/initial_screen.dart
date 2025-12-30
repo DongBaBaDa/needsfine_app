@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/screens/user_join_screen.dart';
+import 'package:needsfine_app/screens/email_pw_find_screen.dart'; // 추가됨
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
@@ -19,7 +20,6 @@ class _InitialScreenState extends State<InitialScreen> {
 
   final _supabase = Supabase.instance.client;
 
-  // 이메일 로그인
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -35,7 +35,6 @@ class _InitialScreenState extends State<InitialScreen> {
     }
   }
 
-  // 카카오 소셜 로그인
   Future<void> _signInWithKakao() async {
     setState(() => _isLoading = true);
     try {
@@ -51,48 +50,14 @@ class _InitialScreenState extends State<InitialScreen> {
     }
   }
 
-  // 비밀번호 재설정
-  Future<void> _passwordReset() async {
-    final emailController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('비밀번호 재설정'),
-          content: TextField(
-            controller: emailController,
-            decoration: const InputDecoration(labelText: '가입한 이메일을 입력하세요'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('취소')),
-            FilledButton(
-              onPressed: () async {
-                try {
-                  await _supabase.auth.resetPasswordForEmail(emailController.text.trim());
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('비밀번호 재설정 메일을 발송했습니다.')),
-                    );
-                  }
-                } on AuthException catch (e) {
-                   if (mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-                    );
-                  }
-                }
-              },
-              child: const Text('전송'),
-            ),
-          ],
-        );
-      },
+  // 찾기 화면으로 이동
+  void _navigateToFindScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const EmailPWFindScreen()),
     );
   }
 
-  // 로그인 상태 감지 및 화면 전환
   @override
   void initState() {
     super.initState();
@@ -101,7 +66,7 @@ class _InitialScreenState extends State<InitialScreen> {
       if (session != null && mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const MainShell()),
-          (route) => false,
+              (route) => false,
         );
       }
     });
@@ -121,15 +86,18 @@ class _InitialScreenState extends State<InitialScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // 1. 로고와 앱 이름
                   Image.asset('assets/icon.png', height: 80),
                   const SizedBox(height: 12),
                   const Center(
                     child: Text('니즈파인', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                   ),
+                  const SizedBox(height: 4),
+                  // 슬로건 18포인트
+                  const Center(
+                    child: Text('진짜가 필요해', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                  ),
                   const SizedBox(height: 60),
 
-                  // 2. 이메일, 비밀번호 입력
                   TextFormField(
                     controller: _emailController,
                     decoration: const InputDecoration(labelText: '이메일'),
@@ -145,41 +113,45 @@ class _InitialScreenState extends State<InitialScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // 3. 로그인 버튼
                   ElevatedButton(
                     onPressed: _isLoading ? null : _signIn,
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: kNeedsFinePurple, foregroundColor: Colors.white, minimumSize: const Size(0, 52)),
+                        backgroundColor: const Color(0xFF9C7CFF), foregroundColor: Colors.white, minimumSize: const Size(0, 52)),
                     child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('로그인', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(height: 20),
-                  
-                  // 4. 이메일/비밀번호 찾기 (중앙 정렬)
+
                   Center(
                     child: TextButton(
-                      onPressed: _passwordReset,
+                      onPressed: _navigateToFindScreen,
                       child: const Text("이메일/비밀번호 찾기", style: TextStyle(color: Colors.grey, fontSize: 14)),
                     ),
                   ),
                   const SizedBox(height: 20),
                   const Divider(),
                   const SizedBox(height: 20),
-                  
-                  // 5. 카카오 로그인 버튼
+
+                  // 카카오 로그인 버튼 (로그인 버튼 길이에 맞춤)
                   GestureDetector(
                     onTap: _isLoading ? null : _signInWithKakao,
-                    child: Image.asset('assets/images/kakaologin.png', fit: BoxFit.contain),
+                    child: SizedBox(
+                      height: 52,
+                      width: double.infinity,
+                      child: Image.asset(
+                        'assets/images/kakaologin.png',
+                        fit: BoxFit.fill,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  
-                  // 6. 회원가입 링크
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text('계정이 없으신가요?', style: TextStyle(color: Colors.grey)),
                       TextButton(
-                        onPressed: () =>  Navigator.push(context, MaterialPageRoute(builder: (_) => const UserJoinScreen())),
-                        child: const Text('회원가입', style: TextStyle(fontWeight: FontWeight.bold, color: kNeedsFinePurple)),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UserJoinScreen())),
+                        child: const Text('회원가입', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF9C7CFF))),
                       ),
                     ],
                   )
