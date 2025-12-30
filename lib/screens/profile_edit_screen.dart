@@ -18,6 +18,7 @@ class ProfileEditScreen extends StatefulWidget {
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final _supabase = Supabase.instance.client;
   late TextEditingController _nicknameController;
+  late TextEditingController _introController; // [복구] 자기소개 컨트롤러
   late UserProfile _updatedProfile;
 
   // 지역 선택 관련 변수
@@ -29,7 +30,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   // 상태 관리 변수
   bool? _isNicknameAvailable;
   bool _isCheckingNickname = false;
-  bool _isSaving = false; // 서버 저장 로딩
+  bool _isSaving = false;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -51,15 +52,15 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
 
     _nicknameController = TextEditingController(text: _updatedProfile.nickname);
+    _introController = TextEditingController(text: _updatedProfile.introduction); // [복구]
 
-    // [해결] Screenshot_20251230_204308.jpg의 '활동' 값 오류 방어 코드
+    // 활동 지역 초기 설정
     if (_updatedProfile.activityZone.isNotEmpty) {
       final zones = _updatedProfile.activityZone.split(' ');
       if (zones.length >= 2) {
         final targetSido = zones[0];
         final targetSigungu = zones[1];
 
-        // "활동"처럼 리스트에 없는 값이 들어오면 드롭다운 오류가 나므로 contains 체크 필수
         if (_sidoList.contains(targetSido)) {
           _selectedSido = targetSido;
           _sigunguList = koreanRegions[_selectedSido!] ?? [];
@@ -75,6 +76,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   @override
   void dispose() {
     _nicknameController.dispose();
+    _introController.dispose(); // [복구]
     super.dispose();
   }
 
@@ -82,6 +84,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   Future<void> _checkNicknameDuplicate() async {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) return;
+
+    // 본인의 기존 닉네임과 같다면 통과
     if (nickname == widget.userProfile.nickname) {
       setState(() => _isNicknameAvailable = true);
       return;
@@ -90,6 +94,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     setState(() => _isCheckingNickname = true);
 
     try {
+      // Supabase profiles 테이블에서 중복 확인
       final res = await _supabase
           .from('profiles')
           .select('nickname')
@@ -97,6 +102,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           .maybeSingle();
 
       setState(() {
+        // 결과가 없어야(null) 사용 가능한 닉네임임
         _isNicknameAvailable = res == null;
       });
     } catch (e) {
@@ -106,7 +112,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }
   }
 
-  // 이미지 선택
   Future<void> _pickImage() async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
@@ -116,7 +121,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }
   }
 
-  // [서버 저장] 이미지 업로드 로직
+  // 이미지 업로드 로직
   Future<String?> _uploadProfileImage() async {
     if (_updatedProfile.imageFile == null) return null;
 
@@ -127,14 +132,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final filePath = '$userId/$fileName';
 
     try {
-      // 업로드 실행
       await _supabase.storage.from('avatars').upload(
         filePath,
         file,
         fileOptions: const FileOptions(upsert: true),
       );
-
-      // 업로드된 이미지의 Public URL 획득
       final String publicUrl = _supabase.storage.from('avatars').getPublicUrl(filePath);
       return publicUrl;
     } catch (e) {
@@ -143,8 +145,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }
   }
 
-  // [서버 저장] 최종 완료 버튼 로직
+  // 서버 저장 및 화면 닫기
   Future<void> _saveAndPop() async {
+    // 닉네임 중복 확인 여부 체크
     if (_nicknameController.text != widget.userProfile.nickname && _isNicknameAvailable != true) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('닉네임 중복 확인이 필요합니다.')));
       return;
@@ -156,20 +159,21 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       final userId = _supabase.auth.currentUser!.id;
       String? newImageUrl;
 
-      // 1. 이미지가 바뀌었다면 서버 스토리지에 업로드
       if (_updatedProfile.imageFile != null) {
         newImageUrl = await _uploadProfileImage();
       }
 
-      // 2. DB 정보 업데이트
+      // [복구] introduction 포함하여 업데이트
       await _supabase.from('profiles').update({
         'nickname': _nicknameController.text.trim(),
+        'introduction': _introController.text.trim(),
         'activity_zone': '$_selectedSido $_selectedSigungu',
         if (newImageUrl != null) 'profile_image_url': newImageUrl,
       }).eq('id', userId);
 
       if (mounted) {
         _updatedProfile.nickname = _nicknameController.text.trim();
+        _updatedProfile.introduction = _introController.text.trim();
         _updatedProfile.activityZone = '$_selectedSido $_selectedSigungu';
         if (newImageUrl != null) _updatedProfile.profileImageUrl = newImageUrl;
 
@@ -208,10 +212,10 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
+          // 프로필 이미지 영역
           Center(
             child: Stack(
               children: [
-                // [해결] 에셋 파일 부재 에러 방지를 위해 기본 아이콘 사용
                 CircleAvatar(
                   radius: 50,
                   backgroundColor: Colors.grey[200],
@@ -241,6 +245,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ),
           const SizedBox(height: 32),
 
+          // 닉네임 영역
           const Text('닉네임', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
           Row(
@@ -284,6 +289,21 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ),
           const SizedBox(height: 24),
 
+          // [복구] 자기소개 영역
+          const Text('자기소개', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _introController,
+            maxLength: 35,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: '자신을 알릴 수 있는 소개글을 작성해 주세요.',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 활동 지역 영역
           const Text('활동 지역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
