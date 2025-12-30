@@ -56,7 +56,6 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     });
   }
 
-  // --- 1. 인증번호(OTP) 발송 로직 (비밀번호 체크 삭제 및 최적화) ---
   Future<void> _sendAuthCode() async {
     if (_emailController.text.isEmpty || !_emailController.text.contains('@')){
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('올바른 이메일을 입력해주세요.'), backgroundColor: Colors.red));
@@ -65,8 +64,6 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // [시니어 팁] 비밀번호를 아직 입력하지 않았더라도 signUp을 가능하게 하기 위해 임시 비번을 사용합니다.
-      // 나중에 회원가입 완료 시 사용자가 입력한 진짜 비번으로 업데이트됩니다.
       final tempPassword = _passwordController.text.isNotEmpty
           ? _passwordController.text.trim()
           : "NeedsFine_Temp_1234!";
@@ -81,14 +78,12 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
         setState(() => _isAuthCodeSent = true);
       }
     } catch (e) {
-      debugPrint("OTP 발송 에러 로그: $e");
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('발송 실패: $e (스팸함 확인 혹은 잠시 후 시도)'), backgroundColor: Colors.red));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('발송 실패: $e'), backgroundColor: Colors.red));
     } finally {
       if(mounted) setState(() => _isLoading = false);
     }
   }
 
-  // --- 2. 인증번호 확인 및 최종 회원가입 완료 ---
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedSido == null || _selectedSigungu == null) {
@@ -102,7 +97,6 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // 1. OTP 인증
       final authResponse = await _supabase.auth.verifyOTP(
         type: OtpType.signup,
         token: _authCodeController.text.trim(),
@@ -110,12 +104,10 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
       );
 
       if (authResponse.user != null) {
-        // 2. 만약 사용자가 비번을 입력했다면, 임시 비번을 실제 비번으로 업데이트
         if (_passwordController.text.isNotEmpty) {
           await _supabase.auth.updateUser(UserAttributes(password: _passwordController.text.trim()));
         }
 
-        // 3. 프로필 정보 저장
         final age = _selectedDate != null ? DateTime.now().year - _selectedDate!.year + 1 : null;
         await _supabase.from('profiles').update({
           'age': age,
@@ -143,7 +135,7 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
       initialDate: _selectedDate ?? DateTime(2000),
       firstDate: DateTime(1920),
       lastDate: DateTime.now(),
-      locale: const Locale('ko', 'KR'), // 한글 설정
+      locale: const Locale('ko', 'KR'),
     );
     if (picked != null && picked != _selectedDate) {
       setState(() => _selectedDate = picked);
@@ -171,18 +163,16 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _authCodeController,
-                decoration: const InputDecoration(labelText: '인증번호 8자리', hintText: '메일로 받은 코드를 입력하세요'),
+                decoration: const InputDecoration(labelText: '인증번호 6자리', hintText: '메일로 받은 코드를 입력하세요'),
                 keyboardType: TextInputType.number,
                 enabled: _isAuthCodeSent,
               ),
-
               const SizedBox(height: 24),
               TextFormField(controller: _passwordController, decoration: const InputDecoration(labelText: '비밀번호'), obscureText: true),
               Text(_passwordValidationMessage, style: TextStyle(color: _passwordValidationMessage.contains('가능') ? Colors.green : Colors.grey, fontSize: 12)),
               const SizedBox(height: 12),
               TextFormField(controller: _confirmPasswordController, decoration: const InputDecoration(labelText: '비밀번호 확인'), obscureText: true),
               Text(_confirmPasswordMessage, style: TextStyle(color: _confirmPasswordMessage.contains('일치합') ? Colors.green : Colors.red, fontSize: 12)),
-
               const SizedBox(height: 24),
               TextFormField(
                 readOnly: true,
@@ -203,7 +193,6 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
                   const Text('여성'),
                 ],
               ),
-
               const SizedBox(height: 24),
               DropdownButtonFormField<String>(
                 value: _selectedSido,
@@ -226,7 +215,6 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
                   setState(() => _selectedSigungu = value);
                 },
               ),
-
               const SizedBox(height: 40),
               ElevatedButton(
                 onPressed: _isLoading ? null : _signUp,

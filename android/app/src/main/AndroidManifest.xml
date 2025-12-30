@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <application
         android:label="needsfine_app"
         android:name="${applicationName}"
@@ -25,7 +30,6 @@
             </intent-filter>
         </activity>
 
-        <!-- [추가] 소셜 로그인 후 앱으로 복귀하기 위한 딥링크 설정 -->
         <activity
             android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
             android:exported="true">
