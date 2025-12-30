@@ -18,7 +18,7 @@ class ProfileEditScreen extends StatefulWidget {
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final _supabase = Supabase.instance.client;
   late TextEditingController _nicknameController;
-  late TextEditingController _introController; // [복구] 자기소개 컨트롤러
+  late TextEditingController _introController;
   late UserProfile _updatedProfile;
 
   // 지역 선택 관련 변수
@@ -52,9 +52,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
 
     _nicknameController = TextEditingController(text: _updatedProfile.nickname);
-    _introController = TextEditingController(text: _updatedProfile.introduction); // [복구]
+    _introController = TextEditingController(text: _updatedProfile.introduction);
 
-    // 활동 지역 초기 설정
+    // 활동 지역 초기 설정 (데이터 파싱 및 유효성 검사)
     if (_updatedProfile.activityZone.isNotEmpty) {
       final zones = _updatedProfile.activityZone.split(' ');
       if (zones.length >= 2) {
@@ -76,16 +76,25 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   @override
   void dispose() {
     _nicknameController.dispose();
-    _introController.dispose(); // [복구]
+    _introController.dispose();
     super.dispose();
   }
 
-  // 닉네임 중복 확인
+  // 닉네임 중복 확인 (금지어 로직 포함)
   Future<void> _checkNicknameDuplicate() async {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) return;
 
-    // 본인의 기존 닉네임과 같다면 통과
+    // 1. 금지어 체크: '니즈파인' 포함 금지 (운영자 제외)
+    // 운영자의 닉네임이나 특정 ID를 조건으로 걸 수 있습니다.
+    if (nickname.contains('니즈파인') && nickname != '오재준') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("'니즈파인'은 운영자만 사용할 수 있습니다.")),
+      );
+      setState(() => _isNicknameAvailable = false);
+      return;
+    }
+
     if (nickname == widget.userProfile.nickname) {
       setState(() => _isNicknameAvailable = true);
       return;
@@ -94,7 +103,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     setState(() => _isCheckingNickname = true);
 
     try {
-      // Supabase profiles 테이블에서 중복 확인
       final res = await _supabase
           .from('profiles')
           .select('nickname')
@@ -102,7 +110,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           .maybeSingle();
 
       setState(() {
-        // 결과가 없어야(null) 사용 가능한 닉네임임
         _isNicknameAvailable = res == null;
       });
     } catch (e) {
@@ -121,7 +128,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }
   }
 
-  // 이미지 업로드 로직
+  // 이미지 업로드 로직 (Supabase Storage)
   Future<String?> _uploadProfileImage() async {
     if (_updatedProfile.imageFile == null) return null;
 
@@ -145,9 +152,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }
   }
 
-  // 서버 저장 및 화면 닫기
+  // 서버 저장 로직 (최종)
   Future<void> _saveAndPop() async {
-    // 닉네임 중복 확인 여부 체크
     if (_nicknameController.text != widget.userProfile.nickname && _isNicknameAvailable != true) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('닉네임 중복 확인이 필요합니다.')));
       return;
@@ -163,7 +169,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         newImageUrl = await _uploadProfileImage();
       }
 
-      // [복구] introduction 포함하여 업데이트
+      // Supabase profiles 테이블 업데이트
       await _supabase.from('profiles').update({
         'nickname': _nicknameController.text.trim(),
         'introduction': _introController.text.trim(),
@@ -189,6 +195,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 운영자 왕관 표시 조건
+    bool isOwner = _nicknameController.text == '오재준' || _nicknameController.text.contains('니즈파인');
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('프로필 수정'),
@@ -233,11 +242,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   right: 0,
                   child: GestureDetector(
                     onTap: _pickImage,
-                    child: CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Colors.grey[800],
-                      child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
-                    ),
+                    child: CircleAvatar(radius: 18, backgroundColor: Colors.grey[800], child: const Icon(Icons.camera_alt, color: Colors.white, size: 20)),
                   ),
                 ),
               ],
@@ -245,8 +250,17 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ),
           const SizedBox(height: 32),
 
-          // 닉네임 영역
-          const Text('닉네임', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          // 닉네임 영역 (왕관 표시 포함)
+          Row(
+            children: [
+              const Text('닉네임', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              if (isOwner)
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(Icons.workspace_premium, color: Colors.amber, size: 20),
+                ),
+            ],
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -263,11 +277,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     helperText: _isNicknameAvailable == true ? '사용 가능한 닉네임입니다.' : null,
                     helperStyle: const TextStyle(color: Colors.green),
                   ),
-                  onChanged: (text) {
-                    setState(() {
-                      _isNicknameAvailable = null;
-                    });
-                  },
+                  onChanged: (text) => setState(() => _isNicknameAvailable = null),
                 ),
               ),
               const SizedBox(width: 8),
@@ -278,7 +288,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _isNicknameAvailable == true ? Colors.green : Colors.grey[200],
                     foregroundColor: _isNicknameAvailable == true ? Colors.white : Colors.black,
-                    elevation: 0,
                   ),
                   child: _isCheckingNickname
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
@@ -289,7 +298,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ),
           const SizedBox(height: 24),
 
-          // [복구] 자기소개 영역
+          // 자기소개 영역
           const Text('자기소개', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
           TextField(
