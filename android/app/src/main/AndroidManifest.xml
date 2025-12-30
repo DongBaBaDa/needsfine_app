@@ -1,17 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
         android:label="needsfine_app"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
-
-        <meta-data
-            android:name="com.naver.maps.map.CLIENT_ID"
-            android:value="1rst5nv703" />
+        android:icon="@mipmap/launcher_icon"
+        android:usesCleartextTraffic="true"> <meta-data
+        android:name="com.naver.maps.map.CLIENT_ID"
+        android:value="1rst5nv703" />
 
         <activity
             android:name=".MainActivity"

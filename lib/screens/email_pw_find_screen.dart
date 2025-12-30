@@ -14,7 +14,6 @@ class _EmailPWFindScreenState extends State<EmailPWFindScreen> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
 
-  // 1. 이메일 찾기 로직 (전화번호 기준)
   Future<void> _findEmail() async {
     if (_phoneController.text.isEmpty) return;
     setState(() => _isLoading = true);
@@ -28,7 +27,8 @@ class _EmailPWFindScreenState extends State<EmailPWFindScreen> {
       if (data != null && data['email'] != null) {
         _showResultDialog("가입된 이메일", "찾으시는 이메일은\n${data['email']} 입니다.");
       } else {
-        _showResultDialog("결과 없음", "해당 번호로 가입된 정보가 없습니다.");
+        // --- 요청하신 에러 메시지 반영 ---
+        _showResultDialog("결과 없음", "해당 전화번호로 등록된 이메일이 없습니다.");
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("오류 발생: $e")));
@@ -37,19 +37,30 @@ class _EmailPWFindScreenState extends State<EmailPWFindScreen> {
     }
   }
 
-  // 2. 비밀번호 찾기 로직 (이메일로 재설정 링크 발송)
   Future<void> _resetPassword() async {
     if (_emailController.text.isEmpty) return;
     setState(() => _isLoading = true);
     try {
-      await _supabase.auth.resetPasswordForEmail(_emailController.text.trim());
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("비밀번호 재설정 링크가 이메일로 발송되었습니다.")),
+      // AuthRetryableFetchException 방지를 위해 네트워크 상태 확인이 필요할 수 있습니다.
+      await _supabase.auth.resetPasswordForEmail(
+        _emailController.text.trim(),
+        // redirectTo: 'needsfine://password-reset', // 딥링크 설정 시 추가
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("비밀번호 재설정 링크가 이메일로 발송되었습니다.")),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("발송 실패: $e")));
+      // OS Error 발생 시 에러 메시지 세분화
+      print("Debug Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("발송 실패: 네트워크 연결을 확인해주세요."), backgroundColor: Colors.red),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -83,7 +94,6 @@ class _EmailPWFindScreenState extends State<EmailPWFindScreen> {
         ),
         body: TabBarView(
           children: [
-            // 이메일 찾기
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
@@ -108,7 +118,6 @@ class _EmailPWFindScreenState extends State<EmailPWFindScreen> {
                 ],
               ),
             ),
-            // 비밀번호 찾기
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
