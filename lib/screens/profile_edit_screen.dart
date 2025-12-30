@@ -53,7 +53,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
     _nicknameController = TextEditingController(text: _updatedProfile.nickname);
 
-    // [수정] 자기소개란에 실제 텍스트가 들어가지 않도록 처리
+    // [수정] 자기소개란에 힌트 문구가 실제 텍스트로 채워지지 않도록 빈값 처리
+    // DB에서 불러온 값이 힌트 문구와 동일하다면 사용자에게는 빈 칸으로 보여줍니다.
     _introController = TextEditingController(
         text: (_updatedProfile.introduction == '자신을 알릴 수 있는 소개글을 작성해 주세요.')
             ? ""
@@ -78,7 +79,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }
   }
 
-  // DB에서 관리자 권한 확인
+  // DB에서 관리자 권한(is_admin) 확인
   Future<void> _fetchAdminStatus() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -106,7 +107,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) return;
 
-    // [수정] 운영자가 아닌데 '니즈파인' 포함 시 사용 불가 처리
+    // [수정] 운영자 권한이 없는데 '니즈파인' 포함 시 사용 불가 처리 및 문구 수정
     if (nickname.contains('니즈파인') && !_isAdminInDB) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("해당 닉네임은 사용할 수 없습니다.")),
@@ -181,7 +182,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         newImageUrl = await _uploadProfileImage();
       }
 
-      // [핵심] upsert를 사용하여 데이터가 없으면 생성, 있으면 수정
+      // [핵심] upsert를 사용하여 데이터가 없으면 새로 생성, 있으면 수정
       await _supabase.from('profiles').upsert({
         'id': userId,
         'email': email,
@@ -189,6 +190,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         'introduction': _introController.text.trim(),
         'activity_zone': '$_selectedSido $_selectedSigungu',
         if (newImageUrl != null) 'profile_image_url': newImageUrl,
+        // 관리자 권한은 DB 대시보드에서 직접 수정하는 것이 안전하므로 여기서 업데이트하지 않음
       });
 
       if (mounted) {
@@ -307,7 +309,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             maxLength: 35,
             maxLines: 3,
             decoration: const InputDecoration(
-              hintText: '자신을 알릴 수 있는 소개글을 작성해 주세요.', // [수정] 힌트로만 존재하도록 설정
+              hintText: '자신을 알릴 수 있는 소개글을 작성해 주세요.', // [유지] 힌트로만 존재
               border: OutlineInputBorder(),
             ),
           ),
