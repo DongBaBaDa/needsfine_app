@@ -54,9 +54,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     _nicknameController = TextEditingController(text: _updatedProfile.nickname);
 
     // [수정] 자기소개란에 힌트 문구가 실제 텍스트로 채워지지 않도록 빈값 처리
-    // DB에서 불러온 값이 힌트 문구와 동일하다면 사용자에게는 빈 칸으로 보여줍니다.
+    // DB에서 불러온 값이 힌트 문구와 동일하거나 비어있다면 사용자에게는 빈 칸으로 보여줍니다.
     _introController = TextEditingController(
-        text: (_updatedProfile.introduction == '자신을 알릴 수 있는 소개글을 작성해 주세요.')
+        text: (_updatedProfile.introduction == '자신을 알릴 수 있는 소개글을 작성해 주세요.' ||
+            _updatedProfile.introduction == '자기소개를 입력해주세요.' ||
+            _updatedProfile.introduction.isEmpty)
             ? ""
             : _updatedProfile.introduction
     );
@@ -110,7 +112,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     // [수정] 운영자 권한이 없는데 '니즈파인' 포함 시 사용 불가 처리 및 문구 수정
     if (nickname.contains('니즈파인') && !_isAdminInDB) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("해당 닉네임은 사용할 수 없습니다.")),
+        const SnackBar(content: Text("해당 닉네임은 사용할 수 없습니다.")), // 요청하신 문구로 수정
       );
       setState(() => _isNicknameAvailable = false);
       return;
