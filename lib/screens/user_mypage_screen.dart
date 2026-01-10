@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:needsfine_app/core/needsfine_theme.dart'; // ✅ 테마 임포트
-import 'package:needsfine_app/screens/my_taste_screen.dart'; // ✅ 이동할 스크린 임포트
+import 'package:needsfine_app/core/needsfine_theme.dart';
+import 'package:needsfine_app/screens/my_taste_screen.dart';
+import 'package:needsfine_app/screens/myfeed_screen.dart';
 import '../models/user_model.dart';
 import 'profile_edit_screen.dart';
 import 'info_edit_screen.dart';
@@ -18,42 +19,52 @@ class UserMyPageScreen extends StatefulWidget {
 class _UserMyPageScreenState extends State<UserMyPageScreen> {
   final _supabase = Supabase.instance.client;
   UserProfile? _userProfile;
+  List<dynamic> _myReviews = []; // ✅ 리뷰 리스트를 담을 변수 추가
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchUserProfile();
+    _fetchUserData(); // ✅ 프로필과 리뷰를 동시에 가져오도록 통합
   }
 
-  // 서버에서 프로필 정보를 가져오는 함수
-  Future<void> _fetchUserProfile() async {
+  // 서버에서 프로필 및 리뷰 정보를 가져오는 함수
+  Future<void> _fetchUserData() async {
     setState(() => _isLoading = true);
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
 
     try {
-      final data = await _supabase
+      // 1. 프로필 정보 가져오기
+      final profileData = await _supabase
           .from('profiles')
           .select()
           .eq('id', userId)
           .maybeSingle();
 
-      if (data != null && mounted) {
+      // 2. 리뷰 정보 가져오기 (reviews 테이블 이름 확인 필요)
+      final reviewData = await _supabase
+          .from('reviews')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      if (profileData != null && mounted) {
         setState(() {
           _userProfile = UserProfile(
-            nickname: data['nickname'] ?? "이름 없음",
-            introduction: data['introduction'] ?? "자신을 알릴 수 있는 소개글을 작성해 주세요.",
-            activityZone: data['activity_zone'] ?? "활동 지역 미설정",
-            profileImageUrl: data['profile_image_url'] ?? "",
-            reliability: data['reliability'] ?? 0,
-            followerCount: data['follower_count'] ?? 0,
-            followingCount: data['following_count'] ?? 0,
+            nickname: profileData['nickname'] ?? "이름 없음",
+            introduction: profileData['introduction'] ?? "자신을 알릴 수 있는 소개글을 작성해 주세요.",
+            activityZone: profileData['activity_zone'] ?? "활동 지역 미설정",
+            profileImageUrl: profileData['profile_image_url'] ?? "",
+            reliability: profileData['reliability'] ?? 0,
+            followerCount: profileData['follower_count'] ?? 0,
+            followingCount: profileData['following_count'] ?? 0,
           );
+          _myReviews = reviewData; // ✅ 리뷰 리스트 저장
         });
       }
     } catch (e) {
-      debugPrint("프로필 로드 에러: $e");
+      debugPrint("데이터 로드 에러: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -63,14 +74,11 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     if (_userProfile == null) return;
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => ProfileEditScreen(userProfile: _userProfile!),
-      ),
+      MaterialPageRoute(builder: (context) => ProfileEditScreen(userProfile: _userProfile!)),
     );
-    _fetchUserProfile();
+    _fetchUserData(); // 수정 후 데이터 갱신
   }
 
-  // ✅ 고객센터 모달 구현 (다른 앱들처럼 세련된 바텀 시트)
   void _showCustomerService(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -123,19 +131,13 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       body: ListView(
         children: [
           _buildProfileHeader(context),
-          const Divider(thickness: 8, color: kNeedsFinePurpleLight), // ✅ 테마색 구분선
-
-          // 2. '나의 입맛' 클릭 시 MyTasteScreen 이동 반영
+          const Divider(thickness: 8, color: kNeedsFinePurpleLight),
           _buildMenuListItem(
               icon: Icons.restaurant_menu,
               title: "나의 입맛",
               isPoint: true,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MyTasteScreen()))
           ),
-
-          // ❌ 약관 및 정책 삭제됨
-
-          // 4. 고객센터 구현
           _buildMenuListItem(
               icon: Icons.support_agent,
               title: "고객센터",
@@ -162,45 +164,32 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ✅ 1. 사진(좌) / 정보(우) 배치
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 사진 영역 (크기 2배 및 희미한 경계선)
               Container(
-                padding: const EdgeInsets.all(4),
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1), // ✅ 희미한 경계선
+                  border: Border.all(color: Colors.grey.withOpacity(0.3), width: 1),
                 ),
                 child: CircleAvatar(
-                  radius: 80, // ✅ 기존 40에서 80으로 2배 확대
+                  radius: 50,
                   backgroundImage: profileImage,
                   backgroundColor: kNeedsFinePurpleLight,
                 ),
               ),
-              const SizedBox(width: 24),
-              // 우측 정보 (닉네임, 신뢰도)
+              const SizedBox(width: 20),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                        _userProfile!.nickname,
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)
-                    ),
-                    const SizedBox(height: 10),
-                    // ✅ 신뢰도는 닉네임 밑으로 배치
+                    Text(_userProfile!.nickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: kNeedsFinePurpleLight,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                          "신뢰도 ${_userProfile!.reliability}%",
-                          style: const TextStyle(color: kNeedsFinePurple, fontWeight: FontWeight.bold, fontSize: 14)
-                      ),
+                      decoration: BoxDecoration(color: kNeedsFinePurpleLight, borderRadius: BorderRadius.circular(12)),
+                      child: Text("신뢰도 ${_userProfile!.reliability}%", style: const TextStyle(color: kNeedsFinePurple, fontWeight: FontWeight.bold, fontSize: 13)),
                     ),
                   ],
                 ),
@@ -209,14 +198,25 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
           const SizedBox(height: 24),
 
-          // 자기소개
-          Text(
-              _userProfile!.introduction,
-              style: TextStyle(color: Colors.grey[800], fontSize: 15, height: 1.5)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("소개", style: TextStyle(fontSize: 12, color: kNeedsFinePurple, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text(_userProfile!.introduction, style: TextStyle(color: Colors.grey[800], fontSize: 15, height: 1.5)),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
 
-          // 팔로워/팔로잉 박스
           Row(
             children: [
               Expanded(child: _buildInfoBox(title: "팔로워", value: "${_userProfile!.followerCount}")),
@@ -224,14 +224,37 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
               Expanded(child: _buildInfoBox(title: "팔로잉", value: "${_userProfile!.followingCount}")),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // 프로필 수정 버튼
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _navigateAndEditProfile,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: kNeedsFinePurple),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text("프로필 수정", style: TextStyle(color: kNeedsFinePurple)),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // ✅ [수정된 부분] 나의 피드로 이동할 때 데이터(userProfile, reviews)를 넘겨줍니다.
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-                onPressed: _navigateAndEditProfile,
-                child: const Text("프로필 수정", style: TextStyle(fontWeight: FontWeight.bold))
+              onPressed: () {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => MyFeedScreen(
+                          userProfile: _userProfile!,
+                          reviews: _myReviews, // ✅ 서버에서 가져온 리뷰 리스트 전달
+                        )
+                    )
+                );
+              },
+              child: const Text("나의 피드", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           )
         ],
@@ -261,13 +284,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       leading: Icon(icon, color: isPoint ? kNeedsFinePurple : Colors.black87),
-      title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: isPoint ? FontWeight.bold : FontWeight.normal,
-            color: isPoint ? kNeedsFinePurple : Colors.black87,
-          )
-      ),
+      title: Text(title, style: TextStyle(fontWeight: isPoint ? FontWeight.bold : FontWeight.normal, color: isPoint ? kNeedsFinePurple : Colors.black87)),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
       onTap: onTap,
     );
