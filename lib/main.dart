@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
+import 'package:needsfine_app/config/supabase_config.dart';
+import 'package:needsfine_app/screens/splash_screen.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
 import 'package:needsfine_app/screens/user_join_screen.dart';
-import 'package:needsfine_app/screens/splash_screen.dart';
 import 'package:needsfine_app/screens/initial_screen.dart';
 import 'package:needsfine_app/screens/email_pw_find_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:needsfine_app/config/supabase_config.dart';
 
-// [요청 반영] 지도 초기화
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -20,7 +19,7 @@ void main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
-  // 2. 네이버 지도 SDK 초기화 (Client ID 적용, 버전 가이드 반영)
+  // 2. 네이버 지도 SDK 초기화
   await NaverMapSdk.instance.initialize(
     clientId: '1rst5nv703',
     onAuthFailed: (ex) {
@@ -36,13 +35,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 서울시청 좌표 (37.5666, 126.979)
-    const seoulCityHall = NLatLng(37.5666, 126.979);
-    final safeAreaPadding = MediaQuery.paddingOf(context);
-
     return MaterialApp(
       title: 'NeedsFine',
-      theme: needsFineTheme, 
+      theme: needsFineTheme, // ✅ needsfine_theme.dart에서 정의한 변수 사용
       debugShowCheckedModeBanner: false,
 
       localizationsDelegates: const [
@@ -55,25 +50,8 @@ class MyApp extends StatelessWidget {
       ],
       locale: const Locale('ko', 'KR'),
 
-      // [요청 반영] 네이버 지도 예제 (서울시청 마커 표시)
-      home: Scaffold(
-        body: NaverMap(
-          options: NaverMapViewOptions(
-            contentPadding: safeAreaPadding, // SafeArea 고려
-            initialCameraPosition: const NCameraPosition(target: seoulCityHall, zoom: 14),
-          ),
-          onMapReady: (controller) {
-            final marker = NMarker(
-              id: "city_hall", // Required
-              position: seoulCityHall, // Required
-              caption: const NOverlayCaption(text: "서울시청"), // Optional
-            );
-            controller.addOverlay(marker); // 지도에 마커를 추가
-            print("naver map is ready!");
-          },
-        ),
-      ),
-      
+      home: const SplashScreen(),
+
       routes: {
         '/initial': (context) => const InitialScreen(),
         '/home': (context) => const MainShell(),

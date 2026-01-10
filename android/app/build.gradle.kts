@@ -1,36 +1,44 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
-    // 1. 주소 설정 (AndroidManifest.xml과 일치해야 함)
+    // 1. 패키지 주소 설정
     namespace = "com.needsfine.needsfine_app"
-    compileSdk = 34
+    compileSdk = 36 // [수정] 36으로 상향
 
-    // 2. 이미 설치되어 있는 27 버전을 사용하도록 고정
+    // 2. 방금 다운로드한 빌드 도구 버전 지정
+    buildToolsVersion = "36.0.0" // [수정] 36.0.0으로 지정
     ndkVersion = "27.0.12077973"
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
     defaultConfig {
+        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.needsfine.needsfine_app"
-        minSdk = flutter.minSdkVersion
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        minSdk = flutter.minSdkVersion // [수정] 네이버 지도 SDK 권장에 따라 최소 23으로 설정
+        targetSdk = 36 // [수정] 36으로 상향
+        
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     buildTypes {
         release {
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -38,8 +46,4 @@ android {
 
 flutter {
     source = "../.."
-}
-
-dependencies {
-    // 추가적인 라이브러리가 필요하다면 여기에 적습니다.
 }

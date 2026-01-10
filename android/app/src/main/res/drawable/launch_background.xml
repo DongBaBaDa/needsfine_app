@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 스플래시 화면에 로고를 표시하도록 수정 -->
+<!-- Modify this file to customize your launch splash screen -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/splash_color" />
+    <item android:drawable="@android:color/white" />
 
-    <item>
+    <!-- You can insert your own image assets here -->
+    <!-- <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/needsfine_logo" />
-    </item>
+            android:src="@mipmap/launch_image" />
+    </item> -->
 </layer-list>

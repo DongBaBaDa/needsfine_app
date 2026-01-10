@@ -1,7 +1,6 @@
 name: needsfine_app
 description: "A new Flutter project for NeedsFine app."
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
@@ -10,26 +9,19 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # [추가] 한글 달력 및 지역 언어 설정을 위한 SDK 패키지
   flutter_localizations:
     sdk: flutter
-
-  # Supabase
   supabase_flutter: ^2.0.0
-
-  # 지도 및 위치 관련
   flutter_naver_map: ^1.4.4
   geolocator: ^11.0.0
   geocoding: ^3.0.0
   permission_handler: ^11.3.1
-
-  # UI & 유틸리티
   carousel_slider: ^5.0.0
   shared_preferences: ^2.2.3
   http: ^1.6.0
   scrollable_positioned_list: ^0.3.8
-  image_picker: ^1.0.0
-  intl: 0.20.2 # 최신 버전으로 유지 권장 (한글 날짜 포맷팅)
+  image_picker: ^1.1.2 # ✅ 주석 해제 및 복구
+  intl: ^0.20.2
   unorm_dart: ^0.2.0
   cached_network_image: ^3.3.0
   flutter_svg: ^2.0.9
@@ -42,7 +34,6 @@ dev_dependencies:
   flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.13.1
 
-# 앱 아이콘 생성 설정
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
