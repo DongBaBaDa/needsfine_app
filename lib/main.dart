@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
-import 'package:needsfine_app/config/supabase_config.dart';
-import 'package:needsfine_app/screens/splash_screen.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
 import 'package:needsfine_app/screens/user_join_screen.dart';
+import 'package:needsfine_app/screens/splash_screen.dart';
 import 'package:needsfine_app/screens/initial_screen.dart';
 import 'package:needsfine_app/screens/email_pw_find_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:needsfine_app/config/supabase_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +37,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'NeedsFine',
-      theme: needsFineTheme, // ✅ needsfine_theme.dart에서 정의한 변수 사용
+      theme: needsFineTheme, 
       debugShowCheckedModeBanner: false,
 
       localizationsDelegates: const [
@@ -50,8 +50,9 @@ class MyApp extends StatelessWidget {
       ],
       locale: const Locale('ko', 'KR'),
 
+      // [복구] 앱의 원래 시작 화면인 스플래시 스크린으로 복구
       home: const SplashScreen(),
-
+      
       routes: {
         '/initial': (context) => const InitialScreen(),
         '/home': (context) => const MainShell(),
