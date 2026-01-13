@@ -48,3 +48,6 @@ flutter:
   assets:
     - assets/images/
     - assets/icon.png
+    - assets/kakao_logo.png
+    - assets/google_g_logo.png
+    - assets/naver_login.png
