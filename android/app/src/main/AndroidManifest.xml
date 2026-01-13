@@ -14,7 +14,6 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- 네이버 지도 Client ID 설정 -->
         <meta-data
             android:name="com.naver.maps.map.CLIENT_ID"
             android:value="1rst5nv703" />
@@ -37,5 +36,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="com.kakao.sdk.flutter.AuthCodeCustomTabsActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kakaodda52349c32ed7bea5d08d184fe8a953" android:host="oauth" />
+            </intent-filter>
+        </activity>
+
     </application>
 </manifest>

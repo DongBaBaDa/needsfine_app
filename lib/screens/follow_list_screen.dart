@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/needsfine_theme.dart';
 
 class FollowListScreen extends StatefulWidget {
-  const FollowListScreen({super.key});
+  final String userId; // 대상 유저 ID
+  final String nickname; // 상단 타이틀용
+  final int initialTabIndex; // 0: 팔로워, 1: 팔로잉
+
+  const FollowListScreen({
+    super.key,
+    required this.userId,
+    required this.nickname,
+    required this.initialTabIndex,
+  });
 
   @override
   State<FollowListScreen> createState() => _FollowListScreenState();
@@ -9,102 +20,100 @@ class FollowListScreen extends StatefulWidget {
 
 class _FollowListScreenState extends State<FollowListScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
-  // 더미 데이터
-  final List<Map<String, String>> _followers = []; // 비어있음
-  final List<Map<String, String>> _following = [
-    {"name": "쩝쩝쓰", "description": "스시 좋아하는 쩝쩝이"},
-    {"name": "싹싹이", "description": "비우는게 취미"},
-  ];
+  final _supabase = Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTabIndex);
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  // 팔로우 데이터를 Supabase에서 가져오는 함수
+  Future<List<dynamic>> _fetchFollowData(bool isFollowerTab) async {
+    final targetIdField = isFollowerTab ? 'following_id' : 'follower_id';
+    final profileIdField = isFollowerTab ? 'follower_id' : 'following_id';
+
+    try {
+      final response = await _supabase
+          .from('follows')
+          .select('profiles!$profileIdField(*)')
+          .eq(targetIdField, widget.userId);
+
+      return response as List<dynamic>;
+    } catch (e) {
+      debugPrint("팔로우 리스트 로드 에러: $e");
+      return [];
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('발랄한 맛사냥꾼_53515'),
-        actions: [IconButton(onPressed: () {}, icon: const Icon(Icons.person_add_alt_1_outlined))],
+        title: Text(widget.nickname),
+        centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: '팔로워'), Tab(text: '팔로잉')],
-          indicatorColor: Colors.black,
-          labelColor: Colors.black,
+          indicatorColor: kNeedsFinePurple,
+          labelColor: kNeedsFinePurple,
+          unselectedLabelColor: Colors.grey,
+          tabs: const [
+            Tab(text: "팔로워"),
+            Tab(text: "팔로잉"),
+          ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildFollowerList(),
-          _buildFollowingList(),
+          _buildFollowList(true), // 팔로워 탭
+          _buildFollowList(false), // 팔로잉 탭
         ],
       ),
     );
   }
 
-  Widget _buildFollowerList() {
-    if (_followers.isEmpty) {
-      return _buildEmptyList(
-        icon: Icons.person_off_outlined,
-        message: '아직 나를 팔로우하는 사람이 없어요',
-        buttonText: '연락처 연동하고 친구 찾기',
-        onPressed: () {},
-      );
-    }
-    return _buildUserList(_followers, isFollowing: false);
-  }
+  Widget _buildFollowList(bool isFollowerTab) {
+    return FutureBuilder<List<dynamic>>(
+      future: _fetchFollowData(isFollowerTab),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(child: Text(isFollowerTab ? "팔로워가 없습니다." : "팔로잉 중인 유저가 없습니다."));
+        }
 
-  Widget _buildFollowingList() {
-    if (_following.isEmpty) {
-      return _buildEmptyList(
-        icon: Icons.person_search_outlined,
-        message: '아직 팔로우하는 사람이 없어요',
-        buttonText: '추천 친구 보러가기',
-        onPressed: () {},
-      );
-    }
-    return _buildUserList(_following, isFollowing: true);
-  }
-
-  Widget _buildEmptyList({required IconData icon, required String message, required String buttonText, required VoidCallback onPressed}) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 60, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(message, style: TextStyle(color: Colors.grey[600], fontSize: 16)),
-          const SizedBox(height: 24),
-          OutlinedButton(onPressed: onPressed, child: Text(buttonText)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUserList(List<Map<String, String>> users, {required bool isFollowing}) {
-    return ListView.builder(
-      itemCount: users.length,
-      itemBuilder: (context, index) {
-        final user = users[index];
-        return ListTile(
-          leading: const CircleAvatar(backgroundImage: NetworkImage('https://via.placeholder.com/150')),
-          title: Text(user['name']!),
-          subtitle: Text(user['description']!),
-          trailing: isFollowing
-            ? ElevatedButton(onPressed: () {}, child: const Text('팔로잉'), style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[200]))
-            : ElevatedButton(onPressed: () {}, child: const Text('팔로우'), style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white)),
+        return ListView.builder(
+          itemCount: snapshot.data!.length,
+          itemBuilder: (context, index) {
+            final profile = snapshot.data![index]['profiles'];
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: kNeedsFinePurpleLight,
+                backgroundImage: (profile['profile_image_url'] != null && profile['profile_image_url'].isNotEmpty)
+                    ? NetworkImage(profile['profile_image_url'])
+                    : const AssetImage('assets/images/default_profile.png') as ImageProvider,
+              ),
+              title: Text(profile['nickname'] ?? "이름 없음", style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(profile['introduction'] ?? "소개글이 없습니다.", maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: OutlinedButton(
+                onPressed: () {}, // 추후 해당 유저 피드로 이동 로직 추가 가능
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFEEEEEE)),
+                ),
+                child: const Text("보기", style: TextStyle(color: Colors.black, fontSize: 12)),
+              ),
+            );
+          },
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 }

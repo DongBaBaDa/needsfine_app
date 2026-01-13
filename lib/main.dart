@@ -9,6 +9,7 @@ import 'package:needsfine_app/screens/initial_screen.dart';
 import 'package:needsfine_app/screens/email_pw_find_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/config/supabase_config.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart'; // ✅ 카카오 SDK 임포트
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +28,9 @@ void main() async {
     },
   );
 
+  // ✅ 3. 카카오 SDK 초기화 (네이티브 앱 키 적용)
+  KakaoSdk.init(nativeAppKey: 'dda52349c32ed7bea5d08d184fe8a953');
+
   runApp(const MyApp());
 }
 
@@ -37,7 +41,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'NeedsFine',
-      theme: needsFineTheme, 
+      theme: needsFineTheme,
       debugShowCheckedModeBanner: false,
 
       localizationsDelegates: const [
@@ -50,9 +54,8 @@ class MyApp extends StatelessWidget {
       ],
       locale: const Locale('ko', 'KR'),
 
-      // [복구] 앱의 원래 시작 화면인 스플래시 스크린으로 복구
       home: const SplashScreen(),
-      
+
       routes: {
         '/initial': (context) => const InitialScreen(),
         '/home': (context) => const MainShell(),

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../core/needsfine_theme.dart';
-import '../models/user_model.dart'; // ✅ UserProfile 모델 임포트
+import '../models/user_model.dart';
+import 'package:needsfine_app/screens/follow_list_screen.dart'; // ✅ 임포트 추가
 import 'dart:io';
 
 class MyFeedScreen extends StatelessWidget {
   final UserProfile userProfile;
-  final List<dynamic> reviews; // ✅ 실제 DB에서 가져온 리뷰 리스트
+  final List<dynamic> reviews;
 
   const MyFeedScreen({
     super.key,
@@ -45,7 +46,6 @@ class MyFeedScreen extends StatelessWidget {
 
   // 1. 내 정보가 반영된 프로필 헤더
   Widget _buildProfileHeader(BuildContext context) {
-    // 프로필 이미지 결정 로직
     ImageProvider profileImage;
     if (userProfile.imageFile != null) {
       profileImage = FileImage(userProfile.imageFile!);
@@ -74,9 +74,16 @@ class MyFeedScreen extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Text("팔로워 ${userProfile.followerCount}", style: const TextStyle(color: Colors.grey)),
+                      // ✅ 클릭 가능하도록 GestureDetector 추가
+                      GestureDetector(
+                        onTap: () => _navigateToFollowList(context, 0),
+                        child: Text("팔로워 ${userProfile.followerCount}", style: const TextStyle(color: Colors.grey)),
+                      ),
                       const SizedBox(width: 12),
-                      Text("팔로잉 ${userProfile.followingCount}", style: const TextStyle(color: Colors.grey)),
+                      GestureDetector(
+                        onTap: () => _navigateToFollowList(context, 1),
+                        child: Text("팔로잉 ${userProfile.followingCount}", style: const TextStyle(color: Colors.grey)),
+                      ),
                     ],
                   ),
                 ],
@@ -85,14 +92,13 @@ class MyFeedScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // ✅ 평균 별점 및 신뢰도 표시
-          _buildInfoRow("평균 별점", "5.0", isStar: true), // 실제 데이터 연동 필요
+          _buildInfoRow("평균 별점", "5.0", isStar: true),
           const SizedBox(height: 14),
           _buildInfoRow("신뢰도", "${userProfile.reliability}%", isReliability: true),
 
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () {}, // 다른 사람이 볼 때는 팔로우, 내가 볼 때는 수정 등으로 분기 가능
+            onPressed: () {},
             style: ElevatedButton.styleFrom(
               minimumSize: const Size(double.infinity, 50),
               backgroundColor: kNeedsFinePurple,
@@ -101,6 +107,20 @@ class MyFeedScreen extends StatelessWidget {
             child: const Text("+ 팔로우", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  // ✅ 팔로우 리스트 화면으로 이동하는 헬퍼 함수
+  void _navigateToFollowList(BuildContext context, int tabIndex) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FollowListScreen(
+          userId: "현재_피드_주인의_ID", // 실제 구현 시 userProfile에 ID 필드를 추가하여 연동하세요.
+          nickname: userProfile.nickname,
+          initialTabIndex: tabIndex,
+        ),
       ),
     );
   }
@@ -122,7 +142,6 @@ class MyFeedScreen extends StatelessWidget {
     );
   }
 
-  // 2. 리뷰 피드 영역 (리스트 데이터 바인딩)
   Widget _buildReviewSection(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
@@ -148,7 +167,6 @@ class MyFeedScreen extends StatelessWidget {
     );
   }
 
-  // 3. 리뷰 카드
   Widget _buildReviewCard(BuildContext context, dynamic review) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -165,7 +183,6 @@ class MyFeedScreen extends StatelessWidget {
           onTap: () {},
         ),
 
-        // 이미지 그리드 (리뷰에 등록된 사진이 있을 경우)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           child: AspectRatio(
@@ -211,7 +228,6 @@ class MyFeedScreen extends StatelessWidget {
 
   Widget _buildPlaceholder() => Container(color: kNeedsFinePurpleLight, child: const Icon(Icons.image, color: Colors.white));
 
-  // 4. ✅ 우측 상단 옵션 (리뷰 숨기기, 내 피드 공유)
   void _showMoreOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -239,10 +255,7 @@ class MyFeedScreen extends StatelessWidget {
     return ListTile(
       leading: Icon(icon, color: color),
       title: Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-      onTap: () {
-        Navigator.pop(context);
-        // 기능 연동 로직
-      },
+      onTap: () => Navigator.pop(context),
     );
   }
 }
