@@ -82,7 +82,7 @@ class _InitialScreenState extends State<InitialScreen> {
       const SnackBar(
         content: Text('네이버 로그인은 준비 중입니다. (Coming soon)'),
         duration: Duration(seconds: 2),
-        backgroundColor: Color(0xFF03C75A), // 네이버 브랜드 컬러
+        backgroundColor: Color(0xFF03C75A),
       ),
     );
   }
@@ -135,29 +135,55 @@ class _InitialScreenState extends State<InitialScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // 네이버 로그인 (이미지 버튼)
-                _buildImageButton(
-                  onTap: _signInWithNaver,
-                  imagePath: 'assets/naver_login.png',
+                // 네이버 로그인 버튼 (통이미지 방식)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _isLoading ? null : _signInWithNaver,
+                    borderRadius: BorderRadius.circular(12),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset(
+                        'assets/naver_login.png',
+                        width: double.infinity,
+                        height: 54,
+                        fit: BoxFit.fill,
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
 
-                // 카카오 로그인 (이미지 버튼)
-                _buildImageButton(
-                  onTap: _signInWithKakao,
-                  imagePath: 'assets/kakao_logo.png',
+                // 카카오 로그인 버튼 (중앙 정렬)
+                _buildSocialButton(
+                  onPressed: _signInWithKakao,
+                  label: '카카오 로그인',
+                  color: const Color(0xFFFEE500),
+                  textColor: const Color(0xFF191919),
+                  iconWidget: Image.asset(
+                    'assets/kakao_logo.png',
+                    width: 24,
+                    height: 24,
+                  ),
                 ),
                 const SizedBox(height: 12),
 
-                // 구글 로그인 (로고 + "구글로 로그인" 텍스트 조합 알약 버튼)
+                // 구글 로그인 버튼 (요청하신 보간 최적화 및 테두리 제거 적용)
                 _buildSocialButton(
                   onPressed: _signInWithGoogle,
                   label: '구글로 로그인',
                   color: const Color(0xFFFFFFFF),
                   textColor: const Color(0xFF1F1F1F),
-                  iconWidget: Image.asset('assets/google_g_logo.png', width: 24),
-                  borderColor: const Color(0xFF747775),
-                  isPill: true,
+                  iconWidget: Image.asset(
+                    'assets/google_g_logo.png',
+                    width: 20, // 정수 크기 권장 반영
+                    height: 20,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.none, // 경계선(halo) 줄이기 반영
+                    isAntiAlias: true,
+                    gaplessPlayback: true,
+                  ),
+                  hasBorder: false, // 버튼 외곽선을 제거하여 로고 테두리와의 혼동 방지
                 ),
 
                 const SizedBox(height: 40),
@@ -208,52 +234,43 @@ class _InitialScreenState extends State<InitialScreen> {
     );
   }
 
-  // 이미지를 버튼으로 사용하는 위젯 (네이버, 카카오용)
-  Widget _buildImageButton({required VoidCallback onTap, required String imagePath}) {
-    return InkWell(
-      onTap: _isLoading ? null : onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Image.asset(
-        imagePath,
-        width: double.infinity,
-        fit: BoxFit.fitWidth,
-      ),
-    );
-  }
-
-  // 커스텀 소셜 버튼 위젯 (구글용)
+  // 소셜 버튼 위젯
   Widget _buildSocialButton({
     required VoidCallback onPressed,
     required String label,
     required Color color,
     required Color textColor,
     required Widget iconWidget,
-    Color? borderColor,
-    bool isPill = false,
+    bool hasBorder = false,
   }) {
-    return ElevatedButton(
-      onPressed: _isLoading ? null : onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: textColor,
-        minimumSize: const Size(double.infinity, 54),
-        elevation: 0,
-        shape: isPill
-            ? const StadiumBorder()
-            : RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        side: borderColor != null
-            ? BorderSide(color: borderColor, width: 1.2)
-            : BorderSide.none,
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(left: 0, child: iconWidget),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: textColor,
+          elevation: 0,
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-        ],
+          side: hasBorder
+              ? const BorderSide(color: Color(0xFFF2F2F2), width: 1.0)
+              : BorderSide.none,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            iconWidget,
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
       ),
     );
   }
