@@ -81,10 +81,10 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     }
   }
 
-  // 인증번호 8자리 확인 로직
+  // 인증번호 6자리 확인 로직
   Future<void> _verifyAuthCode() async {
-    if (_authCodeController.text.length != 8) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('인증번호 8자리를 입력해주세요.')));
+    if (_authCodeController.text.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('인증번호 6자리를 입력해주세요.')));
       return;
     }
 
@@ -173,13 +173,13 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              // 인증번호 8자리 입력 및 확인 버튼
+              // 인증번호 6자리 입력 및 확인 버튼
               Row(
                 children: [
                   Expanded(
                     child: TextFormField(
                       controller: _authCodeController,
-                      decoration: const InputDecoration(labelText: '인증번호 8자리', hintText: '8자리 코드 입력'),
+                      decoration: const InputDecoration(labelText: '인증번호 6자리', hintText: '6자리 코드 입력'),
                       keyboardType: TextInputType.number,
                       enabled: _isAuthCodeSent && !_isEmailVerified,
                     ),
