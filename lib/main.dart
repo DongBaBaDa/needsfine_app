@@ -3,7 +3,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
-import 'package:needsfine_app/screens/user_join_screen.dart';
+// ▼▼▼ 경로 수정됨 (screens/signup/user_join_screen.dart) ▼▼▼
+import 'package:needsfine_app/screens/signup/user_join_screen.dart';
 import 'package:needsfine_app/screens/splash_screen.dart';
 import 'package:needsfine_app/screens/initial_screen.dart';
 import 'package:needsfine_app/screens/email_pw_find_screen.dart';
