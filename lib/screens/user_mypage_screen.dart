@@ -3,11 +3,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/screens/my_taste_screen.dart';
 import 'package:needsfine_app/screens/myfeed_screen.dart';
-import 'package:needsfine_app/screens/follow_list_screen.dart'; // ✅ 이동할 화면 임포트
+import 'package:needsfine_app/screens/follow_list_screen.dart';
 import '../models/user_model.dart';
 import 'profile_edit_screen.dart';
 import 'info_edit_screen.dart';
-import 'dart:io';
+
+// ✅ 화면들 임포트
+import 'notice_screen.dart';
+import 'suggestion_write_screen.dart';
+import 'inquiry_write_screen.dart';
+import 'admin_dashboard_screen.dart'; // ✅ 관리자 대시보드 추가
 
 class UserMyPageScreen extends StatefulWidget {
   const UserMyPageScreen({super.key});
@@ -21,6 +26,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   UserProfile? _userProfile;
   List<dynamic> _myReviews = [];
   bool _isLoading = true;
+  bool _isAdmin = false; // ✅ 관리자 여부 변수 추가
 
   @override
   void initState() {
@@ -39,6 +45,9 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
 
       if (profileData != null && mounted) {
         setState(() {
+          // ✅ DB에서 is_admin 값 가져오기 (없으면 false)
+          _isAdmin = profileData['is_admin'] ?? false;
+
           _userProfile = UserProfile(
             nickname: profileData['nickname'] ?? "이름 없음",
             introduction: profileData['introduction'] ?? "자신을 알릴 수 있는 소개글을 작성해 주세요.",
@@ -69,8 +78,27 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           children: [
             const SizedBox(height: 20),
             const Text("고객센터", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ListTile(leading: const Icon(Icons.help_outline), title: const Text("자주 묻는 질문"), onTap: () {}),
-            ListTile(leading: const Icon(Icons.chat_bubble_outline), title: const Text("1:1 문의"), onTap: () {}),
+            const SizedBox(height: 10),
+
+            // 1. 건의사항
+            ListTile(
+              leading: const Icon(Icons.rate_review_outlined),
+              title: const Text("건의사항 보내기"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const SuggestionWriteScreen()));
+              },
+            ),
+
+            // 2. 1:1 문의
+            ListTile(
+              leading: const Icon(Icons.email_outlined),
+              title: const Text("1:1 문의 (앱 내 작성)"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const InquiryWriteScreen()));
+              },
+            ),
             const SizedBox(height: 20),
           ],
         ),
@@ -98,14 +126,36 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
         children: [
           _buildProfileHeader(context),
           const Divider(thickness: 8, color: kNeedsFinePurpleLight),
+
           _buildMenuListItem(icon: Icons.restaurant_menu, title: "나의 입맛", isPoint: true, onTap: () {}),
           _buildMenuListItem(icon: Icons.support_agent, title: "고객센터", onTap: () => _showCustomerService(context)),
-          _buildMenuListItem(icon: Icons.notifications_none, title: "공지사항", onTap: () {}),
+
+          // 공지사항 (일반 유저용: 보기만 가능)
+          _buildMenuListItem(
+            icon: Icons.notifications_none,
+            title: "공지사항",
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NoticeScreen())),
+          ),
+
+          // ✅ [중요] 관리자 계정일 때만 보이는 메뉴 추가
+          if (_isAdmin) ...[
+            const Divider(thickness: 1, height: 1),
+            Container(
+              color: Colors.deepPurple.withOpacity(0.05), // 관리자 메뉴임을 티내기 위해 배경색 살짝 줌
+              child: _buildMenuListItem(
+                icon: Icons.admin_panel_settings,
+                title: "소중한 피드백 (관리자)",
+                isPoint: true, // 보라색 텍스트
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminDashboardScreen())),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
+  // ... (기존 UI 부분: _buildProfileHeader, _buildStatBox, _buildMenuListItem은 그대로 유지)
   Widget _buildProfileHeader(BuildContext context) {
     ImageProvider profileImage = _userProfile!.profileImageUrl.isNotEmpty
         ? NetworkImage(_userProfile!.profileImageUrl)
@@ -116,7 +166,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. 사진(좌) / 정보(우) 배치
           Row(
             children: [
               Container(
@@ -143,7 +192,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
           const SizedBox(height: 24),
 
-          // 2. 자기소개란 (경계선 있는 박스)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -163,7 +211,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
           const SizedBox(height: 24),
 
-          // 3. 팔로워 / 팔로잉 (박스 UI)
           Row(
             children: [
               Expanded(child: _buildStatBox("팔로워", "${_userProfile!.followerCount}", 0)),
@@ -173,7 +220,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
           const SizedBox(height: 24),
 
-          // 4. 버튼들
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
@@ -197,11 +243,9 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     );
   }
 
-  // 통계 박스 위젯 (탭 이동 로직 추가됨)
   Widget _buildStatBox(String title, String value, int tabIndex) {
     return InkWell(
       onTap: () {
-        // ✅ 클릭 시 팔로우 리스트 화면으로 이동
         Navigator.push(context, MaterialPageRoute(builder: (context) => FollowListScreen(
           userId: _supabase.auth.currentUser!.id,
           nickname: _userProfile!.nickname,
