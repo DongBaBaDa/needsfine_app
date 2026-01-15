@@ -47,7 +47,7 @@ class _InquiryWriteScreenState extends State<InquiryWriteScreen> {
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("전송 실패: $e")));
-    } finally {2
+    } finally {
       if (mounted) setState(() => _isSending = false);
     }
   }
@@ -62,7 +62,7 @@ class _InquiryWriteScreenState extends State<InquiryWriteScreen> {
         child: Column(
           children: [
             const Text(
-              "궁금한 점이나 불편한 점을 남겨주세요.\n입력하신 이메일로 답변을 보내드립니다.",
+              "궁금한 점이나 불편한 점을 남겨주세요. 입력하신 이메일로 답변을 보내드립니다.",
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey, fontSize: 13),
             ),
