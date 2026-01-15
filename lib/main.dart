@@ -3,14 +3,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
-// ▼▼▼ 경로 수정됨 (screens/signup/user_join_screen.dart) ▼▼▼
 import 'package:needsfine_app/screens/signup/user_join_screen.dart';
 import 'package:needsfine_app/screens/splash_screen.dart';
 import 'package:needsfine_app/screens/initial_screen.dart';
 import 'package:needsfine_app/screens/email_pw_find_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/config/supabase_config.dart';
-import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart'; // ✅ 카카오 SDK 임포트
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,15 +20,26 @@ void main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
-  // 2. 네이버 지도 SDK 초기화
-  await NaverMapSdk.instance.initialize(
+  // 2. 네이버 지도 SDK 초기화 (문서 기준 코드로 수정)
+  await FlutterNaverMap().init(
     clientId: '1rst5nv703',
     onAuthFailed: (ex) {
       print("********* 네이버 지도 인증 실패 *********\n$ex");
+      // 인증 실패 유형에 따른 로그 처리
+      switch (ex) {
+        case NQuotaExceededException(:final message):
+          print("사용량 초과 (message: $message)");
+          break;
+        case NUnauthorizedClientException() ||
+        NClientUnspecifiedException() ||
+        NAnotherAuthFailedException():
+          print("인증 실패 상세: $ex");
+          break;
+      }
     },
   );
 
-  // ✅ 3. 카카오 SDK 초기화 (네이티브 앱 키 적용)
+  // 3. 카카오 SDK 초기화
   KakaoSdk.init(nativeAppKey: 'dda52349c32ed7bea5d08d184fe8a953');
 
   runApp(const MyApp());
