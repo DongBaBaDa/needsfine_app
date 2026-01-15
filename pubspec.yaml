@@ -43,18 +43,33 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.13.1
+  # ✅ 네이티브 스플래시 패키지
+  flutter_native_splash: ^2.4.3
 
+# 앱 아이콘 (바탕화면에 깔리는 아이콘 - 기존 유지)
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/icon.png"
   min_sdk_android: 21
 
+# ✅ 네이티브 스플래시 설정 (흰색 배경 + 투명 이미지)
+flutter_native_splash:
+  color: "#FFFFFF"              # 배경: 흰색
+  image: "assets/transparent.png" # 🔴 중요: assets 폴더에 투명 이미지를 넣어주세요!
+  branding: null
+
+  android_12:
+    image: "assets/transparent.png"
+    color: "#FFFFFF"
+    icon_background_color: "#FFFFFF"
+
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
     - assets/icon.png
+    - assets/transparent.png # ✅ 에셋에도 추가
     - assets/kakao_logo.png
     - assets/google_g_logo.png
     - assets/naver_login.png

@@ -11,6 +11,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/config/supabase_config.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 
+// ✅ 알림 및 상세 화면 임포트
+import 'package:needsfine_app/screens/notification_list_screen.dart';
+import 'package:needsfine_app/screens/notice_detail_screen.dart'; // 공지 상세
+import 'package:needsfine_app/screens/inquiry_detail_screen.dart'; // 문의 상세
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -20,12 +25,11 @@ void main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
-  // 2. 네이버 지도 SDK 초기화 (문서 기준 코드로 수정)
+  // 2. 네이버 지도 SDK 초기화
   await FlutterNaverMap().init(
-    clientId: '1rst5nv703',
+    clientId: 'uno05gvwyq',
     onAuthFailed: (ex) {
       print("********* 네이버 지도 인증 실패 *********\n$ex");
-      // 인증 실패 유형에 따른 로그 처리
       switch (ex) {
         case NQuotaExceededException(:final message):
           print("사용량 초과 (message: $message)");
@@ -72,6 +76,11 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const MainShell(),
         '/join': (context) => const UserJoinScreen(),
         '/find': (context) => const EmailPWFindScreen(),
+        '/notifications': (context) => const NotificationListScreen(),
+
+        // ✅ 상세 페이지 경로 추가 (알림 클릭 시 이동 목적)
+        '/notice_detail': (context) => const NoticeDetailScreen(),
+        '/inquiry_detail': (context) => const InquiryDetailScreen(),
       },
     );
   }

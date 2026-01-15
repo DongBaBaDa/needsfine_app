@@ -6,6 +6,7 @@ import 'package:needsfine_app/services/score_calculator.dart';
 import 'package:needsfine_app/widgets/feedback_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:needsfine_app/widgets/notification_badge.dart'; // ✅ 배지 위젯 임포트
 
 class WriteReviewScreen extends StatefulWidget {
   const WriteReviewScreen({super.key});
@@ -18,7 +19,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   final _formKey = GlobalKey<FormState>();
   final _storeNameController = TextEditingController();
   final _reviewTextController = TextEditingController();
-  
+
   double _rating = 0;
   List<File> _selectedImages = [];
   bool _isSubmitting = false;
@@ -64,11 +65,11 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
         final filePath = '$userId/$fileName';
 
         await supabase.storage.from('review-photos').upload(
-              filePath,
-              image,
-              fileOptions: FileOptions(contentType: 'image/$fileExt'),
-            );
-        
+          filePath,
+          image,
+          fileOptions: FileOptions(contentType: 'image/$fileExt'),
+        );
+
         final imageUrl = supabase.storage.from('review-photos').getPublicUrl(filePath);
         photoUrls.add(imageUrl);
       }
@@ -90,9 +91,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       Navigator.pop(context, true);
     } catch (e) {
       if(mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('리뷰 등록 실패: $e')),
-          );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('리뷰 등록 실패: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -101,13 +102,19 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // [수정] Scaffold의 resizeToAvoidBottomInset을 true로 설정하여 키보드에 의한 화면 잘림 방지
     return Scaffold(
-      resizeToAvoidBottomInset: true, 
+      resizeToAvoidBottomInset: true,
       backgroundColor: const Color(0xFFF0E9FF),
       appBar: AppBar(
         title: const Text('리뷰 작성'),
         backgroundColor: const Color(0xFF9C7CFF),
+        actions: [
+          // ✅ 알림 버튼 구현 (더미 제거: unreadCount 0)
+          NotificationBadge(
+            iconColor: Colors.white,
+            onTap: () => Navigator.pushNamed(context, '/notifications'),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -133,7 +140,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
               const SizedBox(height: 24),
               const Text('리뷰를 작성해주세요', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              // [수정] 가이드 문구 변경
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(color: Colors.white.withOpacity(0.5), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF9C7CFF).withOpacity(0.2))),

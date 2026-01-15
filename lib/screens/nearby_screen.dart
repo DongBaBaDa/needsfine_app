@@ -4,10 +4,11 @@ import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:needsfine_app/services/naver_map_service.dart'; // ✅ 분리된 서비스 파일 import
+import 'package:needsfine_app/services/naver_map_service.dart'; // ✅ 서비스 파일 import
 import 'package:needsfine_app/models/app_data.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/screens/ranking_screen.dart';
+import 'package:needsfine_app/widgets/notification_badge.dart'; // ✅ 배지 위젯 임포트
 
 class NearbyScreen extends StatefulWidget {
   const NearbyScreen({super.key});
@@ -28,11 +29,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   // ✅ NaverGeocodingService 인스턴스
   late final NaverGeocodingService _geocodingService;
 
-  // 🔴 [중요] 콘솔에서 [재발급] 버튼을 눌러 발급받은 "새로운 Secret"을 여기에 붙여넣어 주세요.
-  // 기존 키는 I(아이)와 l(엘) 혼동으로 인해 401 오류가 발생했을 가능성이 매우 높습니다.
-  final String _ncpClientId = '1rst5nv703';
-  final String _ncpClientSecret = 'ZVIRQhTdKc0BsZVUcBDSVhZvOMhUUVZM3SvqJf4g';
-
   // 초기 위치: 서울시청
   static const NCameraPosition _initialPosition = NCameraPosition(
     target: NLatLng(37.5665, 126.9780),
@@ -42,11 +38,8 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   @override
   void initState() {
     super.initState();
-    // ✅ 서비스 초기화 (분리된 파일 사용)
-    _geocodingService = NaverGeocodingService(
-      clientId: _ncpClientId,
-      clientSecret: _ncpClientSecret,
-    );
+    _geocodingService = NaverGeocodingService();
+
     _initializeMap();
     searchTrigger.addListener(_handleExternalSearch);
   }
@@ -91,29 +84,23 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     }
   }
 
-  // ✅ 분리된 Service 파일(_geocodingService)을 사용하여 검색하도록 수정
   Future<void> _searchAndMove(String address) async {
     if (address.isEmpty) return;
 
     try {
-      // API 호출 (따로 만드신 NaverGeocodingService 사용)
       final NaverGeocodingResponse response = await _geocodingService.searchAddress(address);
 
       if (response.addresses.isNotEmpty) {
         final AddrItem addr = response.addresses.first;
-
-        // 네이버 API 응답: x=경도, y=위도
         final position = NLatLng(double.parse(addr.y), double.parse(addr.x));
-
         _updateLocationAndMarkers(position, moveCamera: true, addressText: address);
       } else {
         _showSnackBar("검색 결과를 찾을 수 없습니다.");
       }
     } catch (e) {
       debugPrint("검색 실패: $e");
-      // 401 에러가 계속되면 Secret 키를 다시 확인하라는 메시지 출력
       if (e.toString().contains("401")) {
-        _showSnackBar("인증 실패: Client Secret을 재발급 받아 교체해주세요.");
+        _showSnackBar("인증 실패: 콘솔 설정과 키 값을 확인해주세요.");
       } else {
         _showSnackBar("주소 검색 중 오류가 발생했습니다.");
       }
@@ -125,28 +112,31 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  // 마커 업데이트 로직
   Future<void> _updateMarkers(NaverMapController controller) async {
     final markers = <NMarker>{};
 
     for (var store in AppData().stores) {
-      final iconImage = await NOverlayImage.fromWidget(
-          widget: _buildMarkerWidget(store),
-          context: context
-      );
+      try {
+        final iconImage = await NOverlayImage.fromWidget(
+            widget: _buildMarkerWidget(store),
+            context: context
+        );
 
-      final marker = NMarker(
-        id: store.id,
-        position: NLatLng(store.latitude, store.longitude),
-        icon: iconImage,
-        size: const Size(110, 45),
-      );
+        final marker = NMarker(
+          id: store.id,
+          position: NLatLng(store.latitude, store.longitude),
+          icon: iconImage,
+          size: const Size(110, 45),
+        );
 
-      marker.setOnTapListener((overlay) {
-        setState(() => _selectedStore = store);
-      });
+        marker.setOnTapListener((overlay) {
+          setState(() => _selectedStore = store);
+        });
 
-      markers.add(marker);
+        markers.add(marker);
+      } catch (e) {
+        print("마커 생성 실패: $e");
+      }
     }
 
     controller.clearOverlays();
@@ -195,7 +185,15 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('내 주변')),
+      appBar: AppBar(
+        title: const Text('내 주변'),
+        actions: [
+          // ✅ 알림 버튼 구현 (더미 제거: unreadCount 0)
+          NotificationBadge(
+            onTap: () => Navigator.pushNamed(context, '/notifications'),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           _buildSearchBar(),
