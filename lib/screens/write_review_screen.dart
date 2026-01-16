@@ -6,7 +6,10 @@ import 'package:needsfine_app/services/score_calculator.dart';
 import 'package:needsfine_app/widgets/feedback_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
-import 'package:needsfine_app/widgets/notification_badge.dart'; // ✅ 배지 위젯 임포트
+import 'package:needsfine_app/widgets/notification_badge.dart';
+// ✅ 압축 및 경로 관련 패키지 임포트
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart';
 
 class WriteReviewScreen extends StatefulWidget {
   const WriteReviewScreen({super.key});
@@ -33,15 +36,50 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     );
   }
 
+  // ✅ 사진 선택 및 자동 압축 로직 (수정됨)
   Future<void> _pickImage() async {
+    // 1. 5장 제한 확인
     if (_selectedImages.length >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('최대 5장까지 첨부 가능합니다')));
       return;
     }
+
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
     if (image != null) {
-      setState(() => _selectedImages.add(File(image.path)));
+      // 2. 압축 진행
+      File? compressedFile = await _compressImage(File(image.path));
+
+      if (compressedFile != null) {
+        setState(() => _selectedImages.add(compressedFile));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('사진 처리에 실패했습니다.')));
+      }
+    }
+  }
+
+  // ✅ 이미지 압축 헬퍼 함수 (추가됨)
+  Future<File?> _compressImage(File file) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final path = tempDir.path;
+      final name = const Uuid().v4();
+      final targetPath = '$path/$name.jpg';
+
+      // 500KB 이하를 목표로 압축 (화질 70%, 해상도 조정)
+      var result = await FlutterImageCompress.compressAndGetFile(
+        file.absolute.path,
+        targetPath,
+        quality: 70, // 화질 70%
+        minWidth: 1024, // 가로 최대 1024px
+        minHeight: 1024, // 세로 최대 1024px
+      );
+
+      return result != null ? File(result.path) : null;
+    } catch (e) {
+      debugPrint("이미지 압축 오류: $e");
+      return null;
     }
   }
 
@@ -60,17 +98,17 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       final userId = await ReviewService.getUserId() ?? 'anonymous';
 
       for (final image in _selectedImages) {
-        final fileExt = image.path.split('.').last;
+        final fileExt = 'jpg'; // 압축해서 jpg로 통일됨
         final fileName = '${const Uuid().v4()}.$fileExt';
         final filePath = '$userId/$fileName';
 
-        await supabase.storage.from('review-photos').upload(
+        await supabase.storage.from('review_photos').upload(
           filePath,
           image,
-          fileOptions: FileOptions(contentType: 'image/$fileExt'),
+          fileOptions: const FileOptions(contentType: 'image/jpeg'),
         );
 
-        final imageUrl = supabase.storage.from('review-photos').getPublicUrl(filePath);
+        final imageUrl = supabase.storage.from('review_photos').getPublicUrl(filePath);
         photoUrls.add(imageUrl);
       }
 
@@ -91,8 +129,12 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       Navigator.pop(context, true);
     } catch (e) {
       if(mounted) {
+        String errorMessage = '리뷰 등록 실패: $e';
+        if (e.toString().contains('Bucket not found')) {
+          errorMessage = '서버 저장소 설정 오류입니다. 관리자에게 문의하세요.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('리뷰 등록 실패: $e')),
+          SnackBar(content: Text(errorMessage)),
         );
       }
     } finally {
@@ -109,7 +151,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
         title: const Text('리뷰 작성'),
         backgroundColor: const Color(0xFF9C7CFF),
         actions: [
-          // ✅ 알림 버튼 구현 (더미 제거: unreadCount 0)
           NotificationBadge(
             iconColor: Colors.white,
             onTap: () => Navigator.pushNamed(context, '/notifications'),
@@ -154,8 +195,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
               TextFormField(
                 controller: _reviewTextController,
                 maxLines: 6,
+                maxLength: 200, // ✅ 글자수 200자 제한 추가
                 decoration: InputDecoration(
-                  hintText: '솔직한 경험을 자세히 작성해주세요...',
+                  hintText: '솔직한 경험을 자세히 작성해주세요... (최대 200자)',
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -165,7 +207,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                 onChanged: (_) => setState(() {}),
                 validator: (value) => (value == null || value.trim().isEmpty) ? '리뷰 내용을 입력해주세요' : null,
               ),
-              Padding(padding: const EdgeInsets.only(top: 8.0), child: Text('현재 ${_reviewTextController.text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length}단어', style: const TextStyle(fontSize: 12, color: Colors.grey))),
+              // Padding(padding: const EdgeInsets.only(top: 8.0), child: Text('현재 ${_reviewTextController.text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length}단어', style: const TextStyle(fontSize: 12, color: Colors.grey))),
+              // (위 단어 수 표시는 maxLength 카운터와 중복되어 주석 처리하거나 제거해도 무방합니다)
+
               const SizedBox(height: 24),
               const Text('별점을 선택해주세요', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
@@ -207,6 +251,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
               const SizedBox(height: 24),
               if (_calculatedScore.isNotEmpty) ...[const Text('📊 실시간 피드백', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)), const SizedBox(height: 16), FeedbackIndicator(calculatedScore: _calculatedScore), const SizedBox(height: 24)],
               ElevatedButton(onPressed: _isSubmitting ? null : _submitReview, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9C7CFF), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: _isSubmitting ? const CircularProgressIndicator(color: Colors.white) : const Text('리뷰 등록하기')),
+
+              // ✅ 스크롤 여백 추가 (버튼이 잘리지 않도록 100픽셀 공간 확보)
+              const SizedBox(height: 100),
             ],
           ),
         ),

@@ -48,8 +48,8 @@ class Review {
       storeName: json['store_name'] ?? '',
       storeAddress: json['store_address'],
       reviewText: json['review_text'] ?? '',
-      userRating: (json['user_rating'] ?? 3.0).toDouble(),
-      needsfineScore: (json['needsfine_score'] ?? 70.0).toDouble(),
+      userRating: (json['user_rating'] is num) ? (json['user_rating'] as num).toDouble() : 3.0,
+      needsfineScore: (json['needsfine_score'] is num) ? (json['needsfine_score'] as num).toDouble() : 70.0,
       trustLevel: (json['trust_level'] ?? 50).toInt(),
       authenticity: json['authenticity'] ?? false,
       advertisingWords: json['advertising_words'] ?? false,
@@ -95,7 +95,8 @@ class Review {
 /// 매장 순위 데이터 모델
 class StoreRanking {
   final String storeName;
-  final double avgScore;
+  final double avgScore;      // 니즈파인 평균 점수
+  final double avgUserRating; // ✅ [추가됨] 사용자 평균 별점 (에러 해결)
   final int reviewCount;
   final double avgTrust;
   final int rank;
@@ -104,6 +105,7 @@ class StoreRanking {
   StoreRanking({
     required this.storeName,
     required this.avgScore,
+    required this.avgUserRating, // ✅ 생성자 추가
     required this.reviewCount,
     required this.avgTrust,
     required this.rank,
