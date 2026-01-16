@@ -1,83 +1,70 @@
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/ranking_models.dart';
+import 'package:needsfine_app/models/ranking_models.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http; // 리뷰 작성 때만 잠깐 필요할 수 있음
 
-/// NEEDSFINE 리뷰 API 서비스 (Supabase v2 문법 + 에러 수정 완료)
 class ReviewService {
   static final _supabase = Supabase.instance.client;
 
-  // ==========================================
-  // 유저 ID 관리
-  // ==========================================
-
-  static Future<String?> getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('needsfine_user_id');
-  }
-
-  static Future<void> saveUserId(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('needsfine_user_id', userId);
-  }
+  // ✅ 1. 이 주소는 '리뷰 작성(POST)'할 때만 씁니다. (평균 점수 불러올 땐 안 씀)
+  // 재준님이 알려준 Invocation URL 주소를 여기에 넣으세요.
+  static const String _functionUrl = 'https://hokjkmapqbinhsivkbnj.supabase.co/functions/v1/make-server-26899706';
 
   // ==========================================
-  // 리뷰 API
+  // 1. 전체 통계 가져오기 (방금 만든 global_stats_view 사용)
   // ==========================================
-
-  /// 📝 리뷰 작성
-  /// ✅ [수정] DB 필수 컬럼(점수 등) 누락으로 인한 에러 해결
-  static Future<Review> createReview({
-    required String storeName,
-    String? storeAddress,
-    required String reviewText,
-    required double userRating,
-    List<String>? photoUrls,
-  }) async {
+  static Future<Map<String, dynamic>> fetchGlobalStats() async {
     try {
-      final userId = await getUserId();
+      // HTTP 통신 X -> Supabase DB 직접 조회 O
+      final response = await _supabase
+          .from('global_stats_view')
+          .select()
+          .single(); // 데이터가 1줄이니까 single()
 
-      final response = await _supabase.from('reviews').insert({
-        'store_name': storeName,
-        'store_address': storeAddress,
-        'review_text': reviewText,
-        'user_rating': userRating,
-        'photo_urls': photoUrls ?? [],
-        'user_id': userId,
-
-        // 🔹 [핵심] DB의 NOT NULL 제약조건을 피하기 위한 기본값 설정
-        // (실제 분석 로직이 연결되기 전까지는 기본값으로 저장되어야 에러가 안 납니다)
-        'needsfine_score': 70.0,
-        'trust_level': 50,
-        'authenticity': true,
-        'advertising_words': false,
-        'emotional_balance': true,
-        'is_critical': false,
-        'tags': [],
-
-      }).select().single();
-
-      return Review.fromJson(response);
+      // 뷰에서 계산된 값을 그대로 리턴
+      return response;
     } catch (e) {
-      print('❌ 리뷰 작성 에러: $e');
-      rethrow;
+      print('❌ 전체 통계 로드 실패: $e');
+      return {};
     }
   }
 
-  /// 📋 리뷰 목록 조회 (무한 스크롤)
+  // ==========================================
+  // 2. 매장 순위 가져오기 (방금 만든 store_rankings_view 사용)
+  // ==========================================
+  static Future<List<StoreRanking>> fetchStoreRankings() async {
+    try {
+      final List<dynamic> response = await _supabase
+          .from('store_rankings_view')
+          .select()
+          .order('avg_score', ascending: false) // 점수 높은 순
+          .limit(100);
+
+      return response.asMap().entries.map((entry) {
+        return StoreRanking.fromViewJson(entry.value, entry.key + 1);
+      }).toList();
+    } catch (e) {
+      print('❌ 매장 순위 로드 실패: $e');
+      return [];
+    }
+  }
+
+  // ==========================================
+  // 3. 리뷰 목록 가져오기 (기존 테이블 사용)
+  // ==========================================
   static Future<List<Review>> fetchReviews({
     int limit = 20,
     int offset = 0,
     String? storeName,
   }) async {
     try {
-      var query = _supabase.from('reviews').select();
+      var query = _supabase.from('reviews').select().eq('is_hidden', false);
 
       if (storeName != null && storeName.isNotEmpty) {
         query = query.ilike('store_name', '%$storeName%');
       }
 
-      // ✅ 최신순 정렬 + 범위 지정 (offset ~ offset + limit)
       final List<dynamic> data = await query
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);
@@ -89,106 +76,52 @@ class ReviewService {
     }
   }
 
-  /// 🔍 특정 리뷰 조회
-  static Future<Review?> fetchReviewById(String id) async {
-    try {
-      final response = await _supabase.from('reviews').select().eq('id', id).single();
-      return Review.fromJson(response);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// 📊 통계 조회
-  /// ✅ [수정] 단순 개수 카운트가 아니라 '실제 평균 점수'를 계산하도록 변경
-  static Future<Map<String, dynamic>?> fetchStats() async {
-    try {
-      // 1. 점수와 신뢰도 컬럼만 가져옴 (전체 데이터)
-      final List<dynamic> scores = await _supabase
-          .from('reviews')
-          .select('needsfine_score, trust_level');
-
-      if (scores.isEmpty) {
-        return {
-          'total_reviews': 0,
-          'average_score': 0.0,
-          'average_trust': 0.0,
-        };
-      }
-
-      // 2. 앱 내에서 평균 계산
-      double totalScore = 0;
-      double totalTrust = 0;
-
-      for (var item in scores) {
-        totalScore += (item['needsfine_score'] as num).toDouble();
-        totalTrust += (item['trust_level'] as num).toDouble();
-      }
-
-      return {
-        'total_reviews': scores.length,
-        'average_score': totalScore / scores.length, // 실제 평균
-        'average_trust': totalTrust / scores.length, // 실제 평균
-      };
-    } catch (e) {
-      print('❌ 통계 조회 실패: $e');
-      return {'total_reviews': 0};
-    }
-  }
-
-  /// 🗑️ 리뷰 삭제
-  static Future<bool> deleteReview(String reviewId) async {
-    try {
-      await _supabase.from('reviews').delete().eq('id', reviewId);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // ==========================================
-  // 기타 기능
+  // 4. 리뷰 작성 (Edge Function 호출)
   // ==========================================
-
-  static Future<Map<String, dynamic>?> voteReview({
-    required String reviewId,
-    required String voteType,
+  static Future<Review> createReview({
+    required String storeName,
+    String? storeAddress,
+    required String reviewText,
+    required double userRating,
+    List<String>? photoUrls,
   }) async {
     try {
-      final userId = await getUserId();
-      if (userId == null) throw Exception('로그인이 필요합니다.');
+      // 여기서는 Edge Function을 호출해서 점수를 계산시킴
+      final response = await http.post(
+        Uri.parse('$_functionUrl'), // 위에서 설정한 진짜 주소
+        headers: {
+          'Content-Type': 'application/json',
+          // 필요한 경우 인증 헤더 추가: 'Authorization': 'Bearer ${Supabase.instance.client.auth.currentSession?.accessToken}',
+        },
+        body: jsonEncode({
+          'store_name': storeName,
+          'store_address': storeAddress,
+          'review_text': reviewText,
+          'user_rating': userRating,
+          'photo_urls': photoUrls ?? [],
+        }),
+      );
 
-      final response = await _supabase.from('review_votes').insert({
-        'user_id': userId,
-        'review_id': reviewId,
-        'vote_type': voteType,
-      }).select().single();
-
-      return response;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        return Review.fromJson(data);
+      } else {
+        throw Exception('리뷰 등록 실패: ${response.body}');
+      }
     } catch (e) {
-      return {'error': 'Already voted or failed'};
+      print('❌ 리뷰 작성 에러: $e');
+      rethrow;
     }
   }
 
-  static Future<void> createFeedback({String? email, required String message}) async {
-    final userId = await getUserId();
-    await _supabase.from('feedback').insert({
-      'email': email,
-      'message': message,
-      'user_id': userId,
-    });
+  // 유저 ID 헬퍼 등등...
+  static Future<String?> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('needsfine_user_id');
   }
 
-  static Future<List<Feedback>> fetchFeedbacks({int limit = 20}) async {
-    try {
-      final data = await _supabase.from('feedback').select().limit(limit);
-      return (data as List).map((json) => Feedback.fromJson(json)).toList();
-    } catch (e) {
-      return [];
-    }
-  }
-
-  static Future<bool> verifyAdmin() async {
-    return true;
+  static Future<bool> deleteReview(String reviewId) async {
+    try { await _supabase.from('reviews').delete().eq('id', reviewId); return true; } catch (e) { return false; }
   }
 }

@@ -1,25 +1,24 @@
 // lib/models/ranking_models.dart
 
 /// 리뷰 데이터 모델
-/// 웹 프로젝트의 SavedReview 인터페이스와 동일한 구조
 class Review {
   final String id;
   final String storeName;
   final String? storeAddress;
   final String reviewText;
-  final double userRating;           // 사용자가 준 별점 (0.5~5.0)
-  final double needsfineScore;       // 니즈파인 점수
-  final int trustLevel;              // 신뢰도 (0~100)
-  final bool authenticity;           // 진정성
-  final bool advertisingWords;       // 광고성 단어 사용 여부
-  final bool emotionalBalance;       // 감정 균형
-  final List<String> tags;           // 태그 (최대 3개)
-  final List<String> photoUrls;      // 사진 URL 목록
-  final bool isCritical;             // 비판적 리뷰 여부
-  final bool isHidden;               // 숨김 처리 여부
+  final double userRating;
+  final double needsfineScore;
+  final int trustLevel;
+  final bool authenticity;
+  final bool advertisingWords;
+  final bool emotionalBalance;
+  final List<String> tags;
+  final List<String> photoUrls;
+  final bool isCritical;
+  final bool isHidden;
   final DateTime createdAt;
-  final String? userId;              // 작성자 ID (user_number)
-  final String? userEmail;           // 작성자 이메일
+  final String? userId;
+  final String? userEmail;
 
   Review({
     required this.id,
@@ -41,7 +40,6 @@ class Review {
     this.userEmail,
   });
 
-  /// JSON → Dart 객체 변환
   factory Review.fromJson(Map<String, dynamic> json) {
     return Review(
       id: json['id'] ?? '',
@@ -54,23 +52,16 @@ class Review {
       authenticity: json['authenticity'] ?? false,
       advertisingWords: json['advertising_words'] ?? false,
       emotionalBalance: json['emotional_balance'] ?? false,
-      tags: (json['tags'] as List<dynamic>?)
-          ?.map((e) => e.toString())
-          .toList() ?? [],
-      photoUrls: (json['photo_urls'] as List<dynamic>?)
-          ?.map((e) => e.toString())
-          .toList() ?? [],
+      tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      photoUrls: (json['photo_urls'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       isCritical: json['is_critical'] ?? false,
       isHidden: json['is_hidden'] ?? false,
-      createdAt: DateTime.parse(
-        json['created_at'] ?? DateTime.now().toIso8601String(),
-      ),
+      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
       userId: json['users']?['user_number'],
       userEmail: json['users']?['email'],
     );
   }
 
-  /// Dart 객체 → JSON 변환
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -96,7 +87,7 @@ class Review {
 class StoreRanking {
   final String storeName;
   final double avgScore;      // 니즈파인 평균 점수
-  final double avgUserRating; // ✅ [추가됨] 사용자 평균 별점 (에러 해결)
+  final double avgUserRating; // ✅ 사용자 평균 별점 (필드 유지)
   final int reviewCount;
   final double avgTrust;
   final int rank;
@@ -105,12 +96,25 @@ class StoreRanking {
   StoreRanking({
     required this.storeName,
     required this.avgScore,
-    required this.avgUserRating, // ✅ 생성자 추가
+    required this.avgUserRating, // ✅ 생성자 포함
     required this.reviewCount,
     required this.avgTrust,
     required this.rank,
     this.topTags,
   });
+
+  // ✅ 서버(View) 데이터에서 변환하기 위한 팩토리 생성자 추가
+  factory StoreRanking.fromViewJson(Map<String, dynamic> json, int rankIndex) {
+    return StoreRanking(
+      storeName: json['store_name'] ?? '알 수 없음',
+      avgScore: (json['avg_score'] is num) ? (json['avg_score'] as num).toDouble() : 0.0,
+      avgUserRating: (json['avg_user_rating'] is num) ? (json['avg_user_rating'] as num).toDouble() : 0.0,
+      avgTrust: (json['avg_trust'] is num) ? (json['avg_trust'] as num).toDouble() : 0.0,
+      reviewCount: (json['review_count'] is num) ? (json['review_count'] as num).toInt() : 0,
+      rank: rankIndex,
+      topTags: [], // View에서는 태그 가져오기가 복잡하므로 일단 빈 리스트
+    );
+  }
 }
 
 /// 통계 데이터 모델
@@ -148,9 +152,7 @@ class Feedback {
       userId: json['users']?['user_number'] ?? 'unknown',
       email: json['email'],
       message: json['message'] ?? '',
-      createdAt: DateTime.parse(
-        json['created_at'] ?? DateTime.now().toIso8601String(),
-      ),
+      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
     );
   }
 }

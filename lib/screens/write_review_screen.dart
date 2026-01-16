@@ -7,7 +7,7 @@ import 'package:needsfine_app/widgets/feedback_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
-// ✅ 압축 및 경로 관련 패키지 임포트
+// ✅ 압축 및 경로 관련 패키지
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -27,6 +27,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   List<File> _selectedImages = [];
   bool _isSubmitting = false;
 
+  // 실시간 피드백용 (서버 저장용 아님, 사용자에게 보여주기만 하는 용도)
   Map<String, dynamic> get _calculatedScore {
     if (_reviewTextController.text.trim().isEmpty || _rating == 0) return {};
     return ScoreCalculator.calculateNeedsFineScore(
@@ -36,9 +37,8 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     );
   }
 
-  // ✅ 사진 선택 및 자동 압축 로직 (수정됨)
+  // ✅ 1. 사진 선택 및 자동 압축 로직
   Future<void> _pickImage() async {
-    // 1. 5장 제한 확인
     if (_selectedImages.length >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('최대 5장까지 첨부 가능합니다')));
       return;
@@ -48,7 +48,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
-      // 2. 압축 진행
+      // 압축 실행
       File? compressedFile = await _compressImage(File(image.path));
 
       if (compressedFile != null) {
@@ -59,7 +59,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     }
   }
 
-  // ✅ 이미지 압축 헬퍼 함수 (추가됨)
+  // ✅ 2. 이미지 압축 헬퍼 함수
   Future<File?> _compressImage(File file) async {
     try {
       final tempDir = await getTemporaryDirectory();
@@ -67,13 +67,13 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       final name = const Uuid().v4();
       final targetPath = '$path/$name.jpg';
 
-      // 500KB 이하를 목표로 압축 (화질 70%, 해상도 조정)
+      // 500KB 이하 목표 (화질 70%, 해상도 1024px 제한)
       var result = await FlutterImageCompress.compressAndGetFile(
         file.absolute.path,
         targetPath,
-        quality: 70, // 화질 70%
-        minWidth: 1024, // 가로 최대 1024px
-        minHeight: 1024, // 세로 최대 1024px
+        quality: 70,
+        minWidth: 1024,
+        minHeight: 1024,
       );
 
       return result != null ? File(result.path) : null;
@@ -83,6 +83,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     }
   }
 
+  // ✅ 3. 리뷰 등록 (Edge Function이 계산하도록 원본 데이터만 전송)
   Future<void> _submitReview() async {
     if (!_formKey.currentState!.validate()) return;
     if (_rating == 0) {
@@ -97,11 +98,14 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       final supabase = Supabase.instance.client;
       final userId = await ReviewService.getUserId() ?? 'anonymous';
 
+      // 3-1. 사진 업로드
       for (final image in _selectedImages) {
         final fileExt = 'jpg'; // 압축해서 jpg로 통일됨
         final fileName = '${const Uuid().v4()}.$fileExt';
-        final filePath = '$userId/$fileName';
+        final filePath = '$userId/$fileName'; // 폴더 구조: 유저ID/파일명
 
+        // Storage 버킷 이름 확인 필요 (review_photos vs review-photos)
+        // 여기서는 에러가 덜 나는 review_photos(언더바)로 작성합니다.
         await supabase.storage.from('review_photos').upload(
           filePath,
           image,
@@ -112,6 +116,8 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
         photoUrls.add(imageUrl);
       }
 
+      // 3-2. 데이터 저장 요청
+      // Edge Function이 있으므로 점수 계산 없이 순수 데이터만 보냅니다.
       await ReviewService.createReview(
         storeName: _storeNameController.text.trim(),
         reviewText: _reviewTextController.text.trim(),
@@ -122,16 +128,18 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('리뷰가 성공적으로 등록되었습니다! 🎉'),
+          content: Text('리뷰가 등록되었습니다! (점수는 잠시 후 집계됩니다)'),
           backgroundColor: Color(0xFF9C7CFF),
         ),
       );
       Navigator.pop(context, true);
+
     } catch (e) {
       if(mounted) {
         String errorMessage = '리뷰 등록 실패: $e';
+        // 자주 발생하는 Storage 에러 처리
         if (e.toString().contains('Bucket not found')) {
-          errorMessage = '서버 저장소 설정 오류입니다. 관리자에게 문의하세요.';
+          errorMessage = '서버 저장소 이름을 확인해주세요. (review_photos)';
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(errorMessage)),
@@ -195,7 +203,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
               TextFormField(
                 controller: _reviewTextController,
                 maxLines: 6,
-                maxLength: 200, // ✅ 글자수 200자 제한 추가
+                maxLength: 200, // ✅ 글자수 200자 제한 적용
                 decoration: InputDecoration(
                   hintText: '솔직한 경험을 자세히 작성해주세요... (최대 200자)',
                   filled: true,
@@ -207,8 +215,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                 onChanged: (_) => setState(() {}),
                 validator: (value) => (value == null || value.trim().isEmpty) ? '리뷰 내용을 입력해주세요' : null,
               ),
-              // Padding(padding: const EdgeInsets.only(top: 8.0), child: Text('현재 ${_reviewTextController.text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length}단어', style: const TextStyle(fontSize: 12, color: Colors.grey))),
-              // (위 단어 수 표시는 maxLength 카운터와 중복되어 주석 처리하거나 제거해도 무방합니다)
 
               const SizedBox(height: 24),
               const Text('별점을 선택해주세요', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -239,7 +245,16 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
               ),
               if (_rating > 0) Padding(padding: const EdgeInsets.only(top: 12.0), child: Center(child: Text('선택한 별점: ${_rating.toStringAsFixed(1)}점', style: const TextStyle(fontSize: 18, color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)))),
               const SizedBox(height: 24),
-              ElevatedButton.icon(onPressed: _pickImage, icon: const Icon(Icons.camera_alt), label: Text('사진 첨부 (${_selectedImages.length}/5)'), style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF9C7CFF), minimumSize: const Size(double.infinity, 48))),
+
+              // 사진 첨부 버튼
+              ElevatedButton.icon(
+                  onPressed: _pickImage,
+                  icon: const Icon(Icons.camera_alt),
+                  label: Text('사진 첨부 (${_selectedImages.length}/5)'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF9C7CFF), minimumSize: const Size(double.infinity, 48))
+              ),
+
+              // 선택된 사진 미리보기
               if (_selectedImages.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12.0), child: Wrap(spacing: 8, runSpacing: 8, children: _selectedImages.asMap().entries.map((entry) {
                 final index = entry.key;
                 final file = entry.value;
@@ -248,11 +263,19 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                   Positioned(top: 4, right: 4, child: GestureDetector(onTap: () => setState(() => _selectedImages.removeAt(index)), child: Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 16)))),
                 ]);
               }).toList())),
-              const SizedBox(height: 24),
-              if (_calculatedScore.isNotEmpty) ...[const Text('📊 실시간 피드백', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)), const SizedBox(height: 16), FeedbackIndicator(calculatedScore: _calculatedScore), const SizedBox(height: 24)],
-              ElevatedButton(onPressed: _isSubmitting ? null : _submitReview, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9C7CFF), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: _isSubmitting ? const CircularProgressIndicator(color: Colors.white) : const Text('리뷰 등록하기')),
 
-              // ✅ 스크롤 여백 추가 (버튼이 잘리지 않도록 100픽셀 공간 확보)
+              const SizedBox(height: 24),
+              // 실시간 피드백 (화면 표시용)
+              if (_calculatedScore.isNotEmpty) ...[const Text('📊 실시간 피드백', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)), const SizedBox(height: 16), FeedbackIndicator(calculatedScore: _calculatedScore), const SizedBox(height: 24)],
+
+              // 등록 버튼
+              ElevatedButton(
+                  onPressed: _isSubmitting ? null : _submitReview,
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9C7CFF), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  child: _isSubmitting ? const CircularProgressIndicator(color: Colors.white) : const Text('리뷰 등록하기')
+              ),
+
+              // ✅ 스크롤 여백 추가
               const SizedBox(height: 100),
             ],
           ),

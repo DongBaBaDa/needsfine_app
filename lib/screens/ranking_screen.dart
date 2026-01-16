@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/services/review_service.dart';
-import 'package:needsfine_app/utils/ranking_calculator.dart';
+// import 'package:needsfine_app/utils/ranking_calculator.dart'; // ❌ 더 이상 사용하지 않음
 import 'package:needsfine_app/widgets/star_rating.dart';
 import 'package:needsfine_app/screens/write_review_screen.dart';
 
@@ -182,7 +182,7 @@ class RankingScreen extends StatefulWidget {
 
 class _RankingScreenState extends State<RankingScreen> {
   List<Review> _reviews = [];
-  List<StoreRanking> _storeRankings = [];
+  List<StoreRanking> _storeRankings = []; // ✅ 서버에서 가져온 랭킹을 저장
   Stats? _stats;
 
   bool _isLoading = true;
@@ -221,28 +221,36 @@ class _RankingScreenState extends State<RankingScreen> {
   Future<void> _loadInitialData() async {
     if(mounted) setState(() => _isLoading = true);
     try {
-      final statsFuture = ReviewService.fetchStats();
+      // 1. 전체 통계 (fetchGlobalStats로 이름 통일)
+      final statsFuture = ReviewService.fetchGlobalStats();
+      // 2. 리뷰 리스트
       final reviewsFuture = ReviewService.fetchReviews(limit: _limit, offset: 0);
+      // 3. [NEW] 매장 순위 데이터 (서버에서 계산된 결과 가져오기)
+      final rankingsFuture = ReviewService.fetchStoreRankings();
 
-      final results = await Future.wait([statsFuture, reviewsFuture]);
+      final results = await Future.wait([statsFuture, reviewsFuture, rankingsFuture]);
 
-      final statsData = results[0] as Map<String, dynamic>?;
+      final statsData = results[0] as Map<String, dynamic>;
       final reviews = results[1] as List<Review>;
+      final rankings = results[2] as List<StoreRanking>;
 
       if (mounted) {
         setState(() {
-          if (statsData != null) {
+          // ✅ 통계 데이터 파싱 수정 (num 타입을 double로 안전하게 변환)
+          if (statsData.isNotEmpty) {
             _stats = Stats(
-              total: (statsData['total_reviews'] ?? reviews.length) as int,
-              average: 0.0, // 평균은 나중에 정확히 구현
-              avgTrust: 0.0,
+              total: (statsData['total_reviews'] as num?)?.toInt() ?? reviews.length,
+              average: (statsData['average_score'] as num?)?.toDouble() ?? 0.0,
+              avgTrust: (statsData['avg_trust'] as num?)?.toDouble() ?? 0.0,
             );
           } else {
             _stats = Stats(total: reviews.length, average: 0, avgTrust: 0);
           }
 
           _reviews = reviews;
-          _storeRankings = RankingCalculator.calculateStoreRankings(reviews);
+
+          // ✅ [수정] 앱 내 계산(RankingCalculator) 제거하고 서버 데이터 사용
+          _storeRankings = rankings;
 
           // 데이터가 limit보다 적으면 더 이상 데이터가 없는 것
           if (reviews.length < _limit) {
@@ -259,7 +267,6 @@ class _RankingScreenState extends State<RankingScreen> {
     }
   }
 
-  // ✅ [수정됨] 중복 방지 로직 추가
   Future<void> _loadMoreReviews() async {
     if (_isMoreLoading) return;
     setState(() => _isMoreLoading = true);
@@ -277,7 +284,7 @@ class _RankingScreenState extends State<RankingScreen> {
             }
           }
 
-          _storeRankings = RankingCalculator.calculateStoreRankings(_reviews);
+          // ✅ [수정] RankingCalculator 호출 제거 (순위는 서버 데이터로 고정)
 
           // 가져온 개수가 요청 개수보다 적으면 끝
           if (moreReviews.length < _limit) {
@@ -320,6 +327,20 @@ class _RankingScreenState extends State<RankingScreen> {
     } else {
       rankings.sort((a, b) => b.avgScore.compareTo(a.avgScore));
     }
+
+    // 정렬 후 순위 번호 재할당 (화면 표시용)
+    for(int i=0; i<rankings.length; i++) {
+      rankings[i] = StoreRanking(
+          storeName: rankings[i].storeName,
+          avgScore: rankings[i].avgScore,
+          avgUserRating: rankings[i].avgUserRating,
+          reviewCount: rankings[i].reviewCount,
+          avgTrust: rankings[i].avgTrust,
+          rank: i + 1, // 순위 재설정
+          topTags: rankings[i].topTags
+      );
+    }
+
     return rankings;
   }
 
@@ -384,7 +405,7 @@ class _RankingScreenState extends State<RankingScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
         _buildStatItem('총 리뷰', '${_stats!.total}개'),
-        _buildStatItem('평균 점수', _stats!.average == 0 ? '-' : _stats!.average.toStringAsFixed(1)),
+        _buildStatItem('평균 니즈파인 점수', _stats!.average == 0 ? '-' : _stats!.average.toStringAsFixed(1)),
         _buildStatItem('평균 신뢰도', _stats!.avgTrust == 0 ? '-' : '${_stats!.avgTrust.toStringAsFixed(0)}%'),
       ],
     ),
