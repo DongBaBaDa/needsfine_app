@@ -25,7 +25,6 @@ class NotificationListScreen extends StatelessWidget {
         centerTitle: true,
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        // ✅ primaryKey 로 오타 수정 완료
         stream: Supabase.instance.client
             .from('notifications')
             .stream(primaryKey: ['id'])
@@ -86,29 +85,30 @@ class NotificationListScreen extends StatelessWidget {
   }
 
   void _handleNotificationClick(BuildContext context, AppNotification notification) async {
-    await Supabase.instance.client
-        .from('notifications')
-        .update({'is_read': true})
-        .eq('id', notification.id);
+    // ✅ 1. 읽음 처리 업데이트 (비동기 처리)
+    try {
+      await Supabase.instance.client
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('id', notification.id);
+    } catch (e) {
+      debugPrint("읽음 처리 에러: $e");
+    }
 
     if (!context.mounted) return;
 
-    // ✅ 요청하신 타입별 이동 로직 수정 부분
+    // ✅ 2. 타입별 이동 로직
     switch (notification.type) {
       case NotificationType.inquiry:
-      // 문의 내용 상세로 이동 (참조 ID 전달)
         Navigator.pushNamed(context, '/inquiry_detail', arguments: notification.referenceId);
         break;
       case NotificationType.notice:
-      // 공지사항 상세로 이동 (참조 ID 전달)
         Navigator.pushNamed(context, '/notice_detail', arguments: notification.referenceId);
         break;
       case NotificationType.follow:
-      // 팔로우한 유저의 공개 프로필로 이동
         Navigator.pushNamed(context, '/public_profile', arguments: notification.referenceId);
         break;
       case NotificationType.event:
-      // 이벤트 상세 페이지로 이동
         Navigator.pushNamed(context, '/event_detail', arguments: notification.referenceId);
         break;
       default:

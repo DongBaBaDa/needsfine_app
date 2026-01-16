@@ -1,4 +1,3 @@
-// lib/services/review_service.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -7,20 +6,17 @@ import '../config/supabase_config.dart';
 import '../models/ranking_models.dart';
 
 /// NEEDSFINE 리뷰 API 서비스
-/// 웹 프로젝트의 index.ts 엔드포인트와 통신합니다.
 class ReviewService {
-  
+
   // ==========================================
-  // 유저 ID 관리 (웹의 localStorage와 동일)
+  // 유저 ID 관리
   // ==========================================
-  
-  /// 로컬 저장소에서 유저 ID 가져오기
+
   static Future<String?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('needsfine_user_id');
   }
 
-  /// 로컬 저장소에 유저 ID 저장
   static Future<void> saveUserId(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('needsfine_user_id', userId);
@@ -31,7 +27,6 @@ class ReviewService {
   // 리뷰 API
   // ==========================================
 
-  /// 📝 리뷰 작성 (POST /reviews)
   static Future<Review> createReview({
     required String storeName,
     String? storeAddress,
@@ -41,12 +36,6 @@ class ReviewService {
   }) async {
     try {
       final userId = await getUserId();
-
-      print('📤 리뷰 작성 요청...');
-      print('  가게: $storeName');
-      print('  별점: $userRating');
-      print('  사진: ${photoUrls?.length ?? 0}장');
-
       final response = await http.post(
         Uri.parse('${SupabaseConfig.apiBaseUrl}/reviews'),
         headers: {
@@ -65,17 +54,11 @@ class ReviewService {
 
       if (response.statusCode == 201) {
         final data = json.decode(utf8.decode(response.bodyBytes));
-        
-        // 서버에서 반환한 user_id 저장
         if (data['users'] != null && data['users']['user_number'] != null) {
           await saveUserId(data['users']['user_number']);
         }
-
-        print('✅ 리뷰 작성 성공!');
         return Review.fromJson(data);
       } else {
-        print('❌ 리뷰 작성 실패: ${response.statusCode}');
-        print('   응답: ${response.body}');
         throw Exception('Failed to create review: ${response.body}');
       }
     } catch (e) {
@@ -85,12 +68,15 @@ class ReviewService {
   }
 
   /// 📋 리뷰 목록 조회 (GET /reviews)
+  /// [수정] offset 파라미터 추가 (무한 스크롤용)
   static Future<List<Review>> fetchReviews({
     int limit = 20,
+    int offset = 0, // ✅ 추가됨: 건너뛸 개수
     String? storeName,
   }) async {
     try {
-      String url = '${SupabaseConfig.apiBaseUrl}/reviews?limit=$limit';
+      // ✅ URL에 offset 파라미터 추가
+      String url = '${SupabaseConfig.apiBaseUrl}/reviews?limit=$limit&offset=$offset';
       if (storeName != null && storeName.isNotEmpty) {
         url += '&store_name=${Uri.encodeComponent(storeName)}';
       }
@@ -107,16 +93,15 @@ class ReviewService {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
-        
+
         final reviews = data
             .where((r) => r != null && r['needsfine_score'] != null)
             .map((r) => Review.fromJson(r))
             .toList();
 
-        print('✅ 리뷰 ${reviews.length}개 로드 완료');
+        print('✅ 리뷰 ${reviews.length}개 로드 완료 (Offset: $offset)');
         return reviews;
       } else if (response.statusCode == 404) {
-        print('⚠️ 서버가 배포되지 않았습니다.');
         return [];
       } else {
         throw Exception('Failed to load reviews: ${response.statusCode}');
@@ -127,7 +112,6 @@ class ReviewService {
     }
   }
 
-  /// 🔍 특정 리뷰 조회 (GET /reviews/:id)
   static Future<Review?> fetchReviewById(String id) async {
     try {
       final response = await http.get(
@@ -175,39 +159,26 @@ class ReviewService {
   }
 
   // ==========================================
-  // 피드백 API
+  // 피드백 및 기타 API (기존 유지)
   // ==========================================
 
-  /// 💬 피드백 작성 (POST /feedback)
-  static Future<Feedback> createFeedback({
-    String? email,
-    required String message,
-  }) async {
+  static Future<Feedback> createFeedback({String? email, required String message}) async {
     try {
       final userId = await getUserId();
-
       final response = await http.post(
         Uri.parse('${SupabaseConfig.apiBaseUrl}/feedback'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
         },
-        body: json.encode({
-          'email': email,
-          'message': message,
-          'user_id': userId,
-        }),
+        body: json.encode({'email': email, 'message': message, 'user_id': userId}),
       );
 
       if (response.statusCode == 201) {
         final data = json.decode(utf8.decode(response.bodyBytes));
-        
-        // 서버에서 반환한 user_id 저장
         if (data['users'] != null && data['users']['user_number'] != null) {
           await saveUserId(data['users']['user_number']);
         }
-
-        print('✅ 피드백 전송 성공!');
         return Feedback.fromJson(data);
       } else {
         throw Exception('Failed to create feedback: ${response.body}');
@@ -218,7 +189,6 @@ class ReviewService {
     }
   }
 
-  /// 📋 피드백 목록 조회 (GET /feedback)
   static Future<List<Feedback>> fetchFeedbacks({int limit = 20}) async {
     try {
       final response = await http.get(
@@ -231,12 +201,8 @@ class ReviewService {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
-        return data
-            .where((f) => f != null)
-            .map((f) => Feedback.fromJson(f))
-            .toList();
+        return data.where((f) => f != null).map((f) => Feedback.fromJson(f)).toList();
       } else if (response.statusCode == 404) {
-        print('⚠️ 서버가 배포되지 않았습니다.');
         return [];
       } else {
         throw Exception('Failed to load feedbacks');
@@ -247,11 +213,6 @@ class ReviewService {
     }
   }
 
-  // ==========================================
-  // 관리자 API
-  // ==========================================
-
-  /// 🔐 관리자 인증 확인
   static Future<bool> verifyAdmin() async {
     try {
       final response = await http.get(
@@ -259,18 +220,15 @@ class ReviewService {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
-          'X-Admin-Password': "needsfine2953", // [수정] 직접 문자열 사용
+          'X-Admin-Password': "needsfine2953",
         },
       );
-
       return response.statusCode == 200;
     } catch (e) {
-      print('❌ 관리자 인증 실패: $e');
       return false;
     }
   }
 
-  /// 🗑️ 관리자 - 리뷰 삭제
   static Future<bool> deleteReview(String reviewId) async {
     try {
       final response = await http.delete(
@@ -278,24 +236,15 @@ class ReviewService {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
-          'X-Admin-Password': "needsfine2953", // [수정] 직접 문자열 사용
+          'X-Admin-Password': "needsfine2953",
         },
       );
-
-      if (response.statusCode == 200) {
-        print('🗑️ 리뷰 삭제 성공: $reviewId');
-        return true;
-      } else {
-        print('❌ 리뷰 삭제 실패: ${response.body}');
-        return false;
-      }
+      return response.statusCode == 200;
     } catch (e) {
-      print('❌ 리뷰 삭제 에러: $e');
       return false;
     }
   }
 
-  /// 🗑️ 관리자 - 피드백 삭제
   static Future<bool> deleteFeedback(String feedbackId) async {
     try {
       final response = await http.delete(
@@ -303,65 +252,39 @@ class ReviewService {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
-          'X-Admin-Password': "needsfine2953", // [수정] 직접 문자열 사용
+          'X-Admin-Password': "needsfine2953",
         },
       );
-
-      if (response.statusCode == 200) {
-        print('🗑️ 피드백 삭제 성공: $feedbackId');
-        return true;
-      } else {
-        print('❌ 피드백 삭제 실패: ${response.body}');
-        return false;
-      }
+      return response.statusCode == 200;
     } catch (e) {
-      print('❌ 피드백 삭제 에러: $e');
       return false;
     }
   }
 
-  /// 🔄 관리자 - 모든 리뷰 재계산
   static Future<Map<String, dynamic>?> recalculateAllReviews() async {
     try {
-      print('🔄 모든 리뷰 재계산 시작...');
-      
       final response = await http.post(
         Uri.parse('${SupabaseConfig.apiBaseUrl}/recalculate-all'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
-          'X-Admin-Password': "needsfine2953", // [수정] 직접 문자열 사용
+          'X-Admin-Password': "needsfine2953",
         },
       );
-
       if (response.statusCode == 200) {
-        final result = json.decode(utf8.decode(response.bodyBytes));
-        print('✅ 재계산 완료: ${result['success_count']}개 성공, ${result['error_count']}개 실패');
-        return result;
+        return json.decode(utf8.decode(response.bodyBytes));
       } else {
-        print('❌ 재계산 실패: ${response.body}');
         return null;
       }
     } catch (e) {
-      print('❌ 재계산 에러: $e');
       return null;
     }
   }
 
-  // ==========================================
-  // 👍👎 커뮤니티 검증 (투표)
-  // ==========================================
-
-  /// 👍 리뷰 추천/비추천
-  static Future<Map<String, dynamic>?> voteReview({
-    required String reviewId,
-    required String voteType, // 'like' or 'dislike'
-  }) async {
+  static Future<Map<String, dynamic>?> voteReview({required String reviewId, required String voteType}) async {
     try {
       final userId = await getUserId();
-      if (userId == null) {
-        throw Exception('User ID not found. Please write a review first.');
-      }
+      if (userId == null) throw Exception('User ID not found');
 
       final response = await http.post(
         Uri.parse('${SupabaseConfig.apiBaseUrl}/reviews/$reviewId/vote'),
@@ -369,24 +292,17 @@ class ReviewService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
         },
-        body: json.encode({
-          'user_id': userId,
-          'vote_type': voteType,
-        }),
+        body: json.encode({'user_id': userId, 'vote_type': voteType}),
       );
 
       if (response.statusCode == 200) {
-        final result = json.decode(utf8.decode(response.bodyBytes));
-        print('✅ 투표 성공: $voteType');
-        return result;
+        return json.decode(utf8.decode(response.bodyBytes));
       } else if (response.statusCode == 409) {
-        print('⚠️ 이미 투표한 리뷰입니다.');
         return {'error': 'Already voted'};
       } else {
         throw Exception('Failed to vote: ${response.body}');
       }
     } catch (e) {
-      print('❌ 투표 실패: $e');
       return null;
     }
   }

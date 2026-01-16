@@ -150,28 +150,31 @@ class _RankingScreenState extends State<RankingScreen> {
     }
   }
 
-  List<dynamic> get _sortedList {
-    if (_tabIndex == 0) {
-      List<Review> reviews = List.from(_allReviews);
-      switch (_sortOption) {
-        case '니즈파인 점수순':
-          reviews.sort((a, b) => b.needsfineScore.compareTo(a.needsfineScore));
-          break;
-        case '신뢰도순':
-          reviews.sort((a, b) => b.trustLevel.compareTo(a.trustLevel));
-          break;
-        case '쓴소리':
-          reviews = reviews.where((r) => r.isCritical).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          break;
-        case '최신순':
-        default:
-          reviews.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          break;
-      }
-      return reviews;
-    } else {
-      return List.from(_storeRankings);
+  // ✅ [수정됨] 문제의 _sortedList getter를 삭제하고, 아래 두 함수로 분리했습니다.
+  // 이렇게 해야 탭이 전환되는 찰나의 순간에 데이터 타입이 꼬이지 않습니다.
+
+  List<Review> _getSortedReviews() {
+    List<Review> reviews = List.from(_allReviews);
+    switch (_sortOption) {
+      case '니즈파인 점수순':
+        reviews.sort((a, b) => b.needsfineScore.compareTo(a.needsfineScore));
+        break;
+      case '신뢰도순':
+        reviews.sort((a, b) => b.trustLevel.compareTo(a.trustLevel));
+        break;
+      case '쓴소리':
+        reviews = reviews.where((r) => r.isCritical).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case '최신순':
+      default:
+        reviews.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
     }
+    return reviews;
+  }
+
+  List<StoreRanking> _getSortedRankings() {
+    return List.from(_storeRankings);
   }
 
   @override
@@ -267,7 +270,9 @@ class _RankingScreenState extends State<RankingScreen> {
   );
 
   Widget _buildReviewList() {
-    final reviews = _sortedList.cast<Review>();
+    // ✅ [수정됨] 에러 원인이었던 cast 대신 함수 호출로 변경
+    final reviews = _getSortedReviews();
+
     return reviews.isEmpty
         ? const Center(child: Text('조건에 맞는 리뷰가 없습니다.'))
         : ListView.separated(
@@ -335,7 +340,9 @@ class _RankingScreenState extends State<RankingScreen> {
   );
 
   Widget _buildStoreRankingList() {
-    final rankings = _sortedList.cast<StoreRanking>();
+    // ✅ [수정됨] 에러 원인이었던 cast 대신 함수 호출로 변경
+    final rankings = _getSortedRankings();
+
     return rankings.isEmpty
         ? const Center(child: Text('매장 데이터가 없습니다.'))
         : ListView.separated(

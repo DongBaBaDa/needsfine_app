@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
-import 'package:needsfine_app/screens/my_taste_screen.dart';
+import 'package:needsfine_app/screens/taste_selection_screen.dart'; // 파일명 확인
 import 'package:needsfine_app/screens/myfeed_screen.dart';
 import 'package:needsfine_app/screens/follow_list_screen.dart';
 import '../models/user_model.dart';
@@ -11,7 +11,7 @@ import 'notice_screen.dart';
 import 'suggestion_write_screen.dart';
 import 'inquiry_write_screen.dart';
 import 'admin_dashboard_screen.dart';
-import 'package:needsfine_app/widgets/notification_badge.dart'; // ✅ 배지 위젯 임포트
+import 'package:needsfine_app/widgets/notification_badge.dart';
 
 class UserMyPageScreen extends StatefulWidget {
   const UserMyPageScreen({super.key});
@@ -24,6 +24,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   final _supabase = Supabase.instance.client;
   UserProfile? _userProfile;
   List<dynamic> _myReviews = [];
+  List<String> _myTags = []; // ✅ 내 취향 태그 저장 리스트
   bool _isLoading = true;
   bool _isAdmin = false;
 
@@ -45,6 +46,9 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       if (profileData != null && mounted) {
         setState(() {
           _isAdmin = profileData['is_admin'] ?? false;
+          // ✅ 태그 데이터 불러오기 (없으면 빈 리스트)
+          _myTags = List<String>.from(profileData['taste_tags'] ?? []);
+
           _userProfile = UserProfile(
             nickname: profileData['nickname'] ?? "이름 없음",
             introduction: profileData['introduction'] ?? "자신을 알릴 수 있는 소개글을 작성해 주세요.",
@@ -64,6 +68,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     }
   }
 
+  // ... (고객센터 바텀시트 생략 - 기존 동일) ...
   void _showCustomerService(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -109,7 +114,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       appBar: AppBar(
         title: const Text("마이페이지"),
         actions: [
-          // ✅ 종모양 알림 버튼 (설정 아이콘 바로 왼쪽에 구현, 더미 제거: 0)
           NotificationBadge(
             onTap: () => Navigator.pushNamed(context, '/notifications'),
           ),
@@ -123,7 +127,21 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
         children: [
           _buildProfileHeader(context),
           const Divider(thickness: 8, color: kNeedsFinePurpleLight),
-          _buildMenuListItem(icon: Icons.restaurant_menu, title: "나의 입맛", isPoint: true, onTap: () {}),
+          _buildMenuListItem(
+              icon: Icons.restaurant_menu,
+              title: "나의 입맛",
+              isPoint: true,
+              onTap: () async {
+                // ✅ 입맛 설정 화면으로 갔다가 돌아올 때 데이터 갱신
+                final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const TasteSelectionScreen())
+                );
+                if (result == true) {
+                  _fetchUserData();
+                }
+              }
+          ),
           _buildMenuListItem(icon: Icons.support_agent, title: "고객센터", onTap: () => _showCustomerService(context)),
           _buildMenuListItem(
             icon: Icons.notifications_none,
@@ -176,12 +194,34 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                       decoration: BoxDecoration(color: kNeedsFinePurpleLight, borderRadius: BorderRadius.circular(12)),
                       child: Text("신뢰도 ${_userProfile!.reliability}%", style: const TextStyle(color: kNeedsFinePurple, fontWeight: FontWeight.bold, fontSize: 13)),
                     ),
+                    const SizedBox(height: 12),
+
+                    // ✅ [추가됨] 나의 입맛 태그 표시 영역
+                    if (_myTags.isNotEmpty)
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _myTags.take(5).map((tag) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(color: Colors.grey.withOpacity(0.4)),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            "#$tag",
+                            style: TextStyle(fontSize: 11, color: Colors.grey[800], fontWeight: FontWeight.w500),
+                          ),
+                        )).toList(),
+                      ),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 24),
+
+          // ... (소개글 등 하단 영역 기존 동일) ...
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -211,7 +251,13 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: () {},
+              onPressed: () async {
+                await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ProfileEditScreen(userProfile: _userProfile!))
+                );
+                _fetchUserData();
+              },
               style: OutlinedButton.styleFrom(side: const BorderSide(color: kNeedsFinePurple)),
               child: const Text("프로필 수정", style: TextStyle(color: kNeedsFinePurple)),
             ),
