@@ -14,6 +14,8 @@ class ReviewDetailScreen extends StatefulWidget {
 
 class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   bool _isOwner = false;
+  bool _isDeleteActive = false; // 삭제 버튼 활성화 상태 (빨간색)
+
   final Color _primaryColor = const Color(0xFFC87CFF);
   final Color _backgroundColor = const Color(0xFFFFFDF9);
 
@@ -25,26 +27,38 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
   Future<void> _checkOwnership() async {
     final currentUserId = await ReviewService.getUserId();
-    // 데이터 보호: Null Check 강화
     if (currentUserId != null && widget.review.userId == currentUserId) {
       if (mounted) setState(() => _isOwner = true);
     }
   }
 
-  Future<void> _deleteReview() async {
+  // 삭제 버튼 클릭 시 로직
+  void _onDeletePressed() {
+    setState(() {
+      _isDeleteActive = true; // 빨간색으로 변경
+    });
+    _showDeleteDialog();
+  }
+
+  Future<void> _showDeleteDialog() async {
     final confirm = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
-        title: const Text("리뷰 삭제", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text("정말로 이 리뷰를 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다."),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text("삭제 확인", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("정말로 삭제하시겠습니까?"),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () {
+                Navigator.pop(context, false);
+                setState(() => _isDeleteActive = false); // 취소 시 회색 복구
+              },
               child: const Text("취소", style: TextStyle(color: Colors.grey))),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text("삭제", style: TextStyle(color: Colors.red))),
+              child: const Text("삭제", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
         ],
       ),
     );
@@ -52,19 +66,21 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     if (confirm == true) {
       final success = await ReviewService.deleteReview(widget.review.id);
       if (success && mounted) {
-        Navigator.pop(context, true); // true 리턴 -> 목록 새로고침
+        Navigator.pop(context, true); // 목록 새로고침을 위해 true 반환
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("리뷰가 삭제되었습니다.")));
       }
     }
   }
 
-  // 매장 이름 클릭 시 '내 주변' 지도 탭으로 이동
+  void _onEditPressed() {
+    // 수정 기능 구현 시 WriteReviewScreen으로 데이터를 넘겨 재사용 권장
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("수정 기능 준비중입니다.")));
+  }
+
   void _navigateToMap() {
     if (widget.review.storeName.isNotEmpty) {
-      // 1. 전역 트리거 발동
       searchTrigger.value = widget.review.storeName;
-      // 2. 현재 상세 화면 닫기 (MainShell이 트리거를 감지하여 탭을 전환함)
       Navigator.pop(context);
     }
   }
@@ -96,7 +112,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                 Expanded(
                   child: InkWell(
                     onTap: _navigateToMap,
-                    borderRadius: BorderRadius.circular(4),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -108,7 +123,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                                 style: const TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black, // ✅ 검은색 (No decoration)
+                                  color: Colors.black,
                                   fontFamily: 'NotoSansKR',
                                 ),
                               ),
@@ -130,7 +145,8 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                   ),
                 ),
                 Text(
-                  '${widget.review.createdAt.year}.${widget.review.createdAt.month}.${widget.review.createdAt.day}',
+                  '${widget.review.createdAt.year}.${widget.review.createdAt.month}.${widget.review.createdAt.day} '
+                      '${widget.review.createdAt.hour.toString().padLeft(2, '0')}:${widget.review.createdAt.minute.toString().padLeft(2, '0')}',
                   style: TextStyle(fontSize: 12, color: Colors.grey[400]),
                 ),
               ],
@@ -138,36 +154,36 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
             const SizedBox(height: 24),
 
-            // 2. Scores & Insight Chip
+            // 2. User Info & Rating
             Row(
               children: [
+                const CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.grey,
+                  child: Icon(Icons.person, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.review.nickname,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
                 StarRating(rating: widget.review.userRating, size: 20),
-                const SizedBox(width: 12),
-                // Insight Logic 호출
-                _buildInsightChip(),
               ],
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // NeedsFine Badges
             Row(children: [
-              _buildBadge(
-                  label: '니즈파인',
-                  value: widget.review.needsfineScore.toStringAsFixed(1),
-                  isPrimary: true
-              ),
+              _buildBadge('니즈파인', widget.review.needsfineScore.toStringAsFixed(1), true),
               const SizedBox(width: 8),
-              _buildBadge(
-                  label: '신뢰도',
-                  value: '${widget.review.trustLevel}%',
-                  isPrimary: false
-              ),
+              _buildBadge('신뢰도', '${widget.review.trustLevel}%', false),
             ]),
 
             const SizedBox(height: 32),
 
-            // 3. Review Content (Full Text)
+            // 3. Review Content
             Text(
               widget.review.reviewText,
               style: const TextStyle(
@@ -183,7 +199,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
             // 4. Photos
             if (widget.review.photoUrls.isNotEmpty) ...[
               SizedBox(
-                height: 200, // 상세 화면이므로 사진을 더 크게
+                height: 200,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: widget.review.photoUrls.length,
@@ -191,11 +207,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                   itemBuilder: (context, index) {
                     return ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        widget.review.photoUrls[index],
-                        fit: BoxFit.cover,
-                        width: 200,
-                      ),
+                      child: Image.network(widget.review.photoUrls[index], fit: BoxFit.cover, width: 200),
                     );
                   },
                 ),
@@ -205,104 +217,48 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
             // 5. Tags
             if (widget.review.tags.isNotEmpty)
-              Wrap(
-                spacing: 8.0,
-                runSpacing: 8.0,
-                children: widget.review.tags.map((tag) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0E9FF),
-                    borderRadius: BorderRadius.circular(20),
+              Wrap(spacing: 8.0, runSpacing: 8.0, children: widget.review.tags.map((tag) => _buildTag(tag)).toList()),
+
+            const Divider(height: 48, thickness: 1, color: Color(0xFFEEEEEE)),
+
+            // 6. Comments Section (상세 페이지에서도 보임)
+            const Text("댓글", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            // Dummy Comments
+            _buildCommentItem("사용자123", "좋은 정보 감사합니다!"),
+            _buildCommentItem("맛집탐방러", "여기 웨이팅 길었나요?"),
+
+            const SizedBox(height: 40),
+
+            // 7. Edit/Delete Actions (Owner Only)
+            if (_isOwner)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // 수정 버튼
+                  TextButton.icon(
+                    onPressed: _onEditPressed,
+                    icon: const Icon(Icons.edit, size: 18, color: Colors.grey),
+                    label: const Text("수정", style: TextStyle(color: Colors.grey)),
                   ),
-                  child: Text(
-                    tag,
-                    style: TextStyle(
-                      color: Colors.grey[800],
-                      fontSize: 13,
-                    ),
+                  const SizedBox(width: 8),
+                  // 삭제 버튼
+                  TextButton.icon(
+                    onPressed: _onDeletePressed,
+                    icon: Icon(Icons.delete, size: 18, color: _isDeleteActive ? Colors.red : Colors.grey),
+                    label: Text("삭제", style: TextStyle(color: _isDeleteActive ? Colors.red : Colors.grey, fontWeight: _isDeleteActive ? FontWeight.bold : FontWeight.normal)),
                   ),
-                )).toList(),
+                ],
               ),
 
-            // Bottom Spacer
-            const SizedBox(height: 100),
+            const SizedBox(height: 60),
           ],
         ),
       ),
-
-      // Edit/Delete Buttons (Owner Only)
-      floatingActionButton: _isOwner ? Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton(
-            heroTag: 'edit',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("수정 기능은 준비 중입니다.")));
-            },
-            backgroundColor: Colors.white,
-            elevation: 2,
-            mini: true,
-            child: Icon(Icons.edit, color: _primaryColor),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton(
-            heroTag: 'delete',
-            onPressed: _deleteReview,
-            backgroundColor: _primaryColor,
-            elevation: 2,
-            child: const Icon(Icons.delete_outline, color: Colors.white),
-          ),
-        ],
-      ) : null,
     );
   }
 
-  // Logic B: The Quiet Advisor 구현
-  Widget _buildInsightChip() {
-    final double normalizedScore = widget.review.needsfineScore > 5.0
-        ? widget.review.needsfineScore / 20.0
-        : widget.review.needsfineScore;
-
-    final double diff = normalizedScore - widget.review.userRating;
-
-    if (diff >= 0.5) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: _primaryColor.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          "✨ 글의 만족도가 더 높아요",
-          style: TextStyle(
-            color: _primaryColor,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-    } else if (diff <= -0.5) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          "📉 과장된 표현이 있어요",
-          style: TextStyle(
-            color: Colors.grey[700],
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-    }
-    return const SizedBox(); // Visual Silence
-  }
-
-  Widget _buildBadge({required String label, required String value, required bool isPrimary}) {
+  Widget _buildBadge(String label, String value, bool isPrimary) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -313,16 +269,40 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: TextStyle(
-            color: isPrimary ? Colors.white : Colors.grey[600],
-            fontSize: 12,
-          )),
+          Text(label, style: TextStyle(color: isPrimary ? Colors.white : Colors.grey[600], fontSize: 12)),
           const SizedBox(width: 4),
-          Text(value, style: TextStyle(
-            color: isPrimary ? Colors.white : Colors.black87,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-          )),
+          Text(value, style: TextStyle(color: isPrimary ? Colors.white : Colors.black87, fontSize: 13, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTag(String tag) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: const Color(0xFFF0E9FF), borderRadius: BorderRadius.circular(20)),
+      child: Text(tag, style: TextStyle(color: Colors.grey[800], fontSize: 13)),
+    );
+  }
+
+  Widget _buildCommentItem(String user, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CircleAvatar(radius: 12, backgroundColor: Colors.grey, child: Icon(Icons.person, size: 16, color: Colors.white)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+              ],
+            ),
+          )
         ],
       ),
     );

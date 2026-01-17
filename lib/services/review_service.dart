@@ -1,19 +1,16 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
-import 'package:needsfine_app/config/supabase_config.dart'; // AnonKey 사용을 위해 필요하다면 추가
+import 'package:needsfine_app/config/supabase_config.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ReviewService {
   static final _supabase = Supabase.instance.client;
 
-  // Edge Function URL
-  static const String _functionUrl = 'https://hokjkmapqbinhsivkbnj.supabase.co/functions/v1/make-server-26899706';
+  // ✅ Base URL: Edge Function의 루트 주소 (함수명까지만)
+  static const String _baseUrl = 'https://hokjkmapqbinhsivkbnj.supabase.co/functions/v1/make-server-26899706';
 
-  // ==========================================
-  // 1. 전체 통계 가져오기
-  // ==========================================
   static Future<Map<String, dynamic>> fetchGlobalStats() async {
     try {
       final response = await _supabase
@@ -27,9 +24,6 @@ class ReviewService {
     }
   }
 
-  // ==========================================
-  // 2. 매장 순위 가져오기
-  // ==========================================
   static Future<List<StoreRanking>> fetchStoreRankings() async {
     try {
       final List<dynamic> response = await _supabase
@@ -47,16 +41,17 @@ class ReviewService {
     }
   }
 
-  // ==========================================
-  // 3. 리뷰 목록 가져오기
-  // ==========================================
   static Future<List<Review>> fetchReviews({
     int limit = 20,
     int offset = 0,
     String? storeName,
   }) async {
     try {
-      var query = _supabase.from('reviews').select().eq('is_hidden', false);
+      // ✅ profiles 테이블 조인 (닉네임 동기화)
+      var query = _supabase
+          .from('reviews')
+          .select('*, profiles(nickname, user_number, email)')
+          .eq('is_hidden', false);
 
       if (storeName != null && storeName.isNotEmpty) {
         query = query.ilike('store_name', '%$storeName%');
@@ -73,9 +68,6 @@ class ReviewService {
     }
   }
 
-  // ==========================================
-  // 4. 리뷰 작성 (401 오류 수정됨)
-  // ==========================================
   static Future<Review> createReview({
     required String storeName,
     String? storeAddress,
@@ -84,21 +76,28 @@ class ReviewService {
     List<String>? photoUrls,
   }) async {
     try {
-      // ✅ [Fix] 현재 로그인한 사용자의 세션 토큰 가져오기
       final session = _supabase.auth.currentSession;
       final String? accessToken = session?.accessToken;
 
-      // 토큰이 없으면 Anon Key라도 보내야 Edge Function이 401을 뱉지 않음 (Function 설정에 따라 다름)
-      // 여기서는 유저 토큰을 우선으로 하고, 없으면 AnonKey를 보냄
+      // ✅ [Fix 1] 현재 로그인한 유저 ID 가져오기
+      final String? userId = _supabase.auth.currentUser?.id;
+
+      // 로그인이 안 되어 있으면 AnonKey 사용
       final String authHeader = accessToken != null
           ? 'Bearer $accessToken'
           : 'Bearer ${SupabaseConfig.anonKey}';
 
+      // ✅ [중요] 404 해결을 위해 '/reviews' 경로를 명시적으로 추가
+      final url = Uri.parse('$_baseUrl/reviews');
+
+      print("🚀 요청 URL: $url");
+      print("🚀 보내는 user_id: $userId"); // 디버깅용
+
       final response = await http.post(
-        Uri.parse(_functionUrl),
+        url,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authHeader, // 👈 401 해결을 위한 핵심 코드
+          'Authorization': authHeader,
         },
         body: jsonEncode({
           'store_name': storeName,
@@ -106,18 +105,22 @@ class ReviewService {
           'review_text': reviewText,
           'user_rating': userRating,
           'photo_urls': photoUrls ?? [],
+          // ✅ [Fix 2] user_id 필드 추가 (백엔드가 식별할 수 있도록)
+          'user_id': userId,
         }),
       );
 
+      print("📩 응답 상태 코드: ${response.statusCode}");
+      print("📩 응답 본문: ${response.body}");
+
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // 응답 본문이 비어있을 수 있으므로 체크
         if (response.body.isEmpty) {
           throw Exception('서버 응답이 비어있습니다.');
         }
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         return Review.fromJson(data);
       } else {
-        throw Exception('리뷰 등록 실패: ${response.body}');
+        throw Exception('리뷰 등록 실패 (${response.statusCode}): ${response.body}');
       }
     } catch (e) {
       print('❌ 리뷰 작성 에러: $e');
