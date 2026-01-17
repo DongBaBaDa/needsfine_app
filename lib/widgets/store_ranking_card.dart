@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
+import 'package:needsfine_app/core/search_trigger.dart';
 
 // ✅ 전역 검색 트리거 (RankingScreen과 공유)
 import 'package:needsfine_app/screens/ranking_screen.dart';

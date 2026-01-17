@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart'; // ✅ 추가
 import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/screens/taste_selection_screen.dart';
 import 'package:needsfine_app/screens/myfeed_screen.dart';
 import 'package:needsfine_app/screens/follow_list_screen.dart';
-import 'package:needsfine_app/screens/review_collection_screen.dart'; // ✅ 새로 만들 파일 임포트
+import 'package:needsfine_app/screens/review_collection_screen.dart';
+import 'package:needsfine_app/models/ranking_models.dart'; // ✅ [Fix] Review 타입 import 추가
 import '../models/user_model.dart';
 import 'profile_edit_screen.dart';
 import 'info_edit_screen.dart';
@@ -24,9 +26,17 @@ class UserMyPageScreen extends StatefulWidget {
 class _UserMyPageScreenState extends State<UserMyPageScreen> {
   final _supabase = Supabase.instance.client;
   UserProfile? _userProfile;
+
+  // ✅ [Fix] MyFeedScreen에 넘길 때 Review 타입을 쓰므로 List<Review>로 유지
+  List<Review> _myReviews = [];
+
   List<String> _myTags = [];
   bool _isLoading = true;
   bool _isAdmin = false;
+
+  // ✅ 계산된 통계 변수
+  double _avgNeedsFineScore = 0.0;
+  int _avgTrustLevel = 0;
 
   @override
   void initState() {
@@ -41,20 +51,55 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
 
     try {
       final profileData = await _supabase.from('profiles').select().eq('id', userId).maybeSingle();
+      final reviewData = await _supabase.from('reviews').select().eq('user_id', userId).order('created_at', ascending: false);
 
+      // 팔로우 수 카운트
       final followerCountResponse = await _supabase.from('follows').count(CountOption.exact).eq('following_id', userId);
       final followingCountResponse = await _supabase.from('follows').count(CountOption.exact).eq('follower_id', userId);
+
+      // ✅ [Fix] reviewData를 안전하게 리스트로 변환
+      final List<dynamic> rawList = (reviewData is List) ? reviewData : <dynamic>[];
+
+      // ✅ [Fix] 평균 점수 및 신뢰도 계산 (raw map 기준으로 계산)
+      if (rawList.isNotEmpty) {
+        double totalScore = 0.0;
+        int totalTrust = 0;
+
+        for (final item in rawList) {
+          final review = (item is Map) ? Map<String, dynamic>.from(item as Map) : <String, dynamic>{};
+
+          // ✅ [Fix] num -> double
+          totalScore += ((review['needsfine_score'] as num?) ?? 0).toDouble();
+
+          // ✅ [Fix] num -> int (round/toInt 중 택1, 여기선 round)
+          totalTrust += (((review['trust_level'] as num?) ?? 0).round());
+        }
+
+        _avgNeedsFineScore = totalScore / rawList.length;
+        _avgTrustLevel = (totalTrust / rawList.length).round();
+      } else {
+        _avgNeedsFineScore = 0.0;
+        _avgTrustLevel = 0; // 리뷰 없으면 0
+      }
+
+      // ✅ [Fix] MyFeed에 넘길 리뷰 목록은 Review 객체로 변환해서 보관
+      final List<Review> reviewObjects = rawList
+          .whereType<Map>()
+          .map((m) => Review.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
 
       if (profileData != null && mounted) {
         setState(() {
           _isAdmin = profileData['is_admin'] ?? false;
           _myTags = List<String>.from(profileData['taste_tags'] ?? []);
+          _myReviews = reviewObjects;
+
           _userProfile = UserProfile(
             nickname: profileData['nickname'] ?? "이름 없음",
             introduction: profileData['introduction'] ?? "자신을 알릴 수 있는 소개글을 작성해 주세요.",
             activityZone: profileData['activity_zone'] ?? "활동 지역 미설정",
             profileImageUrl: profileData['profile_image_url'] ?? "",
-            reliability: profileData['reliability'] ?? 0,
+            reliability: _avgTrustLevel, // ✅ [Fix] 계산된 평균 신뢰도로 교체
             followerCount: followerCountResponse,
             followingCount: followingCountResponse,
           );
@@ -67,7 +112,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     }
   }
 
-  // ... (고객센터 - 기존 코드 유지)
+  // ... (고객센터 로직 유지)
   void _showCustomerService(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -124,14 +169,11 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           children: [
             _buildProfileHeader(context),
             const Divider(thickness: 8, color: kNeedsFinePurpleLight),
-
-            // ✅ [추가] 리뷰 모음 메뉴 (나의 입맛 위에 배치)
             _buildMenuListItem(
               icon: Icons.collections_bookmark_outlined,
               title: "리뷰 모음",
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReviewCollectionScreen())),
             ),
-
             _buildMenuListItem(
                 icon: Icons.restaurant_menu,
                 title: "나의 입맛",
@@ -162,9 +204,13 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   }
 
   Widget _buildProfileHeader(BuildContext context) {
-    ImageProvider profileImage = _userProfile!.profileImageUrl.isNotEmpty
-        ? NetworkImage(_userProfile!.profileImageUrl)
-        : const AssetImage('assets/images/default_profile.png') as ImageProvider;
+    // ✅ [Fix] CachedNetworkImageProvider 사용
+    ImageProvider profileImage;
+    if (_userProfile!.profileImageUrl.isNotEmpty) {
+      profileImage = CachedNetworkImageProvider(_userProfile!.profileImageUrl);
+    } else {
+      profileImage = const AssetImage('assets/images/default_profile.png');
+    }
 
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -185,11 +231,24 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                   children: [
                     Text(_userProfile!.nickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: kNeedsFinePurpleLight, borderRadius: BorderRadius.circular(12)),
-                      child: Text("신뢰도 ${_userProfile!.reliability}%", style: const TextStyle(color: kNeedsFinePurple, fontWeight: FontWeight.bold, fontSize: 13)),
+
+                    // ✅ [New] 평균 니즈파인 점수 & 신뢰도 표시
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: kNeedsFinePurple, borderRadius: BorderRadius.circular(8)),
+                          child: Text("NF ${_avgNeedsFineScore.toStringAsFixed(1)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: kNeedsFinePurpleLight, borderRadius: BorderRadius.circular(8)),
+                          child: Text("신뢰도 $_avgTrustLevel%", style: const TextStyle(color: kNeedsFinePurple, fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                      ],
                     ),
+
                     const SizedBox(height: 12),
                     if (_myTags.isNotEmpty)
                       Wrap(
@@ -249,8 +308,16 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                // 기존 '나의 피드' 버튼은 유지 (요구사항에 제거하란 말 없었음)
-                Navigator.push(context, MaterialPageRoute(builder: (context) => MyFeedScreen(userProfile: _userProfile!, reviews: [])));
+                // ✅ [Fix] 이미 List<Review>라서 캐스팅 불필요
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MyFeedScreen(
+                      userProfile: _userProfile!,
+                      reviews: _myReviews,
+                    ),
+                  ),
+                );
               },
               child: const Text("나의 피드", style: TextStyle(fontWeight: FontWeight.bold)),
             ),

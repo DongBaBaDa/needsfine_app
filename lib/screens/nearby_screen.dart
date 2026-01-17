@@ -7,8 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:needsfine_app/services/naver_map_service.dart'; // ✅ 서비스 파일 import
 import 'package:needsfine_app/models/app_data.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
-import 'package:needsfine_app/screens/ranking_screen.dart';
+// ✅ [Fix] ranking_screen.dart import 제거 (searchTrigger 충돌 원인)
+// import 'package:needsfine_app/screens/ranking_screen.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart'; // ✅ 배지 위젯 임포트
+import 'package:needsfine_app/core/search_trigger.dart';
 
 class NearbyScreen extends StatefulWidget {
   const NearbyScreen({super.key});

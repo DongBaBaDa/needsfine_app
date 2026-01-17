@@ -23,7 +23,6 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
   @override
   void initState() {
     super.initState();
-    // 탭 3개: 내가 쓴 리뷰 / 도움이 됐어요 / 댓글 단 리뷰
     _tabController = TabController(length: 3, vsync: this);
     _fetchData();
   }
@@ -42,8 +41,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
           .eq('is_hidden', false)
           .order('created_at', ascending: false);
 
-      // 2. 좋아요한 리뷰 (조인 쿼리)
-      // review_votes 테이블에서 vote_type이 'like'인 것들의 reviews 정보를 가져옴
+      // 2. 좋아요한 리뷰 (JSON 구조 파싱 주의)
       final likedReviewsData = await _supabase
           .from('review_votes')
           .select('reviews(*, profiles(nickname, user_number, email, profile_image_url))')
@@ -54,12 +52,16 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
         setState(() {
           _myReviews = (myReviewsData as List).map((json) => Review.fromJson(json)).toList();
 
+          // ✅ [Fix] 중첩된 JSON 구조를 안전하게 파싱
           _likedReviews = (likedReviewsData as List).map((item) {
-            // review_votes의 결과는 { reviews: { ... } } 형태임
             final reviewJson = item['reviews'];
-            // 만약 reviewJson이 null이면(삭제된 리뷰 등) 건너뛰어야 함
+            // 삭제된 리뷰거나 데이터가 없으면 null 반환
             if (reviewJson == null) return null;
-            return Review.fromJson(reviewJson);
+            try {
+              return Review.fromJson(reviewJson);
+            } catch (e) {
+              return null; // 파싱 에러 시 무시
+            }
           }).whereType<Review>().toList(); // null 제거
         });
       }
@@ -95,7 +97,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
         children: [
           _buildReviewList(_myReviews, "작성한 리뷰가 없습니다."),
           _buildReviewList(_likedReviews, "도움이 된다고 표시한 리뷰가 없습니다."),
-          const Center(child: Text("댓글 기능 준비 중입니다.")), // 댓글 API 미구현으로 placeholder 처리
+          const Center(child: Text("댓글 기능 준비 중입니다.")),
         ],
       ),
     );
@@ -114,9 +116,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
           onTap: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: reviews[index])));
           },
-          onTapStore: () {
-            // 상점 클릭 시 동작 (필요 시 구현)
-          },
+          onTapStore: () {},
         );
       },
     );

@@ -12,6 +12,14 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  # --- [External Packages] ---
+
+  # Image & Cache
+  cached_network_image: ^3.3.0
+  flutter_image_compress: ^2.3.0
+  image_picker: ^1.1.2
+  flutter_svg: ^2.0.9
+
   # Supabase
   supabase_flutter: ^2.5.2
 
@@ -20,21 +28,16 @@ dependencies:
   geolocator: ^11.0.0
   geocoding: ^3.0.0
 
-  # Utils & UI
+  # Utils
   permission_handler: ^11.3.1
   carousel_slider: ^5.0.0
   shared_preferences: ^2.2.3
   http: ^1.6.0
   scrollable_positioned_list: ^0.3.8
-  image_picker: ^1.1.2
   intl: ^0.20.2
   unorm_dart: ^0.2.0
-  cached_network_image: ^3.3.0
-  flutter_svg: ^2.0.9
   uuid: ^4.1.0
   url_launcher: ^6.1.12
-  # ✅ 사진 압축 및 경로 관련 패키지 추가
-  flutter_image_compress: ^2.3.0
   path_provider: ^2.1.3
 
   # Auth
@@ -45,34 +48,37 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+
+  # Icons & Splash
   flutter_launcher_icons: ^0.13.1
-  # ✅ 네이티브 스플래시 패키지
   flutter_native_splash: ^2.4.3
 
-# 앱 아이콘 (바탕화면에 깔리는 아이콘 - 기존 유지)
+# --- [Configuration] ---
+
+# 앱 아이콘 설정
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/icon.png"
   min_sdk_android: 21
 
-# ✅ 네이티브 스플래시 설정 (흰색 배경 + 투명 이미지)
+# 스플래시 화면 설정
 flutter_native_splash:
-  color: "#FFFFFF"              # 배경: 흰색
-  image: "assets/transparent.png" # 🔴 중요: assets 폴더에 투명 이미지를 넣어주세요!
+  color: "#FFFFFF"
+  image: "assets/transparent.png"
   branding: null
-
   android_12:
     image: "assets/transparent.png"
     color: "#FFFFFF"
     icon_background_color: "#FFFFFF"
 
+# Flutter 리소스 설정
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
     - assets/icon.png
-    - assets/transparent.png # ✅ 에셋에도 추가
+    - assets/transparent.png
     - assets/kakao_logo.png
     - assets/google_g_logo.png
     - assets/naver_login.png

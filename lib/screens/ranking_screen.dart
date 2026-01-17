@@ -8,8 +8,11 @@ import 'package:needsfine_app/screens/review_detail_screen.dart';
 import 'package:needsfine_app/widgets/review_card.dart';
 import 'package:needsfine_app/widgets/store_ranking_card.dart';
 
-// ✅ 전역 트리거
-final ValueNotifier<String?> searchTrigger = ValueNotifier<String?>(null);
+// ✅ [Fix] 전역 트리거는 core/search_trigger.dart 하나로 통일
+import 'package:needsfine_app/core/search_trigger.dart';
+
+// ✅ [Fix] 여기 있던 중복 선언 제거
+// final ValueNotifier<String?> searchTrigger = ValueNotifier<String?>(null);
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
