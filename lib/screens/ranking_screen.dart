@@ -1,178 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/services/review_service.dart';
-// import 'package:needsfine_app/utils/ranking_calculator.dart'; // ❌ 더 이상 사용하지 않음
 import 'package:needsfine_app/widgets/star_rating.dart';
 import 'package:needsfine_app/screens/write_review_screen.dart';
+import 'package:needsfine_app/screens/review_detail_screen.dart'; // 상세 화면 파일 필요 시
 
-// 화면 간 데이터 전달을 위한 전역 트리거
+// ✅ 전역 트리거 (MainShell에서 감지하여 탭 이동 및 지도 검색 수행)
 final ValueNotifier<String?> searchTrigger = ValueNotifier<String?>(null);
-
-class ReviewDetailScreen extends StatefulWidget {
-  final Review review;
-  const ReviewDetailScreen({super.key, required this.review});
-
-  @override
-  State<ReviewDetailScreen> createState() => _ReviewDetailScreenState();
-}
-
-class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
-  bool _isOwner = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkOwnership();
-  }
-
-  Future<void> _checkOwnership() async {
-    final currentUserId = await ReviewService.getUserId();
-    if (currentUserId != null && widget.review.userId == currentUserId) {
-      if (mounted) setState(() => _isOwner = true);
-    }
-  }
-
-  Future<void> _deleteReview() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("리뷰 삭제"),
-        content: const Text("정말로 이 리뷰를 삭제하시겠습니까?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("취소")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("삭제", style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      final success = await ReviewService.deleteReview(widget.review.id);
-      if (success && mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("리뷰가 삭제되었습니다.")));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.review.storeName),
-        backgroundColor: const Color(0xFF9C7CFF),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      if (widget.review.storeAddress != null) {
-                        searchTrigger.value = widget.review.storeAddress;
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: Text(
-                        widget.review.storeName,
-                        style: const TextStyle(
-                          fontSize: 22, fontWeight: FontWeight.bold,
-                          color: Color(0xFF9C7CFF), decoration: TextDecoration.underline,
-                        )
-                    ),
-                  ),
-                ),
-                StarRating(rating: widget.review.userRating, size: 20),
-              ],
-            ),
-            if (widget.review.storeAddress != null && widget.review.storeAddress!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(widget.review.storeAddress!, style: const TextStyle(color: Colors.grey, fontSize: 14)),
-              ),
-            const SizedBox(height: 16),
-
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: const Color(0xFF9C7CFF), borderRadius: BorderRadius.circular(12)),
-                child: Text('니즈파인 ${widget.review.needsfineScore.toStringAsFixed(1)}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(12)),
-                child: Text('신뢰도 ${widget.review.trustLevel}%', style: const TextStyle(fontSize: 14)),
-              ),
-            ]),
-            const Divider(height: 24),
-
-            const Text('리뷰 내용', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text(widget.review.reviewText, style: const TextStyle(fontSize: 15, height: 1.5)),
-            const SizedBox(height: 24),
-
-            if (widget.review.photoUrls.isNotEmpty) ...[
-              const Text('사진', style: TextStyle(fontSize: 14, color: Colors.grey)),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 150,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: widget.review.photoUrls.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(widget.review.photoUrls[index], fit: BoxFit.cover, width: 150, height: 150),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            if (widget.review.tags.isNotEmpty) Wrap(
-              spacing: 8.0,
-              children: widget.review.tags.map((tag) => Chip(label: Text(tag), backgroundColor: const Color(0xFFF0E9FF), visualDensity: VisualDensity.compact)).toList(),
-            ),
-            const Divider(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [Text('${widget.review.createdAt.year}.${widget.review.createdAt.month}.${widget.review.createdAt.day} 작성', style: const TextStyle(fontSize: 12, color: Colors.grey))],
-            ),
-            const SizedBox(height: 80),
-          ],
-        ),
-      ),
-      floatingActionButton: _isOwner ? Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton(
-            heroTag: 'edit',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("수정 기능은 준비 중입니다.")));
-            },
-            backgroundColor: Colors.white,
-            mini: true,
-            child: const Icon(Icons.edit, color: Color(0xFF9C7CFF)),
-          ),
-          const SizedBox(height: 10),
-          FloatingActionButton(
-            heroTag: 'delete',
-            onPressed: _deleteReview,
-            backgroundColor: const Color(0xFF9C7CFF),
-            child: const Icon(Icons.delete, color: Colors.white),
-          ),
-        ],
-      ) : null,
-    );
-  }
-}
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
@@ -182,7 +16,7 @@ class RankingScreen extends StatefulWidget {
 
 class _RankingScreenState extends State<RankingScreen> {
   List<Review> _reviews = [];
-  List<StoreRanking> _storeRankings = []; // ✅ 서버에서 가져온 랭킹을 저장
+  List<StoreRanking> _storeRankings = [];
   Stats? _stats;
 
   bool _isLoading = true;
@@ -221,11 +55,8 @@ class _RankingScreenState extends State<RankingScreen> {
   Future<void> _loadInitialData() async {
     if(mounted) setState(() => _isLoading = true);
     try {
-      // 1. 전체 통계 (fetchGlobalStats로 이름 통일)
       final statsFuture = ReviewService.fetchGlobalStats();
-      // 2. 리뷰 리스트
       final reviewsFuture = ReviewService.fetchReviews(limit: _limit, offset: 0);
-      // 3. [NEW] 매장 순위 데이터 (서버에서 계산된 결과 가져오기)
       final rankingsFuture = ReviewService.fetchStoreRankings();
 
       final results = await Future.wait([statsFuture, reviewsFuture, rankingsFuture]);
@@ -236,7 +67,6 @@ class _RankingScreenState extends State<RankingScreen> {
 
       if (mounted) {
         setState(() {
-          // ✅ 통계 데이터 파싱 수정 (num 타입을 double로 안전하게 변환)
           if (statsData.isNotEmpty) {
             _stats = Stats(
               total: (statsData['total_reviews'] as num?)?.toInt() ?? reviews.length,
@@ -246,18 +76,9 @@ class _RankingScreenState extends State<RankingScreen> {
           } else {
             _stats = Stats(total: reviews.length, average: 0, avgTrust: 0);
           }
-
           _reviews = reviews;
-
-          // ✅ [수정] 앱 내 계산(RankingCalculator) 제거하고 서버 데이터 사용
           _storeRankings = rankings;
-
-          // 데이터가 limit보다 적으면 더 이상 데이터가 없는 것
-          if (reviews.length < _limit) {
-            _hasMore = false;
-          } else {
-            _hasMore = true;
-          }
+          _hasMore = reviews.length >= _limit;
         });
       }
     } catch (e) {
@@ -277,19 +98,12 @@ class _RankingScreenState extends State<RankingScreen> {
 
       if (mounted) {
         setState(() {
-          // 기존 리스트에 없는 리뷰만 추가 (ID 기준 중복 제거)
           for (var newReview in moreReviews) {
             if (!_reviews.any((existing) => existing.id == newReview.id)) {
               _reviews.add(newReview);
             }
           }
-
-          // ✅ [수정] RankingCalculator 호출 제거 (순위는 서버 데이터로 고정)
-
-          // 가져온 개수가 요청 개수보다 적으면 끝
-          if (moreReviews.length < _limit) {
-            _hasMore = false;
-          }
+          _hasMore = moreReviews.length >= _limit;
         });
       }
     } catch (e) {
@@ -328,7 +142,7 @@ class _RankingScreenState extends State<RankingScreen> {
       rankings.sort((a, b) => b.avgScore.compareTo(a.avgScore));
     }
 
-    // 정렬 후 순위 번호 재할당 (화면 표시용)
+    // 순위 재계산
     for(int i=0; i<rankings.length; i++) {
       rankings[i] = StoreRanking(
           storeName: rankings[i].storeName,
@@ -336,11 +150,10 @@ class _RankingScreenState extends State<RankingScreen> {
           avgUserRating: rankings[i].avgUserRating,
           reviewCount: rankings[i].reviewCount,
           avgTrust: rankings[i].avgTrust,
-          rank: i + 1, // 순위 재설정
+          rank: i + 1,
           topTags: rankings[i].topTags
       );
     }
-
     return rankings;
   }
 
@@ -456,7 +269,7 @@ class _RankingScreenState extends State<RankingScreen> {
     return ListView.separated(
       controller: _scrollController,
       itemCount: reviews.length + (_hasMore ? 1 : 0),
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEEEEEE)),
       itemBuilder: (context, index) {
         if (index == reviews.length) {
           return const Padding(
@@ -469,6 +282,7 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 
+  // 리뷰 목록 카드
   Widget _buildReviewCard(Review review) => InkWell(
     onTap: () async {
       final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: review)));
@@ -482,15 +296,19 @@ class _RankingScreenState extends State<RankingScreen> {
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Expanded(
               child: InkWell(
+                // ✅ 클릭 시 내 주변(MainShell index 2)으로 이동하여 검색 수행
                 onTap: () {
-                  if (review.storeAddress != null) {
-                    searchTrigger.value = review.storeAddress;
+                  if (review.storeName.isNotEmpty) {
+                    searchTrigger.value = review.storeName;
                   }
                 },
                 child: Text(
                     review.storeName,
                     style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF9C7CFF), decoration: TextDecoration.underline,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black, // ✅ 검은색 변경
+                      decoration: TextDecoration.none, // ✅ 밑줄 제거
                     ),
                     overflow: TextOverflow.ellipsis
                 ),
@@ -556,36 +374,64 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 
-  Widget _buildRankingCard(StoreRanking ranking) => Container(
-    padding: const EdgeInsets.all(16.0),
-    child: Row(children: [
-      Container(
-        width: 40, height: 40,
-        decoration: BoxDecoration(color: ranking.rank <= 3 ? const Color(0xFF9C7CFF) : Colors.grey[300], shape: BoxShape.circle),
-        child: Center(child: Text('${ranking.rank}', style: TextStyle(color: ranking.rank <= 3 ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 18))),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          InkWell(
-            onTap: () => searchTrigger.value = ranking.storeName,
-            child: Text(ranking.storeName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF9C7CFF), decoration: TextDecoration.underline)),
-          ),
-          const SizedBox(height: 4),
-          Row(children: [
-            Text(
-                _rankingSortOption == '니즈파인 순'
-                    ? '평균 ${ranking.avgScore.toStringAsFixed(1)}점'
-                    : '별점 ${ranking.avgUserRating.toStringAsFixed(1)}점',
-                style: const TextStyle(fontSize: 14, color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)
+  // 매장 순위 카드
+  Widget _buildRankingCard(StoreRanking ranking) {
+    // ✅ 1~3위만 원형 배경, 4위부터는 숫자만
+    final bool isTopRank = ranking.rank <= 3;
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(children: [
+        // 순위 표시 (수정됨)
+        Container(
+          width: 40,
+          height: 40,
+          decoration: isTopRank
+              ? const BoxDecoration(color: Color(0xFF9C7CFF), shape: BoxShape.circle)
+              : null, // ✅ 4위부터 배경 없음
+          child: Center(
+            child: Text(
+                '${ranking.rank}',
+                style: TextStyle(
+                    color: isTopRank ? Colors.white : Colors.black, // ✅ 4위부터 글자 검정
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18
+                )
             ),
-            const SizedBox(width: 8),
-            Text('신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(width: 8),
-            Text('리뷰 ${ranking.reviewCount}개', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            InkWell(
+              // ✅ 클릭 시 내 주변(MainShell index 2)으로 이동하여 검색 수행
+              onTap: () => searchTrigger.value = ranking.storeName,
+              child: Text(
+                  ranking.storeName,
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black, // ✅ 검은색 변경
+                      decoration: TextDecoration.none // ✅ 밑줄 제거
+                  )
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(children: [
+              Text(
+                  _rankingSortOption == '니즈파인 순'
+                      ? '평균 ${ranking.avgScore.toStringAsFixed(1)}점'
+                      : '별점 ${ranking.avgUserRating.toStringAsFixed(1)}점',
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)
+              ),
+              const SizedBox(width: 8),
+              Text('신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(width: 8),
+              Text('리뷰 ${ranking.reviewCount}개', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ]),
           ]),
-        ]),
-      ),
-    ]),
-  );
+        ),
+      ]),
+    );
+  }
 }
