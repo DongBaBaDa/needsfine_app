@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
-import 'package:needsfine_app/screens/taste_selection_screen.dart'; // 파일명 확인
+import 'package:needsfine_app/screens/taste_selection_screen.dart';
 import 'package:needsfine_app/screens/myfeed_screen.dart';
 import 'package:needsfine_app/screens/follow_list_screen.dart';
 import '../models/user_model.dart';
@@ -24,7 +24,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   final _supabase = Supabase.instance.client;
   UserProfile? _userProfile;
   List<dynamic> _myReviews = [];
-  List<String> _myTags = []; // ✅ 내 취향 태그 저장 리스트
+  List<String> _myTags = [];
   bool _isLoading = true;
   bool _isAdmin = false;
 
@@ -43,10 +43,20 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       final profileData = await _supabase.from('profiles').select().eq('id', userId).maybeSingle();
       final reviewData = await _supabase.from('reviews').select().eq('user_id', userId).order('created_at', ascending: false);
 
+      // ✅ [Fix] count() 함수의 인자 수정 (Named Parameter 'count:' 제거)
+      final followerCountResponse = await _supabase
+          .from('follows')
+          .count(CountOption.exact) // 수정됨
+          .eq('following_id', userId);
+
+      final followingCountResponse = await _supabase
+          .from('follows')
+          .count(CountOption.exact) // 수정됨
+          .eq('follower_id', userId);
+
       if (profileData != null && mounted) {
         setState(() {
           _isAdmin = profileData['is_admin'] ?? false;
-          // ✅ 태그 데이터 불러오기 (없으면 빈 리스트)
           _myTags = List<String>.from(profileData['taste_tags'] ?? []);
 
           _userProfile = UserProfile(
@@ -55,8 +65,10 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             activityZone: profileData['activity_zone'] ?? "활동 지역 미설정",
             profileImageUrl: profileData['profile_image_url'] ?? "",
             reliability: profileData['reliability'] ?? 0,
-            followerCount: profileData['follower_count'] ?? 0,
-            followingCount: profileData['following_count'] ?? 0,
+
+            // ✅ DB Count 결과를 적용 (int형으로 반환됨)
+            followerCount: followerCountResponse,
+            followingCount: followingCountResponse,
           );
           _myReviews = reviewData;
         });
@@ -68,7 +80,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     }
   }
 
-  // ... (고객센터 바텀시트 생략 - 기존 동일) ...
+  // ... (고객센터 및 나머지 UI 코드는 기존과 동일) ...
   void _showCustomerService(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -123,44 +135,47 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
         ],
       ),
-      body: ListView(
-        children: [
-          _buildProfileHeader(context),
-          const Divider(thickness: 8, color: kNeedsFinePurpleLight),
-          _buildMenuListItem(
-              icon: Icons.restaurant_menu,
-              title: "나의 입맛",
-              isPoint: true,
-              onTap: () async {
-                // ✅ 입맛 설정 화면으로 갔다가 돌아올 때 데이터 갱신
-                final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const TasteSelectionScreen())
-                );
-                if (result == true) {
-                  _fetchUserData();
-                }
-              }
-          ),
-          _buildMenuListItem(icon: Icons.support_agent, title: "고객센터", onTap: () => _showCustomerService(context)),
-          _buildMenuListItem(
-            icon: Icons.notifications_none,
-            title: "공지사항",
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NoticeScreen())),
-          ),
-          if (_isAdmin) ...[
-            const Divider(thickness: 1, height: 1),
-            Container(
-              color: Colors.deepPurple.withOpacity(0.05),
-              child: _buildMenuListItem(
-                icon: Icons.admin_panel_settings,
-                title: "소중한 피드백 (관리자)",
+      body: RefreshIndicator(
+        onRefresh: _fetchUserData,
+        color: kNeedsFinePurple,
+        child: ListView(
+          children: [
+            _buildProfileHeader(context),
+            const Divider(thickness: 8, color: kNeedsFinePurpleLight),
+            _buildMenuListItem(
+                icon: Icons.restaurant_menu,
+                title: "나의 입맛",
                 isPoint: true,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminDashboardScreen())),
-              ),
+                onTap: () async {
+                  final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const TasteSelectionScreen())
+                  );
+                  if (result == true) {
+                    _fetchUserData();
+                  }
+                }
             ),
+            _buildMenuListItem(icon: Icons.support_agent, title: "고객센터", onTap: () => _showCustomerService(context)),
+            _buildMenuListItem(
+              icon: Icons.notifications_none,
+              title: "공지사항",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NoticeScreen())),
+            ),
+            if (_isAdmin) ...[
+              const Divider(thickness: 1, height: 1),
+              Container(
+                color: Colors.deepPurple.withOpacity(0.05),
+                child: _buildMenuListItem(
+                  icon: Icons.admin_panel_settings,
+                  title: "소중한 피드백 (관리자)",
+                  isPoint: true,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminDashboardScreen())),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -195,8 +210,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                       child: Text("신뢰도 ${_userProfile!.reliability}%", style: const TextStyle(color: kNeedsFinePurple, fontWeight: FontWeight.bold, fontSize: 13)),
                     ),
                     const SizedBox(height: 12),
-
-                    // ✅ [추가됨] 나의 입맛 태그 표시 영역
                     if (_myTags.isNotEmpty)
                       Wrap(
                         spacing: 6,
@@ -220,8 +233,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             ],
           ),
           const SizedBox(height: 24),
-
-          // ... (소개글 등 하단 영역 기존 동일) ...
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
