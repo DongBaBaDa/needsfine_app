@@ -17,6 +17,7 @@ class Review {
   final String? userEmail;
   final int likeCount;
   final String nickname;
+  final String? userProfileUrl; // ✅ [추가] 프로필 이미지 URL
 
   Review({
     required this.id,
@@ -35,10 +36,10 @@ class Review {
     this.userEmail,
     this.likeCount = 0,
     required this.nickname,
+    this.userProfileUrl,
   });
 
   factory Review.fromJson(Map<String, dynamic> json) {
-    // ✅ 수정: 'users' -> 'profiles'로 변경 (DB 테이블명 일치)
     final profileData = json['profiles'];
 
     String? uid;
@@ -49,13 +50,18 @@ class Review {
     }
 
     String displayNickname = '익명 사용자';
+    String? profileUrl;
 
-    // 1. profiles 테이블에 닉네임이 있는지 확인
-    if (profileData != null && profileData['nickname'] != null) {
-      displayNickname = profileData['nickname'].toString();
-    }
-    // 2. 없다면 ID 기반으로 결정적 닉네임 생성
-    else {
+    // 1. profiles 테이블 데이터 매핑
+    if (profileData != null) {
+      if (profileData['nickname'] != null) {
+        displayNickname = profileData['nickname'].toString();
+      }
+      // ✅ [Fix] 프로필 이미지 URL 매핑
+      if (profileData['profile_image_url'] != null) {
+        profileUrl = profileData['profile_image_url'].toString();
+      }
+    } else {
       displayNickname = _generateDeterministicNickname(uid ?? json['id'].toString());
     }
 
@@ -76,6 +82,7 @@ class Review {
       userEmail: profileData != null ? profileData['email']?.toString() : null,
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       nickname: displayNickname,
+      userProfileUrl: profileUrl, // ✅ 매핑
     );
   }
 

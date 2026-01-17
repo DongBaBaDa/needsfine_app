@@ -4,6 +4,7 @@ import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/screens/taste_selection_screen.dart';
 import 'package:needsfine_app/screens/myfeed_screen.dart';
 import 'package:needsfine_app/screens/follow_list_screen.dart';
+import 'package:needsfine_app/screens/review_collection_screen.dart'; // ✅ 새로 만들 파일 임포트
 import '../models/user_model.dart';
 import 'profile_edit_screen.dart';
 import 'info_edit_screen.dart';
@@ -23,7 +24,6 @@ class UserMyPageScreen extends StatefulWidget {
 class _UserMyPageScreenState extends State<UserMyPageScreen> {
   final _supabase = Supabase.instance.client;
   UserProfile? _userProfile;
-  List<dynamic> _myReviews = [];
   List<String> _myTags = [];
   bool _isLoading = true;
   bool _isAdmin = false;
@@ -41,36 +41,23 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
 
     try {
       final profileData = await _supabase.from('profiles').select().eq('id', userId).maybeSingle();
-      final reviewData = await _supabase.from('reviews').select().eq('user_id', userId).order('created_at', ascending: false);
 
-      // ✅ [Fix] count() 함수의 인자 수정 (Named Parameter 'count:' 제거)
-      final followerCountResponse = await _supabase
-          .from('follows')
-          .count(CountOption.exact) // 수정됨
-          .eq('following_id', userId);
-
-      final followingCountResponse = await _supabase
-          .from('follows')
-          .count(CountOption.exact) // 수정됨
-          .eq('follower_id', userId);
+      final followerCountResponse = await _supabase.from('follows').count(CountOption.exact).eq('following_id', userId);
+      final followingCountResponse = await _supabase.from('follows').count(CountOption.exact).eq('follower_id', userId);
 
       if (profileData != null && mounted) {
         setState(() {
           _isAdmin = profileData['is_admin'] ?? false;
           _myTags = List<String>.from(profileData['taste_tags'] ?? []);
-
           _userProfile = UserProfile(
             nickname: profileData['nickname'] ?? "이름 없음",
             introduction: profileData['introduction'] ?? "자신을 알릴 수 있는 소개글을 작성해 주세요.",
             activityZone: profileData['activity_zone'] ?? "활동 지역 미설정",
             profileImageUrl: profileData['profile_image_url'] ?? "",
             reliability: profileData['reliability'] ?? 0,
-
-            // ✅ DB Count 결과를 적용 (int형으로 반환됨)
             followerCount: followerCountResponse,
             followingCount: followingCountResponse,
           );
-          _myReviews = reviewData;
         });
       }
     } catch (e) {
@@ -80,7 +67,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     }
   }
 
-  // ... (고객센터 및 나머지 UI 코드는 기존과 동일) ...
+  // ... (고객센터 - 기존 코드 유지)
   void _showCustomerService(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -126,13 +113,8 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       appBar: AppBar(
         title: const Text("마이페이지"),
         actions: [
-          NotificationBadge(
-            onTap: () => Navigator.pushNamed(context, '/notifications'),
-          ),
-          IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InfoEditScreen()))
-          ),
+          NotificationBadge(onTap: () => Navigator.pushNamed(context, '/notifications')),
+          IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InfoEditScreen()))),
         ],
       ),
       body: RefreshIndicator(
@@ -142,26 +124,25 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           children: [
             _buildProfileHeader(context),
             const Divider(thickness: 8, color: kNeedsFinePurpleLight),
+
+            // ✅ [추가] 리뷰 모음 메뉴 (나의 입맛 위에 배치)
+            _buildMenuListItem(
+              icon: Icons.collections_bookmark_outlined,
+              title: "리뷰 모음",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReviewCollectionScreen())),
+            ),
+
             _buildMenuListItem(
                 icon: Icons.restaurant_menu,
                 title: "나의 입맛",
                 isPoint: true,
                 onTap: () async {
-                  final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const TasteSelectionScreen())
-                  );
-                  if (result == true) {
-                    _fetchUserData();
-                  }
+                  final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => const TasteSelectionScreen()));
+                  if (result == true) _fetchUserData();
                 }
             ),
             _buildMenuListItem(icon: Icons.support_agent, title: "고객센터", onTap: () => _showCustomerService(context)),
-            _buildMenuListItem(
-              icon: Icons.notifications_none,
-              title: "공지사항",
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NoticeScreen())),
-            ),
+            _buildMenuListItem(icon: Icons.notifications_none, title: "공지사항", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NoticeScreen()))),
             if (_isAdmin) ...[
               const Divider(thickness: 1, height: 1),
               Container(
@@ -216,15 +197,8 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                         runSpacing: 6,
                         children: _myTags.take(5).map((tag) => Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(color: Colors.grey.withOpacity(0.4)),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            "#$tag",
-                            style: TextStyle(fontSize: 11, color: Colors.grey[800], fontWeight: FontWeight.w500),
-                          ),
+                          decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.grey.withOpacity(0.4)), borderRadius: BorderRadius.circular(20)),
+                          child: Text("#$tag", style: TextStyle(fontSize: 11, color: Colors.grey[800], fontWeight: FontWeight.w500)),
                         )).toList(),
                       ),
                   ],
@@ -263,10 +237,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             width: double.infinity,
             child: OutlinedButton(
               onPressed: () async {
-                await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ProfileEditScreen(userProfile: _userProfile!))
-                );
+                await Navigator.push(context, MaterialPageRoute(builder: (context) => ProfileEditScreen(userProfile: _userProfile!)));
                 _fetchUserData();
               },
               style: OutlinedButton.styleFrom(side: const BorderSide(color: kNeedsFinePurple)),
@@ -278,7 +249,8 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => MyFeedScreen(userProfile: _userProfile!, reviews: _myReviews)));
+                // 기존 '나의 피드' 버튼은 유지 (요구사항에 제거하란 말 없었음)
+                Navigator.push(context, MaterialPageRoute(builder: (context) => MyFeedScreen(userProfile: _userProfile!, reviews: [])));
               },
               child: const Text("나의 피드", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
@@ -299,11 +271,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: kNeedsFinePurpleLight),
-          borderRadius: BorderRadius.circular(12),
-        ),
+        decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kNeedsFinePurpleLight), borderRadius: BorderRadius.circular(12)),
         child: Column(
           children: [
             Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kNeedsFinePurple)),

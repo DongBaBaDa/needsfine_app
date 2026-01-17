@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
-import 'package:needsfine_app/screens/review_detail_screen.dart'; // 상세 페이지 이동을 위해 import
+import 'package:needsfine_app/screens/review_detail_screen.dart';
 
 class ReviewCard extends StatefulWidget {
   final Review review;
-  final VoidCallback onTap; // 상세 페이지 이동 콜백
+  final VoidCallback onTap;
   final VoidCallback onTapStore;
 
   const ReviewCard({
@@ -23,8 +23,6 @@ class _ReviewCardState extends State<ReviewCard> {
   bool _isLiked = false;
   int _likeCount = 0;
   bool _isCommentExpanded = false;
-
-  // 차단된 유저 관리
   final Set<String> _blockedUserIds = {};
 
   @override
@@ -46,15 +44,31 @@ class _ReviewCardState extends State<ReviewCard> {
     });
   }
 
-  // ✅ 상세 페이지로 이동하는 함수
   void _goToDetail() {
-    // onTap 콜백을 실행하거나 직접 네비게이션
     widget.onTap();
   }
 
-  // ✅ 유저 옵션 모달
-  void _showUserOptionModal(String userId, String nickname) {
-    if (userId == Supabase.instance.client.auth.currentUser?.id) return; // 나 자신이면 클릭 안됨
+  // ✅ 유저 옵션 모달 (팔로우 상태 체크 후 표시)
+  void _showUserOptionModal(String userId, String nickname) async {
+    if (userId == Supabase.instance.client.auth.currentUser?.id) return;
+
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    bool isFollowing = false;
+
+    // 1. 이미 팔로우 중인지 확인
+    if (myId != null) {
+      final data = await Supabase.instance.client
+          .from('follows')
+          .select()
+          .eq('follower_id', myId)
+          .eq('following_id', userId)
+          .maybeSingle();
+      if (data != null) {
+        isFollowing = true;
+      }
+    }
+
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -63,48 +77,62 @@ class _ReviewCardState extends State<ReviewCard> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.person),
-                title: const Text('유저 정보 보기'),
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('$nickname 님의 피드로 이동합니다.')),
-                  );
-                },
+        return StatefulBuilder( // 모달 내부 상태 갱신을 위해 StatefulBuilder 사용
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.person),
+                    title: const Text('유저 정보 보기'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$nickname 님의 피드로 이동합니다.')),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                        isFollowing ? Icons.person_remove : Icons.person_add,
+                        color: isFollowing ? Colors.red : Colors.black
+                    ),
+                    title: Text(
+                        isFollowing ? '팔로우 취소' : '팔로우 하기',
+                        style: TextStyle(color: isFollowing ? Colors.red : Colors.black)
+                    ),
+                    onTap: () async {
+                      if (isFollowing) {
+                        await _unfollowUser(userId, nickname);
+                      } else {
+                        await _followUser(userId, nickname);
+                      }
+                      Navigator.pop(context); // 액션 후 닫기
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.block, color: Colors.red),
+                    title: const Text('차단하기', style: TextStyle(color: Colors.red)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _blockUser(userId, nickname);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.report, color: Colors.grey),
+                    title: const Text('신고하기', style: TextStyle(color: Colors.grey)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('신고 기능은 추후 도입 예정입니다.')),
+                      );
+                    },
+                  ),
+                ],
               ),
-              ListTile(
-                leading: const Icon(Icons.person_add),
-                title: const Text('팔로우 하기'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _followUser(userId, nickname);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.block, color: Colors.red),
-                title: const Text('차단하기', style: TextStyle(color: Colors.red)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _blockUser(userId, nickname);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.report, color: Colors.grey),
-                title: const Text('신고하기', style: TextStyle(color: Colors.grey)),
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('신고 기능은 추후 도입 예정입니다.')),
-                  );
-                },
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -114,15 +142,35 @@ class _ReviewCardState extends State<ReviewCard> {
     try {
       final myId = Supabase.instance.client.auth.currentUser?.id;
       if (myId == null) return;
+
       await Supabase.instance.client.from('follows').insert({
         'follower_id': myId,
         'following_id': targetUserId,
       });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$nickname 님을 팔로우했습니다!')));
       }
     } catch (e) {
-      // 중복 에러 등 무시
+      debugPrint("팔로우 에러: $e");
+    }
+  }
+
+  // ✅ 언팔로우 로직 추가
+  Future<void> _unfollowUser(String targetUserId, String nickname) async {
+    try {
+      final myId = Supabase.instance.client.auth.currentUser?.id;
+      if (myId == null) return;
+
+      await Supabase.instance.client.from('follows').delete()
+          .eq('follower_id', myId)
+          .eq('following_id', targetUserId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$nickname 님 팔로우를 취소했습니다.')));
+      }
+    } catch (e) {
+      debugPrint("언팔로우 에러: $e");
     }
   }
 
@@ -136,6 +184,14 @@ class _ReviewCardState extends State<ReviewCard> {
   @override
   Widget build(BuildContext context) {
     const Color kPrimary = Color(0xFFC87CFF);
+
+    // ✅ [Fix] 프로필 이미지 URL 처리
+    ImageProvider avatarImage;
+    if (widget.review.userProfileUrl != null && widget.review.userProfileUrl!.isNotEmpty) {
+      avatarImage = NetworkImage(widget.review.userProfileUrl!);
+    } else {
+      avatarImage = const AssetImage('assets/images/default_profile.png'); // 기본 이미지
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 20.0),
@@ -175,14 +231,13 @@ class _ReviewCardState extends State<ReviewCard> {
           else
             const SizedBox(height: 12),
 
-          // 2. User Info Header (팝업 연결됨 ✅)
+          // 2. User Info Header
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar Click
+              // Avatar
               InkWell(
                 onTap: () {
-                  // userId가 null이면 팝업 안뜸 (익명 등)
                   if (widget.review.userId != null) {
                     _showUserOptionModal(widget.review.userId!, widget.review.nickname);
                   }
@@ -190,7 +245,7 @@ class _ReviewCardState extends State<ReviewCard> {
                 child: CircleAvatar(
                   radius: 20,
                   backgroundColor: Colors.grey[200],
-                  child: const Icon(Icons.person, color: Colors.grey, size: 22),
+                  backgroundImage: avatarImage, // ✅ 수정된 이미지 적용
                 ),
               ),
               const SizedBox(width: 12),
@@ -199,7 +254,6 @@ class _ReviewCardState extends State<ReviewCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Nickname Click
                     InkWell(
                       onTap: () {
                         if (widget.review.userId != null) {
@@ -235,7 +289,7 @@ class _ReviewCardState extends State<ReviewCard> {
                 ),
               ),
 
-              // Badge (디자인 유지)
+              // 3. NeedsFine Badge (디자인 수정: 라벨 추가, 신뢰도 텍스트 변경)
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(
@@ -251,6 +305,16 @@ class _ReviewCardState extends State<ReviewCard> {
                 ),
                 child: Column(
                   children: [
+                    // ✅ [추가] 상단 라벨
+                    const Text(
+                      "니즈파인 점수",
+                      style: TextStyle(
+                          fontSize: 9,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w500
+                      ),
+                    ),
+                    const SizedBox(height: 2),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
@@ -267,7 +331,7 @@ class _ReviewCardState extends State<ReviewCard> {
                     Container(width: 30, height: 1, color: Colors.white30),
                     const SizedBox(height: 4),
                     Text(
-                      "${widget.review.trustLevel}% 신뢰",
+                      "${widget.review.trustLevel}% 신뢰도", // ✅ [Fix] '신뢰' -> '신뢰도'
                       style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -277,8 +341,7 @@ class _ReviewCardState extends State<ReviewCard> {
           ),
 
           const SizedBox(height: 16),
-
-          // 3. Content (Click to Detail)
+          // ... (이하 Content, Photos, Footer 등은 기존 유지) ...
           InkWell(
             onTap: _goToDetail,
             child: Text(
@@ -293,7 +356,6 @@ class _ReviewCardState extends State<ReviewCard> {
               ),
             ),
           ),
-
           if (widget.review.tags.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 12.0),
@@ -307,10 +369,7 @@ class _ReviewCardState extends State<ReviewCard> {
                 )).toList(),
               ),
             ),
-
           const SizedBox(height: 16),
-
-          // 4. Photos
           if (widget.review.photoUrls.isNotEmpty)
             Container(
               height: 150,
@@ -337,10 +396,7 @@ class _ReviewCardState extends State<ReviewCard> {
                 },
               ),
             ),
-
           const Divider(height: 24, thickness: 0.5, color: Color(0xFFEEEEEE)),
-
-          // 5. Footer Buttons
           Row(
             children: [
               InkWell(
@@ -382,8 +438,6 @@ class _ReviewCardState extends State<ReviewCard> {
               ),
             ],
           ),
-
-          // 6. Comment Section (Updated Logic)
           if (_isCommentExpanded)
             Padding(
               padding: const EdgeInsets.only(top: 16.0),
@@ -396,9 +450,8 @@ class _ReviewCardState extends State<ReviewCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 댓글 입력창 (누르면 상세 페이지로 이동)
                     InkWell(
-                      onTap: _goToDetail, // ✅ 클릭 시 상세 페이지 이동
+                      onTap: _goToDetail,
                       child: Container(
                         height: 40,
                         decoration: BoxDecoration(
@@ -416,19 +469,8 @@ class _ReviewCardState extends State<ReviewCard> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // 더미 댓글 (최대 3개 정도만 보여줌)
-                    _buildDummyComment("uuid1", "user1", "잘 보고 갑니다!", true),
-                    const SizedBox(height: 8),
-                    _buildDummyComment("uuid2", "user2", "여기 맛있죠 ㅎㅎ", true),
-                    const SizedBox(height: 8),
-                    _buildDummyComment("uuid3", "user3", "저도 가봐야겠네요", true),
-                    const SizedBox(height: 8),
-
-                    // ✅ 댓글 더보기 버튼 (5개 이상일 경우)
-                    // (실제 데이터 갯수에 따라 조건부 렌더링 해야 함, 여기선 항상 노출 예시)
                     InkWell(
-                      onTap: _goToDetail, // ✅ 클릭 시 상세 페이지 이동
+                      onTap: _goToDetail,
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -445,33 +487,6 @@ class _ReviewCardState extends State<ReviewCard> {
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildDummyComment(String userId, String nickname, String text, bool isVisible) {
-    if (!isVisible || _blockedUserIds.contains(userId)) return const SizedBox.shrink();
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: () => _showUserOptionModal(userId, nickname), // ✅ 댓글 프로필 클릭 시 팝업
-          child: const CircleAvatar(radius: 10, backgroundColor: Colors.grey),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: () => _showUserOptionModal(userId, nickname), // ✅ 댓글 닉네임 클릭 시 팝업
-                child: Text(nickname, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-              ),
-              Text(text, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-            ],
-          ),
-        )
-      ],
     );
   }
 }
