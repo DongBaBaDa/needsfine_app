@@ -4,7 +4,7 @@ import 'package:needsfine_app/core/search_trigger.dart';
 
 class StoreRankingCard extends StatelessWidget {
   final StoreRanking ranking;
-  final String sortOption; // '니즈파인 순' or '사용자 별점 순'
+  final String sortOption;
 
   const StoreRankingCard({
     super.key,
@@ -14,86 +14,90 @@ class StoreRankingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1~3위 여부 확인
-    final bool isTopRank = ranking.rank <= 3;
+    Color? rankColor;
+    if (ranking.rank == 1) rankColor = const Color(0xFFFFD700);
+    else if (ranking.rank == 2) rankColor = const Color(0xFFC0C0C0);
+    else if (ranking.rank == 3) rankColor = const Color(0xFFCD7F32);
 
-    return Container(
-      // ✅ 1~3위는 옅은 니즈파인 색 배경, 나머지는 흰색
-      decoration: BoxDecoration(
-        color: isTopRank ? const Color(0xFFF0E9FF) : Colors.white,
-        border: const Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.withOpacity(0.2)),
       ),
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ✅ 순위 표시 영역 (원형 제거, 숫자만 강조)
-            SizedBox(
-              width: 40,
-              child: Center(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          // ✅ [수정] SearchTarget 객체 전달
+          searchTrigger.value = SearchTarget(query: ranking.storeName);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: rankColor ?? Colors.grey[100],
+                  shape: BoxShape.circle,
+                ),
                 child: Text(
                   '${ranking.rank}',
                   style: TextStyle(
-                    // 1~3위는 보라색, 나머지는 검은색
-                    color: isTopRank ? const Color(0xFF9C7CFF) : Colors.black,
-                    fontWeight: FontWeight.bold,
                     fontSize: 18,
-                    fontStyle: isTopRank ? FontStyle.italic : FontStyle.normal,
+                    fontWeight: FontWeight.bold,
+                    color: rankColor != null ? Colors.white : Colors.black54,
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-
-            // 정보 표시 영역
-            Expanded(
-              child: Column(
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    InkWell(
-                      onTap: () {
-                        // 전역 검색 트리거 작동
-                        searchTrigger.value = ranking.storeName;
-                      },
-                      child: Text(
-                          ranking.storeName,
-                          style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                              decoration: TextDecoration.none
-                          )
-                      ),
+                    Text(
+                      ranking.storeName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                            sortOption == '니즈파인 순'
-                                ? '니즈파인 ${ranking.avgScore.toStringAsFixed(1)}점'
-                                : '별점 ${ranking.avgUserRating.toStringAsFixed(1)}점',
-                            style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF9C7CFF),
-                                fontWeight: FontWeight.bold
-                            )
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                            '신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey)
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                            '리뷰 ${ranking.reviewCount}개',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey)
-                        ),
-                      ],
+                    Text(
+                      '리뷰 ${ranking.reviewCount}개',
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
-                  ]
+                  ],
+                ),
               ),
-            ),
-          ]
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    sortOption == '니즈파인 순'
+                        ? '${ranking.avgScore.toStringAsFixed(1)}점'
+                        : '${ranking.avgUserRating.toStringAsFixed(1)}점',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF9C7CFF),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (sortOption == '니즈파인 순')
+                    Text(
+                      '신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: ranking.avgTrust >= 70 ? Colors.green : Colors.orange,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

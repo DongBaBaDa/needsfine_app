@@ -5,7 +5,8 @@ import 'package:needsfine_app/screens/ranking_screen.dart';
 import 'package:needsfine_app/screens/nearby_screen.dart';
 import 'package:needsfine_app/screens/user_mypage_screen.dart';
 
-import 'package:needsfine_app/core/search_trigger.dart'; // ✅ 여기만!
+// ✅ SearchTarget이 정의된 파일 임포트
+import 'package:needsfine_app/core/search_trigger.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -19,7 +20,7 @@ class _MainShellState extends State<MainShell> {
 
   final List<Widget> _widgetOptions = const <Widget>[
     HomeScreen(),        // 0: 홈
-    RankingScreen(),     // 1: 리뷰
+    RankingScreen(),     // 1: 랭킹 (리뷰)
     NearbyScreen(),      // 2: 내 주변
     UserMyPageScreen(),  // 3: 마이파인
   ];
@@ -37,10 +38,11 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _onGlobalSearchTriggered() {
-    final q = searchTrigger.value;
-    if (q != null && q.isNotEmpty) {
+    final target = searchTrigger.value;
+    // ✅ [수정] SearchTarget 객체의 query 필드를 확인
+    if (target != null && target.query.isNotEmpty) {
       if (mounted) {
-        setState(() => _selectedIndex = 2); // ✅ 내 주변 탭 이동
+        setState(() => _selectedIndex = 2); // 내 주변 탭으로 이동
       }
     }
   }
@@ -89,7 +91,7 @@ class _MainShellState extends State<MainShell> {
               label: '홈',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.rate_review_rounded),
+              icon: Icon(Icons.emoji_events_rounded),
               label: '리뷰',
             ),
             BottomNavigationBarItem(

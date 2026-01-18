@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:needsfine_app/core/needsfine_theme.dart';
-import 'package:needsfine_app/core/search_trigger.dart';
+import 'package:needsfine_app/core/search_trigger.dart'; // SearchTarget import 확인
 
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/services/review_service.dart';
@@ -120,8 +120,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     final query = q.trim();
     if (query.isEmpty) return;
 
-    // ✅ 전역 트리거로 Nearby 탭 이동 + Nearby에서 검색 수행
-    searchTrigger.value = query;
+    // ✅ [수정] 전역 트리거로 Nearby 탭 이동 (SearchTarget 객체 사용)
+    searchTrigger.value = SearchTarget(query: query);
 
     FocusScope.of(context).unfocus();
   }
@@ -251,7 +251,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               imageUrl: imageUrl,
               onTap: () {
                 if (r.storeName.isNotEmpty) {
-                  searchTrigger.value = r.storeName;
+                  // ✅ [수정] SearchTarget 객체 전달
+                  searchTrigger.value = SearchTarget(query: r.storeName);
                 }
               },
             ),

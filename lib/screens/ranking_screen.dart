@@ -145,6 +145,7 @@ class _RankingScreenState extends State<RankingScreen> {
       rankings.sort((a, b) => b.avgScore.compareTo(a.avgScore));
     }
 
+    // 순위 재할당
     for (int i = 0; i < rankings.length; i++) {
       rankings[i] = StoreRanking(
           storeName: rankings[i].storeName,
@@ -279,12 +280,18 @@ class _RankingScreenState extends State<RankingScreen> {
         return ReviewCard(
           review: reviews[index],
           onTap: () async {
+            // ✅ [수정] 상세 페이지 이동 및 결과 대기 (삭제/수정 후 갱신)
             final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: reviews[index])));
             if (result == true) _loadInitialData();
           },
           onTapStore: () {
             if (reviews[index].storeName.isNotEmpty) {
-              searchTrigger.value = reviews[index].storeName;
+              // ✅ [수정] SearchTarget 객체 전달 (좌표 포함)
+              searchTrigger.value = SearchTarget(
+                  query: reviews[index].storeName,
+                  lat: reviews[index].storeLat,
+                  lng: reviews[index].storeLng
+              );
             }
           },
         );

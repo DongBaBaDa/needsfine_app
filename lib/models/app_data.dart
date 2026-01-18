@@ -9,12 +9,15 @@ class Review {
   final double rating;
   final String date;
 
-  // ✅ [추가] 리뷰 작성 시점의 위치 정보 박제
+  // 위치 정보 박제
   final String? address;
   final double? latitude;
   final double? longitude;
 
-  // 계산된 속성들
+  // 사진 리스트
+  final List<String> photoUrls;
+
+  // 계산된 속성
   late final double needsfineScore;
   late final int trustLevel;
   late final bool authenticity;
@@ -27,15 +30,18 @@ class Review {
     required this.content,
     required this.rating,
     required this.date,
-    this.address,   // 추가
-    this.latitude,  // 추가
-    this.longitude, // 추가
-    bool hasPhoto = false,
+    this.address,
+    this.latitude,
+    this.longitude,
+    this.photoUrls = const [], // 기본값 빈 리스트
   }) {
-    final scoreResult = ScoreCalculator.calculateNeedsFineScore(content, rating, hasPhoto);
+    // 사진 유무에 따라 가산점 로직 적용
+    final scoreResult = ScoreCalculator.calculateNeedsFineScore(content, rating, photoUrls.isNotEmpty);
+
     needsfineScore = (scoreResult['needsfine_score'] as num).toDouble();
     trustLevel = scoreResult['trust_level'] as int;
     tags = List<String>.from(scoreResult['tags'] ?? []);
+
     authenticity = trustLevel >= 70;
     isCritical = (needsfineScore < 3.0 && trustLevel >= 50);
     isHidden = (trustLevel < 20);
@@ -52,12 +58,11 @@ class Store {
   final List<String> tags;
   final double latitude;
   final double longitude;
-  final String address; // ✅ 주소 필드 명시
+  final String address;
 
   double userRating;
   double needsFineScore;
   int reviewCount;
-  final String? summary;
 
   List<Review> reviews;
 
@@ -68,13 +73,28 @@ class Store {
     required this.tags,
     required this.latitude,
     required this.longitude,
-    required this.address, // 필수값 변경
+    required this.address,
     this.userRating = 0.0,
     this.needsFineScore = 0.0,
     this.reviewCount = 0,
-    this.summary,
     required this.reviews,
   });
+
+  // ✅ [핵심 추가] 이 가게의 모든 리뷰 사진을 모아서 반환 (최신순)
+  List<String> get allPhotos {
+    final photos = <String>[];
+    for (var review in reviews) {
+      photos.addAll(review.photoUrls);
+    }
+    return photos;
+  }
+
+  // ✅ [핵심 추가] 평균 신뢰도 계산
+  int get averageTrustLevel {
+    if (reviewCount == 0) return 0;
+    final totalTrust = reviews.fold(0, (sum, item) => sum + item.trustLevel);
+    return (totalTrust / reviewCount).round();
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -87,20 +107,30 @@ class AppData {
 
   List<Store> stores = [];
 
-  // ✅ [수정] 리뷰 추가 시 위치 정보까지 함께 저장
-  void addReview(String storeName, String content, double rating, String address, double lat, double lng) {
+  // ✅ [수정] 사진 URL 리스트까지 받도록 변경
+  void addReview({
+    required String storeName,
+    required String content,
+    required double rating,
+    required String address,
+    required double lat,
+    required double lng,
+    required List<String> photoUrls,
+    String category = '음식점', // 기본 카테고리
+  }) {
     try {
-      // 1. 이미 등록된 가게인지 확인 (이름과 위치로 매칭)
-      // 실제로는 DB ID로 해야 하지만 베타 단계에선 이름+위치 근사치로 판단
+      // 1. 이미 등록된 가게인지 확인 (이름 + 좌표 근사치 매칭)
       Store store;
       try {
-        store = stores.firstWhere((s) => s.name == storeName && (s.latitude - lat).abs() < 0.001);
+        store = stores.firstWhere(
+                (s) => s.name == storeName && (s.latitude - lat).abs() < 0.0005 && (s.longitude - lng).abs() < 0.0005
+        );
       } catch (e) {
-        // 없으면 새 가게 생성 (임시 ID)
+        // 없으면 새 가게 생성
         store = Store(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           name: storeName,
-          category: '기타', // 카테고리는 검색 정보에서 받아와야 함
+          category: category,
           tags: [],
           latitude: lat,
           longitude: lng,
@@ -115,13 +145,13 @@ class AppData {
         content: content,
         rating: rating,
         date: DateTime.now().toIso8601String().substring(0, 10),
-        address: address,   // 저장
-        latitude: lat,      // 저장
-        longitude: lng,     // 저장
-        hasPhoto: false,
+        address: address,
+        latitude: lat,
+        longitude: lng,
+        photoUrls: photoUrls,
       );
 
-      store.reviews.insert(0, newReview);
+      store.reviews.insert(0, newReview); // 최신 리뷰가 위로
       _updateStoreScores(store);
 
     } catch (e) {

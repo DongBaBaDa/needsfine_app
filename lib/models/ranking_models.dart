@@ -1,5 +1,3 @@
-import 'package:intl/intl.dart';
-
 class Review {
   final String id;
   final String storeName;
@@ -20,7 +18,10 @@ class Review {
   final String? userProfileUrl;
   final int commentCount;
 
-  // ✅ [추가] 댓글 단 리뷰 탭 전용 필드
+  // ✅ [추가] 좌표 필드
+  final double? storeLat;
+  final double? storeLng;
+
   final String? myCommentText;
   final DateTime? myCommentCreatedAt;
 
@@ -43,7 +44,8 @@ class Review {
     required this.nickname,
     this.userProfileUrl,
     this.commentCount = 0,
-    // ✅ 추가 생성자
+    this.storeLat, // 추가
+    this.storeLng, // 추가
     this.myCommentText,
     this.myCommentCreatedAt,
   });
@@ -92,7 +94,10 @@ class Review {
       userProfileUrl: profileUrl,
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
 
-      // ✅ [추가] 댓글 데이터 조인 시 파싱 로직
+      // ✅ [추가] 좌표 파싱
+      storeLat: (json['store_lat'] as num?)?.toDouble(),
+      storeLng: (json['store_lng'] as num?)?.toDouble(),
+
       myCommentText: json['comment_content']?.toString(),
       myCommentCreatedAt: json['comment_created_at'] != null
           ? DateTime.parse(json['comment_created_at'].toString())

@@ -4,9 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/services/review_service.dart';
 import 'package:needsfine_app/widgets/star_rating.dart';
-import 'package:needsfine_app/screens/ranking_screen.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
-import 'package:needsfine_app/screens/write_review_screen.dart'; // 수정 화면용
+import 'package:needsfine_app/screens/write_review_screen.dart';
 
 class ReviewDetailScreen extends StatefulWidget {
   final Review review;
@@ -20,11 +19,9 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   final _supabase = Supabase.instance.client;
   final TextEditingController _commentController = TextEditingController();
 
-  bool _isOwner = false; // 리뷰 작성자인지 여부
+  bool _isOwner = false;
   bool _isLoadingComments = true;
-  List<Map<String, dynamic>> _comments = []; // 실제 댓글 데이터
-
-  // ✅ 도움이 됐어요 상태 변수
+  List<Map<String, dynamic>> _comments = [];
   bool _isLiked = false;
 
   final Color _primaryColor = const Color(0xFFC87CFF);
@@ -35,7 +32,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     super.initState();
     _checkOwnership();
     _fetchComments();
-    _checkLikeStatus(); // ✅ 초기 좋아요 상태 확인
+    _checkLikeStatus();
   }
 
   @override
@@ -44,7 +41,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     super.dispose();
   }
 
-  // 1. 리뷰 작성자 확인 (수정/삭제 버튼 노출용)
   Future<void> _checkOwnership() async {
     final currentUserId = _supabase.auth.currentUser?.id;
     if (currentUserId != null && widget.review.userId == currentUserId) {
@@ -52,7 +48,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // 2. 댓글 목록 불러오기 (DB 연동 - 해당 리뷰 상세 화면 전용)
   Future<void> _fetchComments() async {
     try {
       final response = await _supabase
@@ -73,7 +68,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // ✅ 3. 도움이 됐어요 상태 확인 로직
   Future<void> _checkLikeStatus() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -89,39 +83,23 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     if (mounted) setState(() => _isLiked = res != null);
   }
 
-  // ✅ 4. 도움이 됐어요 토글 로직
+  // ✅ 좋아요 토글
   Future<void> _toggleLike() async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
-      return;
-    }
-
     try {
-      if (_isLiked) {
-        // 좋아요 취소
-        await _supabase.from('review_votes').delete()
-            .eq('review_id', widget.review.id)
-            .eq('user_id', userId)
-            .eq('vote_type', 'like');
-      } else {
-        // 좋아요 추가
-        await _supabase.from('review_votes').insert({
-          'review_id': widget.review.id,
-          'user_id': userId,
-          'vote_type': 'like',
-        });
-      }
-      if (mounted) setState(() => _isLiked = !_isLiked);
+      // UI 즉시 반영 (Optimistic)
+      setState(() => _isLiked = !_isLiked);
+
+      // 서버 요청
+      await ReviewService.toggleLike(widget.review.id);
     } catch (e) {
-      debugPrint("도움이 됐어요 처리 실패: $e");
+      // 실패시 롤백
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("오류가 발생했습니다: $e")));
+        setState(() => _isLiked = !_isLiked);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("오류가 발생했습니다.")));
       }
     }
   }
 
-  // 5. 댓글 작성 로직
   Future<void> _submitComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
@@ -141,19 +119,19 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
       _commentController.clear();
       FocusScope.of(context).unfocus();
-      _fetchComments(); // 목록 새로고침
+      _fetchComments();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("댓글 등록 실패: $e")));
     }
   }
 
-  // 6. 리뷰 삭제 로직
+  // ✅ 리뷰 삭제: 서버에서 지워질 때까지 기다렸다가 pop
   Future<void> _onDeletePressed() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("삭제 확인"),
-        content: const Text("정말로 리뷰를 삭제하시겠습니까?"),
+        content: const Text("정말로 리뷰를 삭제하시겠습니까? 복구할 수 없습니다."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("취소")),
           TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("삭제", style: TextStyle(color: Colors.red))),
@@ -165,23 +143,40 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
       try {
         await ReviewService.deleteReview(widget.review.id);
         if (mounted) {
-          Navigator.pop(context, true); // 목록 화면으로 돌아가며 갱신 신호 보냄
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("리뷰가 삭제되었습니다.")));
+          // true를 반환해야 목록 화면(RankingScreen)에서 새로고침함
+          Navigator.pop(context, true);
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("삭제 실패")));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("삭제 실패: $e")));
       }
     }
   }
 
-  // 7. 리뷰 수정 로직 (화면 이동)
+  // ✅ 리뷰 수정: 수정 완료 후 돌아오면 갱신
   void _onEditPressed() async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("수정 기능은 준비 중입니다.")));
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WriteReviewScreen(
+          reviewToEdit: widget.review,
+        ),
+      ),
+    );
+
+    // 수정 화면에서 true를 들고 돌아왔다면 (수정 성공)
+    if (result == true && mounted) {
+      Navigator.pop(context, true); // 상세화면을 닫고 목록을 새로고침
+    }
   }
 
   void _navigateToMap() {
     if (widget.review.storeName.isNotEmpty) {
-      searchTrigger.value = widget.review.storeName;
+      searchTrigger.value = SearchTarget(
+        query: widget.review.storeName,
+        lat: widget.review.storeLat,
+        lng: widget.review.storeLng,
+      );
       Navigator.pop(context);
     }
   }
@@ -224,24 +219,15 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                   const SizedBox(height: 12),
                   _buildBadges(),
                   const SizedBox(height: 32),
-
-                  // 본문
                   Text(
                     widget.review.reviewText,
                     style: const TextStyle(fontSize: 16, height: 1.6, color: Colors.black87),
                   ),
                   const SizedBox(height: 32),
-
-                  // 사진
                   if (widget.review.photoUrls.isNotEmpty) _buildPhotos(),
-
-                  // 태그
                   if (widget.review.tags.isNotEmpty)
                     Wrap(spacing: 8.0, runSpacing: 8.0, children: widget.review.tags.map((tag) => _buildTag(tag)).toList()),
-
                   const SizedBox(height: 32),
-
-                  // ✅ 도움이 됐어요 버튼
                   Center(
                     child: OutlinedButton.icon(
                       onPressed: _toggleLike,
@@ -265,13 +251,9 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                       ),
                     ),
                   ),
-
                   const Divider(height: 64, thickness: 1, color: Color(0xFFEEEEEE)),
-
-                  // --- 댓글 영역 ---
                   Text("댓글 ${_comments.length}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-
                   _isLoadingComments
                       ? const Center(child: CircularProgressIndicator())
                       : _comments.isEmpty
@@ -298,8 +280,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
               ),
             ),
           ),
-
-          // 댓글 입력창
           _buildCommentInput(),
         ],
       ),
