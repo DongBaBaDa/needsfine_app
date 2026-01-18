@@ -17,7 +17,10 @@ class Review {
   final String? userEmail;
   final int likeCount;
   final String nickname;
-  final String? userProfileUrl; // ✅ [추가] 프로필 이미지 URL
+  final String? userProfileUrl;
+
+  // ✅ [추가] 댓글 개수 필드
+  final int commentCount;
 
   Review({
     required this.id,
@@ -37,6 +40,8 @@ class Review {
     this.likeCount = 0,
     required this.nickname,
     this.userProfileUrl,
+    // ✅ [추가] 생성자 초기값 (기본값 0)
+    this.commentCount = 0,
   });
 
   factory Review.fromJson(Map<String, dynamic> json) {
@@ -57,7 +62,6 @@ class Review {
       if (profileData['nickname'] != null) {
         displayNickname = profileData['nickname'].toString();
       }
-      // ✅ [Fix] 프로필 이미지 URL 매핑
       if (profileData['profile_image_url'] != null) {
         profileUrl = profileData['profile_image_url'].toString();
       }
@@ -82,7 +86,10 @@ class Review {
       userEmail: profileData != null ? profileData['email']?.toString() : null,
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       nickname: displayNickname,
-      userProfileUrl: profileUrl, // ✅ 매핑
+      userProfileUrl: profileUrl,
+
+      // ✅ [추가] JSON 매핑 (DB 컬럼명: comment_count)
+      commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
     );
   }
 

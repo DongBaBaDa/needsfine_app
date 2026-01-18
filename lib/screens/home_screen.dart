@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
 
+import 'package:needsfine_app/models/ranking_models.dart';
+import 'package:needsfine_app/services/review_service.dart';
 
-// ✅ searchTrigger를 MainShell/ NearbyScreen이 이미 쓰고 있으니 그대로 재사용
-// (현재 프로젝트에서 searchTrigger가 선언된 파일에 맞춰 import 경로만 조정하면 됨)
-// 보통 너 프로젝트에선 user_mypage_screen.dart에 전역으로 있었으니 show로 가져옴.
-import 'package:needsfine_app/screens/user_mypage_screen.dart' show searchTrigger;
+import 'package:needsfine_app/screens/category_placeholder_screen.dart';
+import 'package:needsfine_app/screens/weekly_ranking_screen.dart';
+
+import 'package:needsfine_app/widgets/notification_badge.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,46 +19,28 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with AutomaticKeepAliveClientMixin {
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
 
-  final _searchController = TextEditingController();
+  final _supabase = Supabase.instance.client;
 
-  // ✅ 더미 데이터(나중에 Supabase stores로 교체)
-  final List<_StoreCardVM> _top10 = List.generate(
-    10,
-        (i) => _StoreCardVM(
-      rank: i + 1,
-      name: "가게 ${i + 1}",
-      category: i % 2 == 0 ? "오마카세" : "스테이크",
-      nfScore: 9.2 - (i * 0.2),
-      area: i % 2 == 0 ? "강남" : "성수",
-    ),
-  );
+  final TextEditingController _searchController = TextEditingController();
 
-  final List<_CategoryVM> _categories = const [
-    _CategoryVM(label: "한식", icon: Icons.rice_bowl_outlined),
-    _CategoryVM(label: "일식", icon: Icons.set_meal_outlined),
-    _CategoryVM(label: "중식", icon: Icons.local_dining_outlined),
-    _CategoryVM(label: "양식", icon: Icons.restaurant_outlined),
-    _CategoryVM(label: "오마카세", icon: Icons.stars_outlined),
-    _CategoryVM(label: "카페", icon: Icons.coffee_outlined),
-    _CategoryVM(label: "바", icon: Icons.wine_bar_outlined),
-    _CategoryVM(label: "디저트", icon: Icons.icecream_outlined),
-  ];
+  bool _isLoading = true;
 
-  final List<_WeeklyRankVM> _weekly = List.generate(
-    10,
-        (i) => _WeeklyRankVM(
-      rank: i + 1,
-      name: "주간가게 ${i + 1}",
-      changeText: i % 3 == 0 ? "▲${i + 1}" : (i % 3 == 1 ? "▼${i + 1}" : "—"),
-      area: i % 2 == 0 ? "홍대" : "을지로",
-      nfScore: 8.9 - (i * 0.15),
-    ),
-  );
+  // ✅ 주간 랭킹: 리뷰 메뉴(랭킹)에서 불러오는 값과 동일한 소스(ReviewService.fetchStoreRankings)
+  // 홈에서는 5개 미리보기, 더보기는 100개.
+  List<StoreRanking> _top100 = [];
+
+  /// storeName -> imageUrl
+  final Map<String, String> _storeImageMap = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHomeData();
+  }
 
   @override
   void dispose() {
@@ -62,48 +48,117 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  void _submitSearch() {
-    final q = _searchController.text.trim();
-    if (q.isEmpty) return;
+  Future<void> _loadHomeData() async {
+    if (mounted) setState(() => _isLoading = true);
 
-    FocusScope.of(context).unfocus();
+    try {
+      final rankings = await ReviewService.fetchStoreRankings();
 
-    // ✅ MainShell이 이 트리거를 감지해서 "내 주변" 탭(인덱스 2)로 이동함
-    searchTrigger.value = q;
+      // 안전 정렬: 니즈파인 점수 기준 내림차순
+      final sorted = List<StoreRanking>.from(rankings);
+      sorted.sort((a, b) => b.avgScore.compareTo(a.avgScore));
 
-    // 검색창 비우고 싶으면 주석 해제
-    // _searchController.clear();
+      final top100 = sorted.take(100).toList();
+
+      // 랭크 재부여 (1~N)
+      for (int i = 0; i < top100.length; i++) {
+        top100[i] = StoreRanking(
+          storeName: top100[i].storeName,
+          avgScore: top100[i].avgScore,
+          avgUserRating: top100[i].avgUserRating,
+          reviewCount: top100[i].reviewCount,
+          avgTrust: top100[i].avgTrust,
+          rank: i + 1,
+          topTags: top100[i].topTags,
+        );
+      }
+
+      // 이미지 맵 로드 (top100 기준)
+      final names = top100.map((e) => e.storeName).where((e) => e.isNotEmpty).toSet().toList();
+      final imageMap = await _fetchStoreImages(names);
+
+      if (mounted) {
+        setState(() {
+          _top100 = top100;
+          _storeImageMap
+            ..clear()
+            ..addAll(imageMap);
+        });
+      }
+    } catch (e) {
+      debugPrint("홈 데이터 로드 실패: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
+  Future<Map<String, String>> _fetchStoreImages(List<String> storeNames) async {
+    if (storeNames.isEmpty) return {};
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        titleSpacing: 16,
-        title: const Text(
-          "NeedsFine",
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.2,
-          ),
+    try {
+      // ✅ stores 테이블: name, image_url 가정
+      final res = await _supabase.from('stores').select('name, image_url').inFilter('name', storeNames);
+
+      final map = <String, String>{};
+      if (res is List) {
+        for (final row in res) {
+          final name = (row['name'] ?? '').toString();
+          final url = (row['image_url'] ?? '').toString();
+          if (name.isNotEmpty && url.isNotEmpty) {
+            map[name] = url;
+          }
+        }
+      }
+      return map;
+    } catch (e) {
+      debugPrint("매장 이미지 로드 실패: $e");
+      return {};
+    }
+  }
+
+  void _submitSearch(String q) {
+    final query = q.trim();
+    if (query.isEmpty) return;
+
+    // ✅ 전역 트리거로 Nearby 탭 이동 + Nearby에서 검색 수행
+    searchTrigger.value = query;
+
+    FocusScope.of(context).unfocus();
+  }
+
+  void _goToWeeklyMore() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WeeklyRankingScreen(
+          rankings: _top100,
+          storeImageMap: _storeImageMap,
         ),
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildSearchBar()),
-          SliverToBoxAdapter(child: _buildSectionTitle("니즈파인 순위 TOP 10")),
-          SliverToBoxAdapter(child: _buildTop10Carousel()),
-          SliverToBoxAdapter(child: _buildSectionTitle("카테고리별")),
-          SliverToBoxAdapter(child: _buildCategoryGrid()),
-          SliverToBoxAdapter(child: _buildSectionTitle("주간 니즈파인 랭킹")),
-          SliverToBoxAdapter(child: _buildWeeklyList()),
-          const SliverToBoxAdapter(child: SizedBox(height: 28)),
+    );
+  }
+
+  void _goToCategory(String title) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CategoryPlaceholderScreen(title: title),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title, {Widget? trailing}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.black),
+            ),
+          ),
+          if (trailing != null) trailing,
         ],
       ),
     );
@@ -111,398 +166,277 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: Colors.black.withOpacity(0.10),
-            width: 1,
-          ),
+          border: Border.all(color: Colors.grey.withOpacity(0.25)),
         ),
         child: TextField(
           controller: _searchController,
+          onSubmitted: _submitSearch,
           textInputAction: TextInputAction.search,
-          onSubmitted: (_) => _submitSearch(),
-          style: const TextStyle(color: Colors.black, fontSize: 14),
           decoration: InputDecoration(
-            hintText: "가게 이름으로 검색 (내 주변에서 보여줘)",
-            hintStyle: TextStyle(
-              color: Colors.black.withOpacity(0.35),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
+            hintText: '가게명/주소로 검색',
+            hintStyle: TextStyle(color: Colors.grey[500], fontWeight: FontWeight.w500),
             prefixIcon: const Icon(Icons.search, color: kNeedsFinePurple),
             suffixIcon: IconButton(
-              onPressed: _submitSearch,
               icon: const Icon(Icons.arrow_forward_rounded, color: Colors.black),
+              onPressed: () => _submitSearch(_searchController.text),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-      child: Row(
-        children: [
-          Container(
-            width: 6,
-            height: 18,
-            decoration: BoxDecoration(
-              color: kNeedsFinePurple,
-              borderRadius: BorderRadius.circular(99),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.black,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTop10Carousel() {
-    return SizedBox(
-      height: 150,
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-        scrollDirection: Axis.horizontal,
-        itemCount: _top10.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, i) {
-          final s = _top10[i];
-          return _TopCard(
-            rank: s.rank,
-            name: s.name,
-            category: s.category,
-            area: s.area,
-            nfScore: s.nfScore,
-            onTap: () {
-              // ✅ 탭 시에도 "내 주변"으로 이동 + 해당 가게명으로 검색
-              _searchController.text = s.name;
-              _submitSearch();
-            },
-          );
-        },
       ),
     );
   }
 
   Widget _buildCategoryGrid() {
+    final categories = <_CategoryItem>[
+      _CategoryItem('한식', Icons.restaurant_rounded),
+      _CategoryItem('일식', Icons.set_meal_rounded),
+      _CategoryItem('중식', Icons.ramen_dining_rounded),
+      _CategoryItem('양식', Icons.local_pizza_rounded),
+      _CategoryItem('카페', Icons.local_cafe_rounded),
+      _CategoryItem('술집', Icons.wine_bar_rounded),
+      _CategoryItem('디저트', Icons.cake_rounded),
+      _CategoryItem('패스트푸드', Icons.fastfood_rounded),
+      _CategoryItem('분식', Icons.soup_kitchen_rounded),
+      _CategoryItem('기타', Icons.more_horiz_rounded),
+    ];
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: _categories.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.05,
-        ),
-        itemBuilder: (context, i) {
-          final c = _categories[i];
-          return _CategoryTile(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: categories.map((c) {
+          return _CategoryChip(
             label: c.label,
             icon: c.icon,
-            onTap: () {
-              // ✅ 카테고리 탭하면 내 주변으로 이동 + 카테고리로 검색(일단 문자열 검색)
-              _searchController.text = c.label;
-              _submitSearch();
-            },
+            onTap: () => _goToCategory(c.label),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildWeeklyHorizontal() {
+    if (_top100.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+        child: Text("아직 주간 랭킹 데이터가 없습니다.", style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    final preview = _top100.take(5).toList();
+
+    return SizedBox(
+      height: 255,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+        scrollDirection: Axis.horizontal,
+        itemCount: preview.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final r = preview[index];
+          final imageUrl = _storeImageMap[r.storeName] ?? '';
+
+          return SizedBox(
+            width: 280,
+            child: _WeeklyRankCard(
+              ranking: r,
+              imageUrl: imageUrl,
+              onTap: () {
+                if (r.storeName.isNotEmpty) {
+                  searchTrigger.value = r.storeName;
+                }
+              },
+            ),
           );
         },
       ),
     );
   }
 
-  Widget _buildWeeklyList() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: _weekly.map((w) {
-          return _WeeklyRow(
-            rank: w.rank,
-            name: w.name,
-            area: w.area,
-            changeText: w.changeText,
-            nfScore: w.nfScore,
-            onTap: () {
-              _searchController.text = w.name;
-              _submitSearch();
-            },
-          );
-        }).toList(),
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFDF9),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 0,
+        titleSpacing: 18,
+        title: const Text(
+          '니즈파인 NeedsFine',
+          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black),
+        ),
+        actions: [
+          // ✅ 새로고침 버튼 -> 알림 버튼으로 교체
+          NotificationBadge(
+            onTap: () => Navigator.pushNamed(context, '/notifications'),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: RefreshIndicator(
+        color: kNeedsFinePurple,
+        onRefresh: _loadHomeData,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: kNeedsFinePurple))
+            : ListView(
+          children: [
+            _buildSearchBar(),
+
+            _sectionTitle('카테고리별'),
+            _buildCategoryGrid(),
+
+            const SizedBox(height: 6),
+            Divider(height: 1, color: Colors.grey.withOpacity(0.15)),
+
+            _sectionTitle(
+              '주간 니즈파인 랭킹',
+              trailing: TextButton(
+                onPressed: _goToWeeklyMore,
+                child: const Text(
+                  '더 보기+',
+                  style: TextStyle(color: kNeedsFinePurple, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+            _buildWeeklyHorizontal(),
+
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _TopCard extends StatelessWidget {
-  final int rank;
-  final String name;
-  final String category;
-  final String area;
-  final double nfScore;
+class _CategoryItem {
+  final String label;
+  final IconData icon;
+  _CategoryItem(this.label, this.icon);
+}
+
+class _CategoryChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
   final VoidCallback onTap;
 
-  const _TopCard({
-    required this.rank,
-    required this.name,
-    required this.category,
-    required this.area,
-    required this.nfScore,
+  const _CategoryChip({
+    required this.label,
+    required this.icon,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.grey.withOpacity(0.25)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: kNeedsFinePurple),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.black, fontSize: 15),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WeeklyRankCard extends StatelessWidget {
+  final StoreRanking ranking;
+  final String imageUrl;
+  final VoidCallback onTap;
+
+  const _WeeklyRankCard({
+    required this.ranking,
+    required this.imageUrl,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // ✅ topTags nullable 대응
+    final tags = (ranking.topTags ?? const <String>[]).take(2).toList();
+    final tagText = tags.isEmpty ? '' : tags.join(' · ');
+
+    return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 240,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.black.withOpacity(0.10)),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.grey.withOpacity(0.18)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: kNeedsFinePurple,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Text(
-                    "TOP $rank",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  "NF ${nfScore.toStringAsFixed(1)}",
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+            // 1) "1위 ㅇㅇㅇ"
             Text(
-              name,
+              '${ranking.rank}위 ${ranking.storeName}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 15,
-                fontWeight: FontWeight.w900,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black),
             ),
-            const SizedBox(height: 6),
-            Text(
-              "$category · $area",
-              style: TextStyle(
-                color: Colors.black.withOpacity(0.55),
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: kNeedsFinePurple.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kNeedsFinePurple.withOpacity(0.35)),
-              ),
-              child: const Text(
-                "내 주변에서 보기",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: kNeedsFinePurple,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12.5,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+            const SizedBox(height: 12),
 
-class _CategoryTile extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _CategoryTile({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.black.withOpacity(0.10)),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: kNeedsFinePurple, size: 22),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WeeklyRow extends StatelessWidget {
-  final int rank;
-  final String name;
-  final String area;
-  final String changeText;
-  final double nfScore;
-  final VoidCallback onTap;
-
-  const _WeeklyRow({
-    required this.rank,
-    required this.name,
-    required this.area,
-    required this.changeText,
-    required this.nfScore,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final changeColor = changeText.startsWith("▲")
-        ? kNeedsFinePurple
-        : (changeText.startsWith("▼") ? Colors.black : Colors.black.withOpacity(0.35));
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.black.withOpacity(0.10)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: kNeedsFinePurple,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                "$rank",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    area,
-                    style: TextStyle(
-                      color: Colors.black.withOpacity(0.50),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            // 2) Pill 2개 (✅ Row 대신 Wrap → 오버플로우 방지)
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
               children: [
-                Text(
-                  "NF ${nfScore.toStringAsFixed(1)}",
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12.5,
-                  ),
+                _Pill(
+                  label: '니즈파인 점수 NF ${ranking.avgScore.toStringAsFixed(1)}',
+                  filled: true,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  changeText,
-                  style: TextStyle(
-                    color: changeColor,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                  ),
+                _Pill(
+                  label: '신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%',
+                  filled: false,
                 ),
               ],
             ),
+
+            if (tagText.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                tagText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+            ],
+
+            const SizedBox(height: 12),
+
+            // 3) 사진 영역 (큰 박스)
+            Expanded(
+              child: _StoreImageLarge(url: imageUrl),
+            ),
           ],
         ),
       ),
@@ -510,44 +444,61 @@ class _WeeklyRow extends StatelessWidget {
   }
 }
 
-class _StoreCardVM {
-  final int rank;
-  final String name;
-  final String category;
-  final double nfScore;
-  final String area;
-
-  _StoreCardVM({
-    required this.rank,
-    required this.name,
-    required this.category,
-    required this.nfScore,
-    required this.area,
-  });
-}
-
-class _WeeklyRankVM {
-  final int rank;
-  final String name;
-  final String area;
-  final String changeText;
-  final double nfScore;
-
-  _WeeklyRankVM({
-    required this.rank,
-    required this.name,
-    required this.area,
-    required this.changeText,
-    required this.nfScore,
-  });
-}
-
-class _CategoryVM {
+class _Pill extends StatelessWidget {
   final String label;
-  final IconData icon;
+  final bool filled;
 
-  const _CategoryVM({
-    required this.label,
-    required this.icon,
-  });
+  const _Pill({required this.label, required this.filled});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: filled ? kNeedsFinePurple : Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: filled ? kNeedsFinePurple : Colors.grey.withOpacity(0.25)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: filled ? Colors.white : Colors.black,
+          fontWeight: FontWeight.w900,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+}
+
+class _StoreImageLarge extends StatelessWidget {
+  final String url;
+
+  const _StoreImageLarge({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasUrl = url.trim().isNotEmpty;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        color: Colors.grey.withOpacity(0.08),
+        child: hasUrl
+            ? Image.network(
+          url,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallback(),
+        )
+            : _fallback(),
+      ),
+    );
+  }
+
+  Widget _fallback() {
+    return const Center(
+      child: Icon(Icons.store_rounded, color: Colors.black, size: 42),
+    );
+  }
 }
