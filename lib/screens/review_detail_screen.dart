@@ -48,7 +48,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // 2. 댓글 목록 불러오기 (DB 연동)
+  // 2. 댓글 목록 불러오기 (DB 연동 - 해당 리뷰 상세 화면 전용)
   Future<void> _fetchComments() async {
     try {
       final response = await _supabase
@@ -124,8 +124,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
   // 5. 리뷰 수정 로직 (화면 이동)
   void _onEditPressed() async {
-    // WriteReviewScreen에 기존 데이터를 전달하도록 수정 필요 (현재는 단순히 이동만)
-    // 실제로는 WriteReviewScreen 생성자에 review 객체를 받아서 초기값을 세팅해줘야 함
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("수정 기능은 WriteReviewScreen 업데이트가 필요합니다.")));
   }
 
@@ -168,7 +166,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- 기존 UI 유지 (헤더, 유저 정보, 배지 등) ---
                   _buildHeader(),
                   const SizedBox(height: 24),
                   _buildUserInfo(),
@@ -229,8 +226,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
       ),
     );
   }
-
-  // --- 위젯 분리 메서드들 ---
 
   Widget _buildHeader() {
     return Row(
@@ -413,7 +408,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
             ),
             const SizedBox(width: 8),
             IconButton(
-              onPressed: _submitComment, // ✅ 실제 전송 로직 연결
+              onPressed: _submitComment,
               icon: Icon(Icons.send, color: _primaryColor),
             ),
           ],

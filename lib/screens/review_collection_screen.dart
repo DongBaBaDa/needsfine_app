@@ -19,6 +19,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
 
   List<Review> _myReviews = [];
   List<Review> _likedReviews = [];
+  List<Review> _commentedReviews = []; // 내가 댓글을 단 리뷰 리스트
 
   @override
   void initState() {
@@ -33,7 +34,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
     if (userId == null) return;
 
     try {
-      // 1. 내가 쓴 리뷰
+      // 1. 내가 쓴 리뷰 로드
       final myReviewsData = await _supabase
           .from('reviews')
           .select('*, profiles(nickname, user_number, email, profile_image_url)')
@@ -41,32 +42,38 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
           .eq('is_hidden', false)
           .order('created_at', ascending: false);
 
-      // 2. 좋아요한 리뷰 (JSON 구조 파싱 주의)
+      // 2. 좋아요한 리뷰 로드
       final likedReviewsData = await _supabase
           .from('review_votes')
           .select('reviews(*, profiles(nickname, user_number, email, profile_image_url))')
           .eq('user_id', userId)
           .eq('vote_type', 'like');
 
+      // 3. 내가 댓글을 단 리뷰 로드
+      final commentedReviewsData = await _supabase
+          .from('comments')
+          .select('reviews(*, profiles(nickname, user_number, email, profile_image_url))')
+          .eq('user_id', userId);
+
       if (mounted) {
         setState(() {
           _myReviews = (myReviewsData as List).map((json) => Review.fromJson(json)).toList();
 
-          // ✅ [Fix] 중첩된 JSON 구조를 안전하게 파싱
           _likedReviews = (likedReviewsData as List).map((item) {
             final reviewJson = item['reviews'];
-            // 삭제된 리뷰거나 데이터가 없으면 null 반환
             if (reviewJson == null) return null;
-            try {
-              return Review.fromJson(reviewJson);
-            } catch (e) {
-              return null; // 파싱 에러 시 무시
-            }
-          }).whereType<Review>().toList(); // null 제거
+            try { return Review.fromJson(reviewJson); } catch (e) { return null; }
+          }).whereType<Review>().toList();
+
+          _commentedReviews = (commentedReviewsData as List).map((item) {
+            final reviewJson = item['reviews'];
+            if (reviewJson == null) return null;
+            try { return Review.fromJson(reviewJson); } catch (e) { return null; }
+          }).whereType<Review>().toList();
         });
       }
     } catch (e) {
-      debugPrint("리뷰 모음 로드 실패: $e");
+      debugPrint("데이터 로드 실패: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -97,7 +104,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
         children: [
           _buildReviewList(_myReviews, "작성한 리뷰가 없습니다."),
           _buildReviewList(_likedReviews, "도움이 된다고 표시한 리뷰가 없습니다."),
-          const Center(child: Text("댓글 기능 준비 중입니다.")),
+          _buildReviewList(_commentedReviews, "댓글을 작성한 리뷰가 없습니다."),
         ],
       ),
     );

@@ -18,8 +18,6 @@ class Review {
   final int likeCount;
   final String nickname;
   final String? userProfileUrl;
-
-  // ✅ [추가] 댓글 개수 필드
   final int commentCount;
 
   Review({
@@ -40,32 +38,23 @@ class Review {
     this.likeCount = 0,
     required this.nickname,
     this.userProfileUrl,
-    // ✅ [추가] 생성자 초기값 (기본값 0)
     this.commentCount = 0,
   });
 
   factory Review.fromJson(Map<String, dynamic> json) {
+    // profiles 데이터 추출
     final profileData = json['profiles'];
 
-    String? uid;
-    if (profileData != null && profileData['id'] != null) {
-      uid = profileData['id'].toString();
-    } else {
-      uid = json['user_id']?.toString();
-    }
-
-    String displayNickname = '익명 사용자';
+    String? uid = json['user_id']?.toString();
+    String displayNickname = '정보 없음';
     String? profileUrl;
 
-    // 1. profiles 테이블 데이터 매핑
     if (profileData != null) {
-      if (profileData['nickname'] != null) {
-        displayNickname = profileData['nickname'].toString();
-      }
-      if (profileData['profile_image_url'] != null) {
-        profileUrl = profileData['profile_image_url'].toString();
-      }
+      uid = profileData['id']?.toString() ?? uid;
+      displayNickname = profileData['nickname']?.toString() ?? '익명 사용자';
+      profileUrl = profileData['profile_image_url']?.toString();
     } else {
+      // ✅ 프로필 조인에 실패했을 때를 대비한 자동 생성 닉네임
       displayNickname = _generateDeterministicNickname(uid ?? json['id'].toString());
     }
 
@@ -87,8 +76,6 @@ class Review {
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       nickname: displayNickname,
       userProfileUrl: profileUrl,
-
-      // ✅ [추가] JSON 매핑 (DB 컬럼명: comment_count)
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
     );
   }
@@ -96,15 +83,14 @@ class Review {
   static String _generateDeterministicNickname(String seed) {
     final adjectives = ['행복한', '조용한', '배고픈', '미식가', '성실한', '낭만적인', '바쁜', '매운맛'];
     final animals = ['호랑이', '고양이', '쿼카', '미식가', '탐험가', '부엉이', '거북이', '다람쥐'];
-
     int hash = seed.hashCode;
     String adj = adjectives[hash.abs() % adjectives.length];
     String animal = animals[(hash.abs() ~/ 10) % animals.length];
-
     return "$adj $animal";
   }
 }
 
+// StoreRanking, Stats 클래스 생략 없이 유지
 class StoreRanking {
   final String storeName;
   final double avgScore;
