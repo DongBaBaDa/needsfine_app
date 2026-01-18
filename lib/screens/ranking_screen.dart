@@ -8,11 +8,8 @@ import 'package:needsfine_app/screens/review_detail_screen.dart';
 import 'package:needsfine_app/widgets/review_card.dart';
 import 'package:needsfine_app/widgets/store_ranking_card.dart';
 
-// ✅ [Fix] 전역 트리거는 core/search_trigger.dart 하나로 통일
+// ✅ 전역 트리거 임포트
 import 'package:needsfine_app/core/search_trigger.dart';
-
-// ✅ [Fix] 여기 있던 중복 선언 제거
-// final ValueNotifier<String?> searchTrigger = ValueNotifier<String?>(null);
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
@@ -148,9 +145,7 @@ class _RankingScreenState extends State<RankingScreen> {
       rankings.sort((a, b) => b.avgScore.compareTo(a.avgScore));
     }
 
-    // 랭킹 재계산 (순서만 부여)
     for (int i = 0; i < rankings.length; i++) {
-      // StoreRanking은 final 필드라 새로 생성 필요
       rankings[i] = StoreRanking(
           storeName: rankings[i].storeName,
           avgScore: rankings[i].avgScore,
@@ -166,7 +161,7 @@ class _RankingScreenState extends State<RankingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFDF9), // Warm White Background
+      backgroundColor: const Color(0xFFFFFDF9),
       appBar: AppBar(
         title: const Text('리뷰 랭킹', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF9C7CFF),
@@ -297,17 +292,121 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 
+  // ✅ [수정] 구분선 로직이 반영된 매장 리스트 빌더
   Widget _buildStoreRankingList() {
     final rankings = _getSortedRankings();
+    final double overallAverage = _stats?.average ?? 0.0;
+
     return rankings.isEmpty
         ? const Center(child: Text('매장 데이터가 없습니다.'))
-        : ListView.separated(
+        : ListView.builder(
       itemCount: rankings.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) => StoreRankingCard(
-        ranking: rankings[index],
-        sortOption: _rankingSortOption,
+      itemBuilder: (context, index) {
+        final ranking = rankings[index];
+
+        // 현재 매장 점수
+        final double currentScore = _rankingSortOption == '니즈파인 순'
+            ? ranking.avgScore
+            : ranking.avgUserRating;
+
+        // 현재가 평균 이상인지
+        final bool isAboveAverage = currentScore >= overallAverage;
+
+        // 다음 매장 점수 (없으면 null)
+        final nextRanking = (index + 1 < rankings.length)
+            ? rankings[index + 1]
+            : null;
+
+        final double? nextScore = nextRanking != null
+            ? (_rankingSortOption == '니즈파인 순' ? nextRanking.avgScore : nextRanking.avgUserRating)
+            : null;
+
+        // 다음 매장이 평균 미만인지 확인
+        final bool isNextBelowAverage = nextScore != null && nextScore < overallAverage;
+
+        // ✅ 구분선 표시 조건: (현재 >= 평균) && (다음 < 평균)
+        final bool showDivider = isAboveAverage && isNextBelowAverage;
+
+        return Column(
+          children: [
+            StoreRankingCard(
+              ranking: ranking,
+              sortOption: _rankingSortOption,
+            ),
+
+            if (showDivider) _buildAverageDivider(overallAverage),
+
+            // 카드 사이의 기본 구분선 (마지막 아이템 제외)
+            if (!showDivider && index < rankings.length - 1)
+              const Divider(height: 1),
+          ],
+        );
+      },
+    );
+  }
+
+  // ✅ 평균 점수 구분선 위젯
+  Widget _buildAverageDivider(double average) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // 1. 니즈파인색 점선
+          CustomPaint(
+            size: const Size(double.infinity, 1),
+            painter: _DashedLinePainter(),
+          ),
+
+          // 2. 중앙 배지
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFF9C7CFF),
+                width: 1.5,
+              ),
+            ),
+            child: Text(
+              '니즈파인 평균 점수 ${average.toStringAsFixed(1)}점',
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+// ✅ 점선 그리기용 Painter
+class _DashedLinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF9C7CFF)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    const dashWidth = 6.0;
+    const dashSpace = 4.0;
+    double startX = 0;
+
+    while (startX < size.width) {
+      canvas.drawLine(
+        Offset(startX, 0),
+        Offset(startX + dashWidth, 0),
+        paint,
+      );
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }

@@ -20,6 +20,10 @@ class Review {
   final String? userProfileUrl;
   final int commentCount;
 
+  // ✅ [추가] 댓글 단 리뷰 탭 전용 필드
+  final String? myCommentText;
+  final DateTime? myCommentCreatedAt;
+
   Review({
     required this.id,
     required this.storeName,
@@ -39,22 +43,32 @@ class Review {
     required this.nickname,
     this.userProfileUrl,
     this.commentCount = 0,
+    // ✅ 추가 생성자
+    this.myCommentText,
+    this.myCommentCreatedAt,
   });
 
   factory Review.fromJson(Map<String, dynamic> json) {
-    // profiles 데이터 추출
     final profileData = json['profiles'];
 
-    String? uid = json['user_id']?.toString();
-    String displayNickname = '정보 없음';
+    String? uid;
+    if (profileData != null && profileData['id'] != null) {
+      uid = profileData['id'].toString();
+    } else {
+      uid = json['user_id']?.toString();
+    }
+
+    String displayNickname = '익명 사용자';
     String? profileUrl;
 
     if (profileData != null) {
-      uid = profileData['id']?.toString() ?? uid;
-      displayNickname = profileData['nickname']?.toString() ?? '익명 사용자';
-      profileUrl = profileData['profile_image_url']?.toString();
+      if (profileData['nickname'] != null) {
+        displayNickname = profileData['nickname'].toString();
+      }
+      if (profileData['profile_image_url'] != null) {
+        profileUrl = profileData['profile_image_url'].toString();
+      }
     } else {
-      // ✅ 프로필 조인에 실패했을 때를 대비한 자동 생성 닉네임
       displayNickname = _generateDeterministicNickname(uid ?? json['id'].toString());
     }
 
@@ -77,6 +91,12 @@ class Review {
       nickname: displayNickname,
       userProfileUrl: profileUrl,
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
+
+      // ✅ [추가] 댓글 데이터 조인 시 파싱 로직
+      myCommentText: json['comment_content']?.toString(),
+      myCommentCreatedAt: json['comment_created_at'] != null
+          ? DateTime.parse(json['comment_created_at'].toString())
+          : null,
     );
   }
 
@@ -90,7 +110,6 @@ class Review {
   }
 }
 
-// StoreRanking, Stats 클래스 생략 없이 유지
 class StoreRanking {
   final String storeName;
   final double avgScore;

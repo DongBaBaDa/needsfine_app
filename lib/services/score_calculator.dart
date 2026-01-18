@@ -1,235 +1,289 @@
-// lib/services/score_calculator.dart
 import 'dart:math';
 
 class ScoreCalculator {
-  
-  // 🏷️ 태그 추출 (logic.ts의 extractReviewTags 이식)
+  // ---------------------------------------------------------------------------
+  // 1. 태그 추출 로직 (v11.1)
+  // ---------------------------------------------------------------------------
   static List<String> extractReviewTags(String text) {
-    final normalizedText = text.trim();
-    final List<({String word, int priority})> tags = [];
+    if (text.isEmpty) return [];
 
-    // Fatal Patterns (치명적 문제)
-    final fatalPatterns = {
-      '위생 상태 최악': RegExp(r'(바퀴|벌레|파리|모기|머리카락|이물질|털).*(나왔|있|보였|다녀)'),
-      '서비스 최악': RegExp(r'(잡아|치워|그냥).*(달래|래|라니|라고|무시)'),
-      '응대 불량': RegExp(r'(욕|반말|싸우|시비|소리).*(하|했|듣|지르)'),
-      '식중독 주의': RegExp(r'(상한|쉰|썩은|비린|비릿).*(맛|냄새)'),
-    };
+    // Dart에서는 normalize가 기본적으로 처리되거나 문자열 조작 시 자동 처리됨
+    final normalizedText = text;
+    final List<Map<String, dynamic>> tags = [];
 
-    // Info Patterns (정보성 태그)
-    final infoPatterns = {
-      '공기밥 적음': RegExp(r'(공기밥|밥|양).*(적|작|모자|부족|아쉽)'),
-      '양이 적음': RegExp(r'(양).*(적|작|창렬|부족)'),
-      '웨이팅 주의': RegExp(r'(웨이팅|대기|줄).*(길|많|심해|헬|필수)'),
-      '가성비 아쉽': RegExp(r'(가격|비싸|가성비).*(별로|나쁘|안좋|사악)'),
-      '직원 응대 아쉽': RegExp(r'(직원|알바|서빙|이모|아줌마|종업원).*(불친절|느리|실수|반말|무시|치우|뺏)'),
-      '주차 불편': RegExp(r'(주차|차).*(힘들|없|불편|헬)'),
-      '화장실 불편': RegExp(r'(화장실).*(더럽|좁|멀|별로)'),
-      '시끄러움': RegExp(r'(시끄|소란|정신없|시장통)'),
-      '재방문 의사 없음': RegExp(r'(재방문|다시|또|굳이).*(안|못|없|않|모르)'),
-      '메뉴 아쉬움': RegExp(r'(메뉴|선택|시키|주문).*(실패|잘못|아쉽|후회|미스)'),
-    };
+    // 정규식 패턴 정의 (Dart raw string r'...' 사용)
+    final fatalPatterns = [
+      {'word': '위생 상태 최악', 'pattern': RegExp(r'(바퀴|벌레|파리|모기|머리카락|이물질|털)[^]{0,50}(나왔|있|보였|다녀)')},
+      {'word': '서비스 최악', 'pattern': RegExp(r'(잡아|치워|그냥|내돈)[^]{0,50}(달래|래|라니|라고|무시|아깝)')},
+      {'word': '응대 불량', 'pattern': RegExp(r'(욕|반말|싸우|시비|소리|기분)[^]{0,50}(하|했|듣|지르|나쁘|잡쳐)')},
+      {'word': '식중독/상태 불량', 'pattern': RegExp(r'(상한|쉰|썩은|비린|비릿|잡내|누린|물컹|딱딱|안익|차가)[^]{0,50}(맛|냄새|식감|상태)')},
+    ];
 
-    // Feature Patterns (특징 태그)
-    final featurePatterns = {
-      '뷰 좋음': RegExp(r'(뷰|전망|경치)\s*(가|이|는|도)?\s*(좋|예쁘|끝내|최고|맛집)'),
-      '혼밥 가능': RegExp(r'(혼밥|혼자).*(가능|좋|편해)'),
-      '양이 많음': RegExp(r'(양).*(많|푸짐|넉넉|배터)'),
-      '가성비 좋음': RegExp(r'(가성비|가격).*(좋|착해|저렴|합리)'),
-      '친절함': RegExp(r'(친절|상냥|매너|서비스)'),
-      '재료 신선': RegExp(r'(신선|재료|채소|해산물).*(좋|싱싱)'),
-      '국물 진국': RegExp(r'(국물|육수).*(진국|깊|진하|끝내)'),
-      '데이트 추천': RegExp(r'(데이트|소개팅|분위기|기념일|커플)'),
-      '고기 맛집': RegExp(r'(고기|갈비|삼겹|육즙).*(좋|맛있|부드|살살)'),
-      '키오스크 없음': RegExp(r'(키오스크|주문).*(없|안|직원)'),
-    };
+    final negativePatterns = [
+      {'word': '가성비 아쉽', 'pattern': RegExp(r'(가격|비싸|가성비)[^]{0,30}(별로|나쁘|안좋|사악|창렬)')},
+      {'word': '맛이 평범함', 'pattern': RegExp(r'(찾아갈.*아니|그닥|그저|무난|쏘쏘|평범|특별함.*없|기대.*이하)')},
+      {'word': '양이 적음', 'pattern': RegExp(r'(양)[^]{0,30}(적|작|창렬|부족)')},
+      {'word': '재방문 의사 없음', 'pattern': RegExp(r'(재방문|다시|또|굳이)[^]{0,30}(안|못|없|않|모르)')},
+      {'word': '메뉴 아쉬움', 'pattern': RegExp(r'(메뉴|선택|시키|주문)[^]{0,30}(실패|잘못|아쉽|후회|미스)')},
+    ];
 
-    // Basic Patterns (기본 태그)
-    final basicPatterns = {
-      '맛있음': RegExp(r'(맛있|존맛|꿀맛|별미|굿)'),
-      '분위기 좋음': RegExp(r'(분위기).*(좋|깡패|예쁘|감성|레트로)'),
-      '깨끗함': RegExp(r'(깨끗|청결|깔끔)'),
-      '맛 평범/쏘쏘': RegExp(r'(맛|음식|간|반응).*(평범|쏘쏘|무난|그저|보통|애매|특별함.*없)'),
-    };
+    final infoPatterns = [
+      {'word': '공기밥 적음', 'pattern': RegExp(r'(공기밥|밥|양)[^]{0,30}(적|작|모자|부족|아쉽)')},
+      {'word': '웨이팅 있음', 'pattern': RegExp(r'(웨이팅|대기|줄)[^]{0,50}(길|많|심해|헬|필수)')},
+      {'word': '직원 응대 아쉽', 'pattern': RegExp(r'(직원|알바|서빙|이모|아줌마|종업원)[^]{0,50}(불친절|느리|실수|반말|무시|치우|뺏)')},
+      {'word': '주차 불편', 'pattern': RegExp(r'(주차|차)[^]{0,30}(힘들|없|불편|헬)')},
+      {'word': '화장실 불편', 'pattern': RegExp(r'(화장실)[^]{0,30}(더럽|좁|멀|별로)')},
+      {'word': '시끄러움', 'pattern': RegExp(r'(시끄|소란|정신없|시장통)')},
+      {'word': '매장 환경', 'pattern': RegExp(r'(좁다|좁은|넓다|넓은|쾌적|답답|시원|덥다|더워|추워|춥다|환기|연기|냄새|에어컨|히터)')},
+      {'word': '분위기/소음', 'pattern': RegExp(r'(조용|분위기|음악|노래|BGM|인테리어|조명|힙한|노포)')},
+      {'word': '편의시설', 'pattern': RegExp(r'(남녀공용|테이블간격|의자|바닥|미끄|기름기|끈적|태블릿|키오스크|아기의자)')},
+      {'word': '서비스 디테일', 'pattern': RegExp(r'(구워|잘라|리필|벨|호출|가져다|셀프|무한)')},
+    ];
 
-    // 패턴 매칭
-    fatalPatterns.forEach((word, pattern) {
-      if (pattern.hasMatch(normalizedText)) {
-        tags.add((word: word, priority: 0));
+    final featurePatterns = [
+      {'word': '뷰 좋음', 'pattern': RegExp(r'(뷰|전망|경치)\s*(가|이|는|도)?\s*(좋|예쁘|끝내|최고|맛집)')},
+      {'word': '혼밥 가능', 'pattern': RegExp(r'(혼밥|혼자)[^]{0,30}(가능|좋|편해)')},
+      {'word': '양이 많음', 'pattern': RegExp(r'(양)[^]{0,30}(많|푸짐|넉넉|배터)')},
+      {'word': '가성비 좋음', 'pattern': RegExp(r'(가성비|가격)[^]{0,30}(좋|착해|저렴|합리)')},
+      {'word': '친절함', 'pattern': RegExp(r'(친절|상냥|매너|서비스)')},
+      {'word': '재료 신선', 'pattern': RegExp(r'(신선|재료|채소|해산물)[^]{0,30}(좋|싱싱)')},
+      {'word': '국물 진국', 'pattern': RegExp(r'(국물|육수)[^]{0,30}(진국|깊|진하|끝내)')},
+      {'word': '데이트 추천', 'pattern': RegExp(r'(데이트|소개팅|분위기|기념일|커플)')},
+      {'word': '고기 맛집', 'pattern': RegExp(r'(고기|갈비|삼겹|육즙)[^]{0,30}(좋|맛있|부드|살살)')},
+      {'word': '키오스크 없음', 'pattern': RegExp(r'(키오스크|주문)[^]{0,30}(없|안|직원)')},
+      {'word': '고기 퀄리티', 'pattern': RegExp(r'(두툼|두껍|얇은|대패|마블링|비계|껍질|육즙)')},
+      {'word': '식감 좋음', 'pattern': RegExp(r'(부들|야들|꼬들|쫀득|탱탱|아삭|사르르|녹아|숙성|활어|찰진|꾸덕|크리미|알덴테)')},
+      {'word': '맛 디테일', 'pattern': RegExp(r'(불맛|불향|숯불향|훈연|감칠맛|간이|슴슴|짭짤|달달|매콤|얼큰|칼칼|시원|개운|웍질)')},
+      {'word': '맛 비교', 'pattern': RegExp(r'(신라면|불닭|엽떡|마라탕|진라면|열라면|~보다|~만큼|~정도)')},
+    ];
+
+    final basicPatterns = [
+      {'word': '맛있음', 'pattern': RegExp(r'(맛있|존맛|꿀맛|별미|굿)')},
+      {'word': '분위기 좋음', 'pattern': RegExp(r'(분위기)[^]{0,30}(좋|깡패|예쁘|감성|레트로)')},
+      {'word': '깨끗함', 'pattern': RegExp(r'(깨끗|청결|깔끔)')},
+      {'word': '맛 준수함', 'pattern': RegExp(r'(맛|음식|간|반응)[^]{0,30}(준수|나쁘지|괜찮)')},
+    ];
+
+    // 태그 수집
+    void addTags(List<Map<String, dynamic>> patterns, int priority) {
+      for (var p in patterns) {
+        if ((p['pattern'] as RegExp).hasMatch(normalizedText)) {
+          tags.add({'word': p['word'], 'priority': priority});
+        }
       }
-    });
+    }
 
-    infoPatterns.forEach((word, pattern) {
-      if (pattern.hasMatch(normalizedText)) {
-        tags.add((word: word, priority: 1));
-      }
-    });
-
-    featurePatterns.forEach((word, pattern) {
-      if (pattern.hasMatch(normalizedText)) {
-        tags.add((word: word, priority: 2));
-      }
-    });
-
-    basicPatterns.forEach((word, pattern) {
-      if (pattern.hasMatch(normalizedText)) {
-        tags.add((word: word, priority: 3));
-      }
-    });
+    addTags(fatalPatterns, 0);
+    addTags(negativePatterns, 1);
+    addTags(infoPatterns, 1);
+    addTags(featurePatterns, 2);
+    addTags(basicPatterns, 3);
 
     // 중복 제거 및 우선순위 정렬
-    // Set을 사용하여 중복 제거 (word 기준)
-    final uniqueWords = <String>{};
-    final uniqueTags = <({String word, int priority})>[];
-    
-    for (var tag in tags) {
-      if (uniqueWords.add(tag.word)) {
-        uniqueTags.add(tag);
-      }
-    }
+    final seen = <String>{};
+    final uniqueTags = tags.where((item) => seen.add(item['word'] as String)).toList();
+    uniqueTags.sort((a, b) => (a['priority'] as int).compareTo(b['priority'] as int));
 
-    uniqueTags.sort((a, b) => a.priority.compareTo(b.priority));
-
-    // 상위 3개만 반환
-    return uniqueTags.take(3).map((t) => t.word).toList();
+    return uniqueTags.take(3).map((e) => e['word'] as String).toList();
   }
 
-  // 📊 니즈파인 점수 계산 (logic.ts의 calculateNeedsFineScore 이식)
+  // ---------------------------------------------------------------------------
+  // 2. NeedsFine 점수 계산 로직 (v11.1 Score Diet)
+  // ---------------------------------------------------------------------------
   static Map<String, dynamic> calculateNeedsFineScore(
-    String reviewText,
-    double userRating,
-    bool hasPhoto,
-  ) {
+      String reviewText,
+      double userRating,
+      bool hasPhoto,
+      ) {
     final safeText = reviewText.trim();
-    final safeRating = userRating.clamp(0.5, 5.0);
-    final textLen = safeText.length;
+    // 텍스트 정제 (보이지 않는 문자 제거 등)
+    final normalizedText = safeText.replaceAll(RegExp(r'[\u200B-\u200D\uFEFF]'), "").trim();
+    final int textLen = normalizedText.length;
 
-    double qrScore = 0;
+    // 1. 변수 추출
+    final tags = extractReviewTags(normalizedText);
+    final hasNegativeNuance = tags.any((t) => RegExp(r'(아쉽|별로|나쁘|사악|평범|쏘쏘|그닥|아니|창렬|없음|실패|후회)').hasMatch(t));
+    final hasFact = RegExp(r'([0-9]+(분|시간|시|명|개|원|만원|천원)|한시간|두시간|반시간|오십분)').hasMatch(normalizedText);
+    final hasContrast = RegExp(r'(하지만|그래도|불구하고|반면|~데|~지만|~한데|~나|~으나)').hasMatch(normalizedText);
 
-    // 태그 추출
-    final tags = extractReviewTags(safeText);
-    final hasInfoTag = tags.any((t) => 
-      RegExp(r'(적음|아쉽|불편|주의|치우|시끄|없음|평범|쏘쏘)').hasMatch(t)
-    );
-
-    // Fatal 패턴 카운트
-    final fatalPatterns = [
-      RegExp(r'(바퀴|벌레|파리|모기|머리카락|이물질|털).{0,50}(나왔|있|보였|다녀)'),
-      RegExp(r'(잡아|치워).{0,30}(달래|래|라니|라고)'),
-      RegExp(r'(욕|반말|싸우|시비).{0,30}(하|했|듣)'),
-      RegExp(r'(상한|쉰|썩은|비린|비릿).{0,30}(맛|냄새)'),
+    // Context Count
+    int contextCount = 0;
+    final contextPatterns = [
+      r'(모임|회식|단체|연말|송년|신년|기념일|가족|상견례|뒤풀이)',
+      r'(예약|캐치테이블|테이블링|웨이팅|대기|줄|입장)',
+      r'(룸|방|칸막이|분할|프라이빗|조용|시끌|벅적|주차|화장실|창가|뷰|테라스)',
+      r'(혼자|혼밥|커플|데이트|친구|부모님|아이|애기|유모차)',
+      r'(짜장|짬뽕|탕수육|볶음밥|군만두|양장피|유산슬|깐풍기|마라|멘보샤|코스|요리|파스타|피자|리조또|스테이크|샐러드|버거|샌드위치|김치|반찬)',
+      r'(된장|찌개|김치|국밥|냉면|계란찜|공기밥|볶음밥|누룽지|쌈|상추|깻잎|파절이|명이나물|숯불|그릴|불판)',
+      r'(멜젓|갈치속젓|와사비|소금|쌈장|기름장|콩가루|쯔란|마늘|고추)',
+      r'(초밥|스시|사시미|회|라멘|우동|소바|돈까스|카츠|덮밥|텐동|락교|초생강|단무지|미소|장국)',
+      r'(파스타|스파게티|리조또|필라프|스테이크|피자|버거|샐러드|식전빵|피클|할라피뇨|와인|에이드)',
+      r'(짜장|짬뽕|탕수육|꿔바로우|마라탕|샹궈|군만두|딤섬|멘보샤|춘장|고량주)',
+      r'(안주|탕|튀김|소주|맥주|생맥|하이볼|위스키|칵테일|사케|막걸리|기본안주|뻥튀기)'
     ];
-    int fatalCount = fatalPatterns.where((p) => p.hasMatch(safeText)).length;
+    for (var p in contextPatterns) { if (RegExp(p).hasMatch(normalizedText)) contextCount++; }
 
-    // Malicious 패턴 카운트
-    final maliciousPatterns = [
-      RegExp(r'(쓰레기|개판|망해|최악|극혐|폐업|기분.*잡쳐|더러워|미친)'),
-      RegExp(r'(노맛|존노|퉤)'),
-      RegExp(r'(니|너|새끼).{0,20}(들|가)'),
+    // Info Count
+    int infoCount = 0;
+    final infoPatterns = [
+      r'(좁다|좁은|넓다|넓은|쾌적|답답|시원|덥다|더워|추워|춥다|환기|연기|냄새|에어컨|히터)',
+      r'(시끄|소란|정신없|시장통|조용|분위기|음악|노래|BGM|인테리어|조명)',
+      r'(화장실|주차|발렛|키오스크|태블릿|아기의자|구워|잘라|리필|벨|호출)'
     ];
-    int maliciousCount = maliciousPatterns.where((p) => p.hasMatch(safeText)).length;
+    for (var p in infoPatterns) { if (RegExp(p).hasMatch(normalizedText)) infoCount++; }
 
-    // Sincerity 패턴 카운트
-    final sincerityPatterns = [
-      RegExp(r'(n번째|재방문|또|단골|원픽|자주|인생|최애|킬러)'),
-      RegExp(r'(일주|한달|매주).{0,20}(번|회)'),
-      RegExp(r'(처음|첫).{0,20}(방문|와보|먹어)'),
-      RegExp(r'(메뉴|음식|반찬|국물).{0,50}(설명|나오|구워|주시|쫄깃)'),
-      RegExp(r'(맛있|최고|굿|짱|존맛|좋았)'),
-      RegExp(r'(물컹|비린|딱딱|질긴|불은|불어|차가운|식은).{0,30}(식감|느낌|상태|면|튀김)'),
+    // Comparative Count
+    int comparativeCount = 0;
+    final comparativePatterns = [
+      r'(신라면|불닭|엽떡|마라탕|진라면|열라면)',
+      r'(~보다|~만큼|~정도)[^]{0,10}(매워|맵|짜|달|맛있|괜찮)'
     ];
-    int sincerityCount = sincerityPatterns.where((p) => p.hasMatch(safeText)).length;
+    for (var p in comparativePatterns) { if (RegExp(p).hasMatch(normalizedText)) comparativeCount++; }
 
-    // 신뢰도 기초 점수 계산
-    final isShortAndHigh = textLen < 20 && safeRating >= 4.0;
+    // Cliché Count
+    int clicheCount = 0;
+    final clichePatterns = [
+      r'(겉바속촉|입에서 녹아|육즙이? (팡팡|가득)|잡내(가)? (1도|전혀|하나도) (없|안)|사장님(이)? (왕)?친절|재방문 (의사|각|100)|강추|존맛탱|비주얼 (대박|굿|미쳤))'
+    ];
+    for (var p in clichePatterns) { if (RegExp(p).hasMatch(normalizedText)) clicheCount++; }
 
-    if (textLen < 30) {
-      qrScore += isShortAndHigh ? -1.5 : (sincerityCount > 0 ? 1.0 : 0.5);
-    } else if (textLen < 80) {
-      qrScore += 2.0;
-    } else {
-      qrScore += 3.5;
+    // Narrative Count
+    int narrativeCount = 0;
+    final narrativePatterns = [
+      r'(친구(랑|들이랑)|엄마(랑|가)|남편(이랑|이)|비가|늦게|실수로|우연히|지나가다|옆테이블|직원분이|~해서 좋았|~는 좀|다만|솔직히|개인적으로|의외로|운좋게)',
+      r'(n번째|재방문|또|단골|원픽|자주|인생|최애|킬러|벌써|매번)'
+    ];
+    for (var p in narrativePatterns) { if (RegExp(p).hasMatch(normalizedText)) narrativeCount++; }
+
+    // Mitigated Count
+    int mitigatedCount = 0;
+    final mitigatedPatterns = [
+      r'(걱정|고민|망설|의심|비싸|멀|힘들)[^]{0,20}(하지만|그런데|반전|오히려|불구하고|싹|해소|용서|이해|만족)'
+    ];
+    for (var p in mitigatedPatterns) { if (RegExp(p).hasMatch(normalizedText)) mitigatedCount++; }
+
+    // Fatal / Malicious / Praise / Sensory / Sincerity counts
+    int fatalCount = 0;
+    final fatalP = [r'(바퀴|벌레|파리|모기|머리카락|이물질|털)[^]{0,50}(나왔|있|보였|다녀)', r'(잡아|치워|내돈)[^]{0,30}(달래|래|라니|라고|무시|아깝)', r'(욕|반말|싸우|시비)[^]{0,30}(하|했|듣)', r'(상한|쉰|썩은|비린|비릿|잡내|누린|물컹|딱딱|안익)[^]{0,30}(맛|냄새|식감|상태)'];
+    for (var p in fatalP) { if (RegExp(p).hasMatch(normalizedText)) fatalCount++; }
+
+    int maliciousCount = 0;
+    final maliciousP = [r'(쓰레기|개판|망해|최악|극혐|폐업|기분.*잡쳐|더러워|미친)', r'(노맛|존노|퉤)', r'(니|너|새끼)[^]{0,20}(들|가)'];
+    for (var p in maliciousP) { if (RegExp(p).hasMatch(normalizedText)) maliciousCount++; }
+
+    int praiseCount = 0;
+    final praiseP = [r'(맛있|최고|굿|짱|존맛|좋았|강추|대박|예술|환상)'];
+    for (var p in praiseP) { if (RegExp(p).hasMatch(normalizedText)) praiseCount++; }
+
+    int sensoryCount = 0;
+    final sensoryP = [
+      r'(쫄깃|바삭|물컹|딱딱|싱거|짜|매워|육즙|부드|고소|담백|비린|잡내|아삭|탱글|꾸덕|촉촉|질기|퍽퍽|시원|얼큰)',
+      r'(두툼|두껍|얇은|대패|마블링|비계|껍질|기름진|느끼|부들|야들|꼬들|쫀득|사르르|녹아|질겅|푸석|흐물|눅눅)',
+      r'(불맛|불향|숯불향|훈연|감칠맛|간이|슴슴|짭짤|달달|달짝|매콤|칼칼|개운|숙성|활어|찰진|진한|깊은|크리미|알덴테|퍼진|익힘|굽기|웍질|걸쭉|청량|목넘김|술도둑)'
+    ];
+    for (var p in sensoryP) { if (RegExp(p).hasMatch(normalizedText)) sensoryCount++; }
+
+    int sincerityCount = 0;
+    final sincerityP = [r'(n번째|재방문|또|단골|원픽|자주|인생|최애|킬러)', r'(일주|한달|매주)[^]{0,20}(번|회)', r'(처음|첫)[^]{0,20}(방문|와보|먹어)', r'(메뉴|음식|반찬|국물|식감|튀김|상태|비주얼|양념|소스|간이|육즙)[^]{0,50}(설명|나오|구워|주시)'];
+    for (var p in sincerityP) { if (RegExp(p).hasMatch(normalizedText)) sincerityCount++; }
+
+    // 2. 품질 점수 (q_r_score) 계산
+    double lengthFactor = textLen < 40 ? 0.6 : 0.8;
+    double qrScore = log(textLen + 1) * lengthFactor;
+
+    qrScore += sqrt(contextCount) * 0.5;
+    qrScore += (log(sincerityCount + 1) / ln2) * 1.8; // log2
+    qrScore += min(5.0, sensoryCount * 1.5);
+
+    if (comparativeCount > 0) qrScore += 2.0;
+    if (narrativeCount > 0) qrScore += 1.5;
+    qrScore += sqrt(infoCount) * 1.2;
+
+    if (hasFact) qrScore += 1.5;
+    if (hasContrast) qrScore += 1.2;
+    if (hasNegativeNuance) qrScore += 1.0;
+
+    // 감점 로직
+    if (clicheCount >= 3 && !hasNegativeNuance && fatalCount == 0) {
+      if (narrativeCount > 0) qrScore -= 1.0;
+      else qrScore -= 2.0;
+    }
+    if (mitigatedCount > 0) qrScore -= 1.5;
+    if (maliciousCount > 0) qrScore -= 3.0;
+    if (fatalCount > 0) {
+      double evidenceStrength = (textLen - 40) / 10;
+      qrScore += max(-1.0, min(2.0, evidenceStrength));
     }
 
-    qrScore += sincerityCount * 1.2;
-    if (hasInfoTag) qrScore += 1.5;
+    // 사진 가산점 (UI상에서 사진이 있으면 +)
+    if (hasPhoto) qrScore += 2.0;
 
-    // 치명적 이슈 가중치
-    if (fatalCount > 0) qrScore += 3.0 + (sincerityCount * 0.5);
-    if (maliciousCount > 0 && fatalCount == 0 && textLen < 150) {
-      qrScore -= 2.0;
-    }
+    // 3. 신뢰도(Trust Level) 계산
+    // sigmoid = 1 / (1 + exp(-0.4 * (x - 3.5)))
+    double trustScore = 1 / (1 + exp(-0.4 * (qrScore - 3.5)));
 
-    // 신뢰도 계산 (Sigmoid)
-    double sigmoid(double x) => 1 / (1 + exp(-0.6 * (x - 3.5)));
-    double trustScore = sigmoid(qrScore);
+    // 재방문 면제권
+    final bool isRevisit = RegExp(r'(n번째|재방문|또|단골|원픽|자주|인생|최애|킬러|벌써|매번)').hasMatch(normalizedText);
 
-    // 📸 사진 유무에 따른 신뢰도 보정
-    if (hasPhoto) {
-      trustScore = (trustScore + 0.15).clamp(0.0, 0.99);
-    } else {
-      trustScore = trustScore.clamp(0.0, 0.85);
-    }
-
-    // 짧은 글 락
-    if (textLen < 20 && !hasPhoto) {
-      trustScore = trustScore.clamp(0.0, 0.35);
-    }
-
-    trustScore = trustScore.clamp(0.1, 1.0);
-    final trustLevel = (trustScore * 100).round();
-
-    // 최종 점수 계산
-    double finalScore = safeRating;
-    final isLazyReview = textLen < 20 && sincerityCount == 0 && !hasPhoto;
-
-    if (trustLevel >= 60) {
-      if (fatalCount > 0) {
-        finalScore = (safeRating * 0.6) + (1.0 * 0.4);
-      } else {
-        finalScore = safeRating;
+    if (textLen < 40 && !isRevisit) {
+      if (infoCount == 0 && comparativeCount == 0) {
+        trustScore *= 0.7;
       }
+    }
+
+    // 너무 완벽한 리뷰 견제
+    if (textLen >= 100 && userRating == 5.0 && !hasNegativeNuance && fatalCount == 0 && infoCount == 0 && clicheCount >= 2) {
+      trustScore = min(trustScore, 0.8);
+    }
+
+    // 재방문 시 신뢰도 보정
+    if (isRevisit) {
+      trustScore = max(trustScore, 0.7);
+    }
+
+    trustScore = 0.1 + (trustScore * 0.88);
+
+    // 4. 최종 점수 (Anchor Gravity)
+    double baseAnchor = 2.5;
+
+    if (fatalCount > 0) {
+      baseAnchor = 1.0;
+    } else if (maliciousCount > 0) {
+      baseAnchor = 2.0;
+    } else if (hasNegativeNuance && userRating >= 3.0) {
+      baseAnchor = 2.5;
     } else {
-      if (maliciousCount > 0) {
-        finalScore = (safeRating * 0.5) + (1.5 * 0.5);
+      if (userRating >= 4.0) {
+        bool isProven = (trustScore > 0.7 && textLen >= 50) || isRevisit;
+        baseAnchor = isProven ? 3.5 : 2.5;
+      } else if (userRating <= 2.0) {
+        baseAnchor = 1.5;
       } else {
-        double anchor = isLazyReview ? 3.0 : (safeRating >= 3.0 ? 3.5 : 2.5);
-        finalScore = (safeRating * trustScore) + (anchor * (1 - trustScore));
+        baseAnchor = 2.5;
       }
     }
 
-    // 내용 기반 차감
-    if (hasInfoTag && finalScore >= 4.0) {
-      finalScore -= 0.3;
+    double finalScore = (userRating * trustScore) + (baseAnchor * (1 - trustScore));
+
+    // Platinum Cap
+    if (finalScore >= 4.5) {
+      bool hasPlatinumEvidence = (narrativeCount > 0 || hasNegativeNuance || fatalCount > 0 || isRevisit);
+      if (!hasPlatinumEvidence) {
+        finalScore = 4.4;
+      }
     }
 
-    // 감정-별점 불일치 보정
-    if (fatalCount > 0 && finalScore >= 3.0) {
-      finalScore = (finalScore * 0.5).clamp(0.0, 1.5);
-    }
-
-    final hasNegativeContent = hasInfoTag || 
-                               maliciousCount > 0 || 
-                               RegExp(r'(별로|실망|그닥|아쉽|최악)').hasMatch(safeText);
-    if (hasNegativeContent && finalScore >= 3.5) {
-      finalScore -= 0.5;
-    }
-
-    // 범위 보정
-    finalScore = finalScore.clamp(1.0, 5.0);
-
-    // 메타데이터
-    final authenticity = trustLevel >= 70;
-    final advertisingPattern = RegExp(r'(최고|완전|대박|꼭|무조건|강추)');
-    final advertisingWords = sincerityCount == 0 && advertisingPattern.hasMatch(safeText);
+    finalScore = double.parse(max(1.0, min(5.0, finalScore)).toStringAsFixed(1));
+    int trustLevel = (trustScore * 100).round();
 
     return {
-      'needsfine_score': double.parse(finalScore.toStringAsFixed(1)),
+      'needsfine_score': finalScore,
       'trust_level': trustLevel,
-      'authenticity': authenticity,
-      'advertising_words': !advertisingWords, // 반전 (자연스러움)
-      'emotional_balance': !hasNegativeContent, // 감정 균형
       'tags': tags,
+      // UI 표시용 추가 정보
+      'is_revisit': isRevisit,
+      'info_count': infoCount,
+      'narrative_count': narrativeCount,
     };
   }
 }

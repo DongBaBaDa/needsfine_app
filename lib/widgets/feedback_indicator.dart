@@ -1,4 +1,3 @@
-// lib/widgets/feedback_indicator.dart
 import 'package:flutter/material.dart';
 
 class FeedbackIndicator extends StatelessWidget {
@@ -8,112 +7,133 @@ class FeedbackIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final needsfineScore = calculatedScore['needsfine_score'] ?? 0.0;
-    final trustLevel = calculatedScore['trust_level'] ?? 0;
-    final authenticity = calculatedScore['authenticity'] ?? false;
-    final advertisingWords = calculatedScore['advertising_words'] ?? false;
-    final emotionalBalance = calculatedScore['emotional_balance'] ?? false;
+    if (calculatedScore.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      children: [
-        // 예상 니즈파인 점수
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+    // 데이터 추출
+    final double score = calculatedScore['needsfine_score'] ?? 0.0;
+    final int trustLevel = calculatedScore['trust_level'] ?? 0;
+    final List<String> tags = List<String>.from(calculatedScore['tags'] ?? []);
+
+    // 신뢰도 색상
+    Color trustColor;
+    if (trustLevel >= 80) trustColor = Colors.green;
+    else if (trustLevel >= 50) trustColor = Colors.orange;
+    else trustColor = Colors.red;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepPurple.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-          child: Column(
+        ],
+        border: Border.all(color: const Color(0xFF9C7CFF).withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              const Text(
-                '예상 니즈파인 점수',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
+              // 예상 점수
+              Column(
+                children: [
+                  const Text('예상 니즈파인 점수', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  Text(
+                    score.toStringAsFixed(1),
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF9C7CFF),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                '${needsfineScore.toStringAsFixed(1)}점',
-                style: const TextStyle(
-                  fontSize: 32,
-                  color: Color(0xFF9C7CFF),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '(신뢰도: $trustLevel%)',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              Container(width: 1, height: 40, color: Colors.grey[300]),
+              // 신뢰도
+              Column(
+                children: [
+                  const Text('리뷰 신뢰도', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.verified_user, size: 20, color: trustColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$trustLevel%',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: trustColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+          // 추출 태그 표시
+          if (tags.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: tags.map((tag) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0E9FF),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF9C7CFF).withOpacity(0.5)),
+                  ),
+                  child: Text(
+                    '#$tag',
+                    style: const TextStyle(
+                      color: Color(0xFF6200EE),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
 
-        const SizedBox(height: 16),
+          if (tags.isEmpty)
+            const Text(
+              "작성된 내용에서 키워드를 분석 중입니다...",
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
 
-        // 3가지 체크 항목
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          children: [
-            _buildCheckItem(
-              label: '정보성',
-              isActive: authenticity,
-              activeIcon: '👍',
-              inactiveIcon: '📝',
+          const SizedBox(height: 8),
+          // 팁 제공
+          if (trustLevel < 50)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.orange),
+                  SizedBox(width: 6),
+                  Text(
+                    "구체적인 경험(메뉴, 분위기)을 추가해보세요!",
+                    style: TextStyle(fontSize: 12, color: Colors.deepOrange),
+                  ),
+                ],
+              ),
             ),
-            _buildCheckItem(
-              label: '자연스러움',
-              isActive: advertisingWords,
-              activeIcon: '💜',
-              inactiveIcon: '⚠️',
-            ),
-            _buildCheckItem(
-              label: '감정 균형',
-              isActive: emotionalBalance,
-              activeIcon: '😊',
-              inactiveIcon: '😐',
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCheckItem({
-    required String label,
-    required bool isActive,
-    required String activeIcon,
-    required String inactiveIcon,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isActive ? const Color(0xFF9C7CFF) : Colors.grey[300]!,
-          width: 2,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            isActive ? activeIcon : inactiveIcon,
-            style: const TextStyle(fontSize: 24),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 11,
-              color: isActive ? const Color(0xFF9C7CFF) : Colors.grey,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
         ],
       ),
     );

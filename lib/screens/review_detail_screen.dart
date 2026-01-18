@@ -24,6 +24,9 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   bool _isLoadingComments = true;
   List<Map<String, dynamic>> _comments = []; // 실제 댓글 데이터
 
+  // ✅ 도움이 됐어요 상태 변수
+  bool _isLiked = false;
+
   final Color _primaryColor = const Color(0xFFC87CFF);
   final Color _backgroundColor = const Color(0xFFFFFDF9);
 
@@ -32,6 +35,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     super.initState();
     _checkOwnership();
     _fetchComments();
+    _checkLikeStatus(); // ✅ 초기 좋아요 상태 확인
   }
 
   @override
@@ -69,7 +73,55 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // 3. 댓글 작성 로직
+  // ✅ 3. 도움이 됐어요 상태 확인 로직
+  Future<void> _checkLikeStatus() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final res = await _supabase
+        .from('review_votes')
+        .select()
+        .eq('review_id', widget.review.id)
+        .eq('user_id', userId)
+        .eq('vote_type', 'like')
+        .maybeSingle();
+
+    if (mounted) setState(() => _isLiked = res != null);
+  }
+
+  // ✅ 4. 도움이 됐어요 토글 로직
+  Future<void> _toggleLike() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
+      return;
+    }
+
+    try {
+      if (_isLiked) {
+        // 좋아요 취소
+        await _supabase.from('review_votes').delete()
+            .eq('review_id', widget.review.id)
+            .eq('user_id', userId)
+            .eq('vote_type', 'like');
+      } else {
+        // 좋아요 추가
+        await _supabase.from('review_votes').insert({
+          'review_id': widget.review.id,
+          'user_id': userId,
+          'vote_type': 'like',
+        });
+      }
+      if (mounted) setState(() => _isLiked = !_isLiked);
+    } catch (e) {
+      debugPrint("도움이 됐어요 처리 실패: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("오류가 발생했습니다: $e")));
+      }
+    }
+  }
+
+  // 5. 댓글 작성 로직
   Future<void> _submitComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
@@ -95,7 +147,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // 4. 리뷰 삭제 로직
+  // 6. 리뷰 삭제 로직
   Future<void> _onDeletePressed() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -122,9 +174,9 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // 5. 리뷰 수정 로직 (화면 이동)
+  // 7. 리뷰 수정 로직 (화면 이동)
   void _onEditPressed() async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("수정 기능은 WriteReviewScreen 업데이트가 필요합니다.")));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("수정 기능은 준비 중입니다.")));
   }
 
   void _navigateToMap() {
@@ -187,7 +239,34 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                   if (widget.review.tags.isNotEmpty)
                     Wrap(spacing: 8.0, runSpacing: 8.0, children: widget.review.tags.map((tag) => _buildTag(tag)).toList()),
 
-                  const Divider(height: 48, thickness: 1, color: Color(0xFFEEEEEE)),
+                  const SizedBox(height: 32),
+
+                  // ✅ 도움이 됐어요 버튼
+                  Center(
+                    child: OutlinedButton.icon(
+                      onPressed: _toggleLike,
+                      icon: Icon(
+                        _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                        size: 18,
+                        color: _isLiked ? Colors.white : _primaryColor,
+                      ),
+                      label: Text(
+                        "도움이 됐어요",
+                        style: TextStyle(
+                          color: _isLiked ? Colors.white : _primaryColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: _isLiked ? _primaryColor : Colors.white,
+                        side: BorderSide(color: _primaryColor),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      ),
+                    ),
+                  ),
+
+                  const Divider(height: 64, thickness: 1, color: Color(0xFFEEEEEE)),
 
                   // --- 댓글 영역 ---
                   Text("댓글 ${_comments.length}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -214,7 +293,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                       );
                     },
                   ),
-                  const SizedBox(height: 60), // 하단 입력창 가림 방지
+                  const SizedBox(height: 60),
                 ],
               ),
             ),

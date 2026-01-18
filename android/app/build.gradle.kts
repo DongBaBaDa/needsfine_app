@@ -1,45 +1,75 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-android {
-    // 1. 패키지 주소 설정
-    namespace = "com.needsfine.needsfine_app"
-    compileSdk = 36 // [수정] 36으로 상향
+// 자바 유틸리티 임포트
+import java.util.Properties
+        import java.io.FileInputStream
 
-    // 2. 방금 다운로드한 빌드 도구 버전 지정
-    buildToolsVersion = "36.0.0" // [수정] 36.0.0으로 지정
-    ndkVersion = "27.0.12077973"
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { stream ->
+        localProperties.load(stream)
+    }
+}
+
+val flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
+val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
+
+android {
+    // ✅ [수정 1] 패키지 이름 일치시키기 (example 제거)
+    namespace = "com.needsfine.needsfine_app"
+
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "1.8"
+    }
+
+    sourceSets {
+        getByName("main").java.srcDirs("src/main/kotlin")
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // ✅ [수정 2] Application ID도 일치시키기
         applicationId = "com.needsfine.needsfine_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion // [수정] 네이버 지도 SDK 권장에 따라 최소 23으로 설정
-        targetSdk = 36 // [수정] 36으로 상향
-        
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+
+        // ✅ [수정 3] 네이버 지도 SDK는 최소 21 이상 필요합니다.
+        // (flutter.minSdkVersion은 보통 16이나 19라서 충돌 날 수 있음)
+        minSdk = flutter.minSdkVersion
+
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutterVersionCode.toInt()
+        versionName = flutterVersionName
+    }
+
+    // ⭐ 기존 서명 설정 유지
+    signingConfigs {
+        create("release") {
+            keyAlias = "upload"
+            keyPassword = "니즈파인2953"
+            storeFile = file("c:/Users/a/upload-keystore.jks")
+            storePassword = "니즈파인2953"
+        }
     }
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+        getByName("release") {
+            // ⭐ 서명 적용
+            signingConfig = signingConfigs.getByName("release")
+
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

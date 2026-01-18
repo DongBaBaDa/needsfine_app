@@ -19,7 +19,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
 
   List<Review> _myReviews = [];
   List<Review> _likedReviews = [];
-  List<Review> _commentedReviews = []; // 내가 댓글을 단 리뷰 리스트
+  List<Review> _commentedReviews = [];
 
   @override
   void initState() {
@@ -29,6 +29,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
   }
 
   Future<void> _fetchData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -37,44 +38,59 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
       // 1. 내가 쓴 리뷰 로드
       final myReviewsData = await _supabase
           .from('reviews')
-          .select('*, profiles(nickname, user_number, email, profile_image_url)')
+          .select('*, profiles(*)')
           .eq('user_id', userId)
           .eq('is_hidden', false)
           .order('created_at', ascending: false);
 
-      // 2. 좋아요한 리뷰 로드
+      // ✅ 2. 도움이 됐어요 (좋아요한 리뷰) 로드 - 쿼리 강화
+      // reviews 테이블 안의 profiles 정보까지 확실하게 가져옵니다.
       final likedReviewsData = await _supabase
           .from('review_votes')
-          .select('reviews(*, profiles(nickname, user_number, email, profile_image_url))')
+          .select('reviews(*, profiles(*))')
           .eq('user_id', userId)
           .eq('vote_type', 'like');
 
       // 3. 내가 댓글을 단 리뷰 로드
-      final commentedReviewsData = await _supabase
+      final commentedData = await _supabase
           .from('comments')
-          .select('reviews(*, profiles(nickname, user_number, email, profile_image_url))')
-          .eq('user_id', userId);
+          .select('content, created_at, reviews(*, profiles(*))')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
+          // 내가 쓴 리뷰 파싱
           _myReviews = (myReviewsData as List).map((json) => Review.fromJson(json)).toList();
 
+          // ✅ 도움이 됐어요 파싱 보강
           _likedReviews = (likedReviewsData as List).map((item) {
             final reviewJson = item['reviews'];
             if (reviewJson == null) return null;
-            try { return Review.fromJson(reviewJson); } catch (e) { return null; }
+            try {
+              return Review.fromJson(reviewJson);
+            } catch (e) {
+              return null; // 파싱 에러 데이터 제외
+            }
           }).whereType<Review>().toList();
 
-          _commentedReviews = (commentedReviewsData as List).map((item) {
+          // 댓글 단 리뷰 파싱
+          _commentedReviews = (commentedData as List).map((item) {
             final reviewJson = item['reviews'];
             if (reviewJson == null) return null;
-            try { return Review.fromJson(reviewJson); } catch (e) { return null; }
+
+            final combinedJson = Map<String, dynamic>.from(reviewJson);
+            combinedJson['comment_content'] = item['content'];
+            combinedJson['comment_created_at'] = item['created_at'];
+
+            return Review.fromJson(combinedJson);
           }).whereType<Review>().toList();
+
+          _isLoading = false;
         });
       }
     } catch (e) {
       debugPrint("데이터 로드 실패: $e");
-    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -102,15 +118,15 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
           : TabBarView(
         controller: _tabController,
         children: [
-          _buildReviewList(_myReviews, "작성한 리뷰가 없습니다."),
-          _buildReviewList(_likedReviews, "도움이 된다고 표시한 리뷰가 없습니다."),
-          _buildReviewList(_commentedReviews, "댓글을 작성한 리뷰가 없습니다."),
+          _buildReviewList(_myReviews, "작성한 리뷰가 없습니다.", false),
+          _buildReviewList(_likedReviews, "도움이 됐어요 표시한 리뷰가 없습니다.", false),
+          _buildReviewList(_commentedReviews, "댓글을 작성한 리뷰가 없습니다.", true),
         ],
       ),
     );
   }
 
-  Widget _buildReviewList(List<Review> reviews, String emptyMessage) {
+  Widget _buildReviewList(List<Review> reviews, String emptyMessage, bool isCommentMode) {
     if (reviews.isEmpty) {
       return Center(child: Text(emptyMessage, style: const TextStyle(color: Colors.grey)));
     }
@@ -118,14 +134,42 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
       itemCount: reviews.length,
       separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEEEEEE)),
       itemBuilder: (context, index) {
+        final review = reviews[index];
         return ReviewCard(
-          review: reviews[index],
-          onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: reviews[index])));
+          review: isCommentMode ? _convertToCommentUi(review) : review,
+          onTap: () async {
+            final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: review))
+            );
+            if (result == true) _fetchData();
           },
           onTapStore: () {},
         );
       },
+    );
+  }
+
+  Review _convertToCommentUi(Review original) {
+    return Review(
+      id: original.id,
+      storeName: original.storeName,
+      storeAddress: original.storeAddress,
+      reviewText: original.myCommentText ?? "내용 없음",
+      userRating: original.userRating,
+      needsfineScore: original.needsfineScore,
+      trustLevel: original.trustLevel,
+      tags: original.tags,
+      photoUrls: original.photoUrls,
+      isCritical: original.isCritical,
+      isHidden: original.isHidden,
+      createdAt: original.myCommentCreatedAt ?? original.createdAt,
+      userId: original.userId,
+      userEmail: original.userEmail,
+      likeCount: original.likeCount,
+      nickname: original.nickname,
+      userProfileUrl: original.userProfileUrl,
+      commentCount: original.commentCount,
     );
   }
 }
