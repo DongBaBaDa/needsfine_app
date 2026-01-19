@@ -1,3 +1,4 @@
+// lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
@@ -25,6 +26,19 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
   List<StoreRanking> _top100 = [];
   final Map<String, String> _storeImageMap = {};
+
+  // ✅ 디자인 토큰 (로직 영향 없음)
+  static const Color _brand = Color(0xFF8A2BE2);
+  static const Color _bg = Color(0xFFF2F2F7);
+  static const Color _card = Colors.white;
+
+  static final List<BoxShadow> _softShadow = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.06),
+      blurRadius: 16,
+      offset: const Offset(0, 8),
+    ),
+  ];
 
   @override
   void initState() {
@@ -103,7 +117,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   }
 
   void _goToWeeklyMore() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => WeeklyRankingScreen(rankings: _top100, storeImageMap: _storeImageMap)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WeeklyRankingScreen(rankings: _top100, storeImageMap: _storeImageMap),
+      ),
+    );
   }
 
   void _goToCategory(String title) {
@@ -114,23 +133,26 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _bg, // ✅ 배치는 동일, 배경만 고급스럽게
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: _bg,
+        surfaceTintColor: _bg,
         elevation: 0,
         titleSpacing: 20,
-        title: const Text('NeedsFine', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black, fontSize: 24)),
+        title: const Text(
+          'NeedsFine',
+          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black, fontSize: 24),
+        ),
         actions: [
           NotificationBadge(onTap: () => Navigator.pushNamed(context, '/notifications')),
           const SizedBox(width: 16),
         ],
       ),
       body: RefreshIndicator(
-        color: const Color(0xFF8A2BE2),
+        color: _brand,
         onRefresh: _loadHomeData,
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF8A2BE2)))
+            ? const Center(child: CircularProgressIndicator(color: _brand))
             : ListView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.only(bottom: 40),
@@ -145,7 +167,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               trailing: TextButton(
                 onPressed: _goToWeeklyMore,
                 style: TextButton.styleFrom(splashFactory: NoSplash.splashFactory),
-                child: const Text('더보기', style: TextStyle(color: Color(0xFF8A2BE2), fontWeight: FontWeight.w600)),
+                child: const Text(
+                  '더보기',
+                  style: TextStyle(color: _brand, fontWeight: FontWeight.w700),
+                ),
               ),
             ),
             _buildWeeklyHorizontal(),
@@ -173,15 +198,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            )
-          ],
+          color: _card,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: _softShadow,
+          border: Border.all(color: Colors.black.withOpacity(0.05)),
         ),
         child: TextField(
           controller: _searchController,
@@ -189,14 +209,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
             hintText: '맛집을 찾아보세요',
-            hintStyle: TextStyle(color: Colors.grey[400], fontWeight: FontWeight.w500),
-            prefixIcon: const Icon(Icons.search, color: Color(0xFF8A2BE2)),
+            hintStyle: TextStyle(color: Colors.grey[400], fontWeight: FontWeight.w600),
+            prefixIcon: const Icon(Icons.search_rounded, color: _brand),
             suffixIcon: IconButton(
               icon: const Icon(Icons.arrow_forward_rounded, color: Colors.black54),
               onPressed: () => _submitSearch(_searchController.text),
             ),
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           ),
         ),
       ),
@@ -204,10 +224,17 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   }
 
   Widget _buildCategoryGrid() {
+    // ✅ 아이콘 교체(덜 귀엽고 더 일반적인 느낌)
     final categories = [
-      ('한식', Icons.rice_bowl), ('일식', Icons.set_meal), ('중식', Icons.ramen_dining),
-      ('양식', Icons.local_pizza), ('카페', Icons.coffee), ('술집', Icons.wine_bar),
-      ('디저트', Icons.cake), ('패스트푸드', Icons.fastfood), ('분식', Icons.soup_kitchen),
+      ('한식', Icons.restaurant_menu),
+      ('일식', Icons.set_meal),
+      ('중식', Icons.ramen_dining),
+      ('양식', Icons.local_pizza),
+      ('카페', Icons.local_cafe),
+      ('술집', Icons.local_bar),
+      ('디저트', Icons.icecream),
+      ('패스트푸드', Icons.fastfood),
+      ('분식', Icons.soup_kitchen),
       ('기타', Icons.more_horiz),
     ];
 
@@ -218,8 +245,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       child: Row(
         children: categories.map((c) {
           return Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: _CategoryChip(label: c.$1, icon: c.$2, onTap: () => _goToCategory(c.$1)),
+            padding: const EdgeInsets.only(right: 14),
+            child: _CategoryChip(
+              label: c.$1,
+              icon: c.$2,
+              onTap: () => _goToCategory(c.$1),
+            ),
           );
         }).toList(),
       ),
@@ -235,7 +266,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
 
     return SizedBox(
-      height: 280,
+      height: 292,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
@@ -245,9 +276,13 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         itemBuilder: (context, index) {
           final r = _top100[index];
           final imageUrl = _storeImageMap[r.storeName] ?? '';
-          return _WeeklyRankCard(ranking: r, imageUrl: imageUrl, onTap: () {
-            if (r.storeName.isNotEmpty) searchTrigger.value = SearchTarget(query: r.storeName);
-          });
+          return _WeeklyRankCard(
+            ranking: r,
+            imageUrl: imageUrl,
+            onTap: () {
+              if (r.storeName.isNotEmpty) searchTrigger.value = SearchTarget(query: r.storeName);
+            },
+          );
         },
       ),
     );
@@ -255,6 +290,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 }
 
 class _CategoryChip extends StatelessWidget {
+  static const Color _brand = Color(0xFF8A2BE2);
+
   final String label;
   final IconData icon;
   final VoidCallback onTap;
@@ -263,29 +300,53 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F5F7),
-              borderRadius: BorderRadius.circular(20),
+    // ✅ 미니멀 카드형 (귀여움↓ / 존재감↑)
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: 84,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 8),
             ),
-            child: Icon(icon, color: Colors.black87, size: 28),
-          ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
-      ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _brand.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _brand.withOpacity(0.18)),
+              ),
+              child: Icon(icon, color: Colors.black87, size: 22),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black87),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 class _WeeklyRankCard extends StatelessWidget {
+  static const Color _brand = Color(0xFF8A2BE2);
+
   final StoreRanking ranking;
   final String imageUrl;
   final VoidCallback onTap;
@@ -294,61 +355,144 @@ class _WeeklyRankCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ 기존 배치(이미지 위 + 정보 아래)는 유지, 스타일만 정리
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 220,
+        width: 230,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
             )
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 이미지
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                child: imageUrl.isNotEmpty
-                    ? Image.network(imageUrl, fit: BoxFit.cover, width: double.infinity)
-                    : Container(color: Colors.grey[100], child: const Icon(Icons.store, color: Colors.grey)),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${ranking.rank}위 ${ranking.storeName}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (imageUrl.isNotEmpty)
+                      Image.network(imageUrl, fit: BoxFit.cover, width: double.infinity)
+                    else
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: const Color(0xFF8A2BE2).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                        child: Text(
-                          'NF ${ranking.avgScore.toStringAsFixed(1)}',
-                          style: const TextStyle(color: Color(0xFF8A2BE2), fontWeight: FontWeight.bold, fontSize: 12),
+                        color: Colors.grey[100],
+                        child: const Icon(Icons.store, color: Colors.grey),
+                      ),
+                    // 하단 그라데이션(텍스트 대비)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 70,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.0),
+                              Colors.black.withOpacity(0.35),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      // ✅ [수정] 오버플로우 해결: toStringAsFixed(0) 적용
-                      Text(
-                          '신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%',
-                          style: TextStyle(color: Colors.grey[600], fontSize: 12, fontWeight: FontWeight.w500)
+                    ),
+                    // 랭크 배지
+                    Positioned(
+                      left: 12,
+                      top: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: Colors.black.withOpacity(0.06)),
+                        ),
+                        child: Text(
+                          '${ranking.rank}위',
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.black),
+                        ),
                       ),
-                    ],
+                    ),
+                    // 가게명(이미지 위 하단)
+                    Positioned(
+                      left: 14,
+                      right: 14,
+                      bottom: 12,
+                      child: Text(
+                        ranking.storeName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                          color: Colors.white,
+                          height: 1.1,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // 정보 영역
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Row(
+                children: [
+                  // 니즈파인 점수 칩
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _brand.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: _brand.withOpacity(0.16)),
+                    ),
+                    child: Text(
+                      // ✅ NF -> 니즈파인
+                      '니즈파인 ${ranking.avgScore.toStringAsFixed(1)}',
+                      style: const TextStyle(
+                        color: _brand,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // 신뢰도 칩
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.black.withOpacity(0.06)),
+                      ),
+                      child: Text(
+                        '신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ),
                 ],
               ),

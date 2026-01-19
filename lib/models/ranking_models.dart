@@ -1,3 +1,4 @@
+// lib/models/ranking_models.dart
 class Review {
   final String id;
   final String storeName;
@@ -18,7 +19,7 @@ class Review {
   final String? userProfileUrl;
   final int commentCount;
 
-  // ✅ [기존 유지] 좌표 필드
+  // ✅ 좌표 필드
   final double? storeLat;
   final double? storeLng;
 
@@ -112,7 +113,8 @@ class Review {
   }
 }
 
-// ✅ [수정됨] StoreRanking 클래스에 좌표 및 주소 필드 추가
+// ✅ [수정 완료] StoreRanking 클래스 복구
+// ReviewService에서 호출하는 `fromViewJson` 메서드를 정확히 구현함
 class StoreRanking {
   final String storeName;
   final double avgScore;
@@ -120,12 +122,16 @@ class StoreRanking {
   final int reviewCount;
   final double avgTrust;
   final int rank;
-  final List<String>? topTags;
 
-  // 추가된 필드
-  final double? storeLat;
-  final double? storeLng;
-  final String? storeAddress;
+  // ✅ UI에서 에러가 안 나도록 nullable이 아닌 빈 리스트로 초기화
+  final List<String> topTags;
+
+  // ✅ RankingScreen에서 사용하는 변수명 'address'
+  final String? address;
+
+  // ✅ 지도 이동을 위한 좌표
+  final double? lat;
+  final double? lng;
 
   StoreRanking({
     required this.storeName,
@@ -134,12 +140,13 @@ class StoreRanking {
     required this.reviewCount,
     required this.avgTrust,
     required this.rank,
-    this.topTags,
-    this.storeLat,      // 추가
-    this.storeLng,      // 추가
-    this.storeAddress,  // 추가
+    required this.topTags,
+    this.address,
+    this.lat,
+    this.lng,
   });
 
+  // 🚨 [핵심 수정] ReviewService가 호출하는 메서드명으로 복구 & rankIndex 파라미터 부활
   factory StoreRanking.fromViewJson(Map<String, dynamic> json, int rankIndex) {
     return StoreRanking(
       storeName: json['store_name']?.toString() ?? '알 수 없음',
@@ -147,11 +154,19 @@ class StoreRanking {
       avgUserRating: (json['avg_user_rating'] as num?)?.toDouble() ?? 0.0,
       avgTrust: (json['avg_trust'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
+
+      // ✅ 서비스에서 계산해서 넘겨준 순위(rankIndex) 사용
       rank: rankIndex,
-      // ✅ JSON에서 좌표/주소 파싱 (DB 컬럼명이 store_lat, store_lng, store_address 라고 가정)
-      storeLat: (json['store_lat'] as num?)?.toDouble(),
-      storeLng: (json['store_lng'] as num?)?.toDouble(),
-      storeAddress: json['store_address']?.toString(),
+
+      // ✅ tags가 null이면 빈 리스트([]) 반환하여 View 에러 방지
+      topTags: (json['top_tags'] as List?)?.map((e) => e.toString()).toList() ?? [],
+
+      // ✅ DB의 'store_address' 컬럼을 View의 'address' 변수에 매핑
+      address: json['store_address']?.toString(),
+
+      // ✅ 좌표 파싱
+      lat: (json['store_lat'] as num?)?.toDouble(),
+      lng: (json['store_lng'] as num?)?.toDouble(),
     );
   }
 }
@@ -160,5 +175,10 @@ class Stats {
   final int total;
   final double average;
   final double avgTrust;
-  Stats({required this.total, required this.average, required this.avgTrust});
+
+  Stats({
+    required this.total,
+    required this.average,
+    required this.avgTrust
+  });
 }

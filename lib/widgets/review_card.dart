@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart';
-import 'package:needsfine_app/core/search_trigger.dart'; // ✅ 이동 로직용
 
 class ReviewCard extends StatefulWidget {
   final Review review;
-  final VoidCallback onTap;       // 리뷰 상세 이동
-  final VoidCallback onTapStore;  // (기존 호환성 유지)
+  final VoidCallback onTap;        // 리뷰 상세 이동
+  final VoidCallback onTapStore;   // ✅ 가게 이동 (SearchTrigger는 바깥에서 처리)
   final VoidCallback onTapProfile; // 유저 프로필 이동
 
   const ReviewCard({
@@ -152,17 +151,6 @@ class _ReviewCardState extends State<ReviewCard> {
     }
   }
 
-  // ✅ [핵심 기능] 가게 클릭 시 저장된 좌표(lat, lng)로 즉시 이동
-  void _handleStoreClick() {
-    if (widget.review.storeName.isNotEmpty) {
-      searchTrigger.value = SearchTarget(
-        query: widget.review.storeName,
-        lat: widget.review.storeLat, // DB에 저장된 위도
-        lng: widget.review.storeLng, // DB에 저장된 경도
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     ImageProvider avatarImage;
@@ -192,7 +180,7 @@ class _ReviewCardState extends State<ReviewCard> {
             child: Row(
               children: [
                 GestureDetector(
-                  onTap: _handleStoreClick,
+                  onTap: widget.onTapStore, // ✅ 홈스크린 로직과 동일: 밖에서 SearchTrigger 처리
                   child: Container(
                     width: 56,
                     height: 56,
@@ -211,7 +199,7 @@ class _ReviewCardState extends State<ReviewCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         GestureDetector(
-                          onTap: _handleStoreClick,
+                          onTap: widget.onTapStore, // ✅
                           child: Text(
                             widget.review.storeName,
                             style: const TextStyle(

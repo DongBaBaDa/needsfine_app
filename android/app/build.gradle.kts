@@ -19,6 +19,15 @@ if (localPropertiesFile.exists()) {
 val flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
 val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
 
+// [추가] key.properties 로드 설정
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { stream ->
+        keystoreProperties.load(stream)
+    }
+}
+
 android {
     // ✅ [수정 1] 패키지 이름 일치시키기 (example 제거)
     namespace = "com.needsfine.needsfine_app"
@@ -52,13 +61,17 @@ android {
         versionName = flutterVersionName
     }
 
-    // ⭐ 기존 서명 설정 유지
+    // ⭐ 서명 설정 (key.properties 적용)
     signingConfigs {
         create("release") {
-            keyAlias = "upload"
-            keyPassword = "니즈파인2953"
-            storeFile = file("c:/Users/a/upload-keystore.jks")
-            storePassword = "니즈파인2953"
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            storeFile = if (keystoreProperties["storeFile"] != null) {
+                file(keystoreProperties["storeFile"] as String)
+            } else {
+                null
+            }
+            storePassword = keystoreProperties["storePassword"] as String?
         }
     }
 

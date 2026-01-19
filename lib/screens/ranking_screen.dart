@@ -1,12 +1,17 @@
+// lib/screens/ranking_screen.dart
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/services/review_service.dart';
 import 'package:needsfine_app/screens/write_review_screen.dart';
 import 'package:needsfine_app/screens/review_detail_screen.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart';
+
+// ✅ 분리된 위젯 임포트
 import 'package:needsfine_app/widgets/review_card.dart';
 import 'package:needsfine_app/widgets/store_ranking_card.dart';
-import 'package:needsfine_app/core/search_trigger.dart'; // ✅ 전역 트리거
+
+// ✅ 전역 트리거 임포트
+import 'package:needsfine_app/core/search_trigger.dart';
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
@@ -52,8 +57,9 @@ class _RankingScreenState extends State<RankingScreen> {
     super.dispose();
   }
 
-  Future<void> _loadInitialData() async {
-    if (mounted) setState(() => _isLoading = true);
+  Future<void> _loadInitialData({bool isRefresh = false}) async {
+    if (!isRefresh && mounted) setState(() => _isLoading = true);
+
     try {
       final statsFuture = ReviewService.fetchGlobalStats();
       final reviewsFuture = ReviewService.fetchReviews(limit: _limit, offset: 0);
@@ -136,21 +142,37 @@ class _RankingScreenState extends State<RankingScreen> {
   List<StoreRanking> _getSortedRankings() {
     List<StoreRanking> rankings = List.from(_storeRankings);
 
+    // ✅ [수정됨] 정렬 로직에 '리뷰 개수 순' 추가
     if (_rankingSortOption == '사용자 별점 순') {
       rankings.sort((a, b) => b.avgUserRating.compareTo(a.avgUserRating));
+    } else if (_rankingSortOption == '리뷰 개수 순') {
+      // 리뷰 개수가 많은 순서대로 정렬 (동점일 경우 니즈파인 점수순)
+      rankings.sort((a, b) {
+        int compare = b.reviewCount.compareTo(a.reviewCount);
+        if (compare == 0) {
+          return b.avgScore.compareTo(a.avgScore);
+        }
+        return compare;
+      });
     } else {
+      // 기본: 니즈파인 순
       rankings.sort((a, b) => b.avgScore.compareTo(a.avgScore));
     }
 
+    // 순위 재할당 (화면 표시용 Rank 번호 갱신)
     for (int i = 0; i < rankings.length; i++) {
       rankings[i] = StoreRanking(
-          storeName: rankings[i].storeName,
-          avgScore: rankings[i].avgScore,
-          avgUserRating: rankings[i].avgUserRating,
-          reviewCount: rankings[i].reviewCount,
-          avgTrust: rankings[i].avgTrust,
-          rank: i + 1,
-          topTags: rankings[i].topTags);
+        storeName: rankings[i].storeName,
+        avgScore: rankings[i].avgScore,
+        avgUserRating: rankings[i].avgUserRating,
+        reviewCount: rankings[i].reviewCount,
+        avgTrust: rankings[i].avgTrust,
+        rank: i + 1, // 정렬된 순서대로 1위, 2위... 부여
+        topTags: rankings[i].topTags,
+        address: rankings[i].address,
+        lat: rankings[i].lat,
+        lng: rankings[i].lng,
+      );
     }
     return rankings;
   }
@@ -162,7 +184,12 @@ class _RankingScreenState extends State<RankingScreen> {
       appBar: AppBar(
         title: const Text('리뷰 랭킹', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF9C7CFF),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _loadInitialData)],
+        actions: [
+          IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () => _loadInitialData(isRefresh: true)
+          )
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9C7CFF))))
@@ -202,7 +229,7 @@ class _RankingScreenState extends State<RankingScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const WriteReviewScreen()));
-          if (result == true) _loadInitialData();
+          if (result == true) _loadInitialData(isRefresh: true);
         },
         backgroundColor: const Color(0xFF9C7CFF),
         child: const Icon(Icons.edit, color: Colors.white),
@@ -239,8 +266,11 @@ class _RankingScreenState extends State<RankingScreen> {
         DropdownButton<String>(
           value: _tabIndex == 0 ? _reviewSortOption : _rankingSortOption,
           underline: const SizedBox(),
-          items: (_tabIndex == 0 ? ['최신순', '니즈파인 점수순', '신뢰도순', '쓴소리'] : ['니즈파인 순', '사용자 별점 순'])
-              .map((String value) {
+          // ✅ [수정됨] 매장 순위 탭일 때 '리뷰 개수 순' 옵션 추가
+          items: (_tabIndex == 0
+              ? ['최신순', '니즈파인 점수순', '신뢰도순', '쓴소리']
+              : ['니즈파인 순', '사용자 별점 순', '리뷰 개수 순']
+          ).map((String value) {
             return DropdownMenuItem<String>(value: value, child: Text(value, style: const TextStyle(fontSize: 14)));
           }).toList(),
           onChanged: (newValue) {
@@ -278,26 +308,23 @@ class _RankingScreenState extends State<RankingScreen> {
           review: reviews[index],
           onTap: () async {
             final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: reviews[index])));
-            if (result == true) _loadInitialData();
+            if (result == true) _loadInitialData(isRefresh: true);
           },
-          // ✅ [핵심 수정] 가게 이름 뿐만 아니라 좌표도 함께 전달!
           onTapStore: () {
             if (reviews[index].storeName.isNotEmpty) {
               searchTrigger.value = SearchTarget(
-                query: reviews[index].storeName,
-                lat: reviews[index].storeLat, // 위도 전달
-                lng: reviews[index].storeLng, // 경도 전달
+                  query: reviews[index].storeName,
+                  lat: reviews[index].storeLat,
+                  lng: reviews[index].storeLng
               );
-              // (선택 사항) 탭 전환이 필요하다면 여기서 MainShell의 탭 인덱스 변경 로직 추가 필요
-              // 예: DefaultTabController를 사용하지 않는 외부 탭이라면 별도 통신 필요
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("지도로 이동합니다.")));
             }
           },
           onTapProfile: () {
             if (reviews[index].userId != null) {
               Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => UserProfileScreen(userId: reviews[index].userId!))
+                context,
+                MaterialPageRoute(builder: (_) => UserProfileScreen(userId: reviews[index].userId!)),
               );
             }
           },
@@ -316,20 +343,39 @@ class _RankingScreenState extends State<RankingScreen> {
       itemCount: rankings.length,
       itemBuilder: (context, index) {
         final ranking = rankings[index];
-        final double currentScore = _rankingSortOption == '니즈파인 순' ? ranking.avgScore : ranking.avgUserRating;
+
+        final double currentScore = _rankingSortOption == '니즈파인 순'
+            ? ranking.avgScore
+            : ranking.avgUserRating;
+
         final bool isAboveAverage = currentScore >= overallAverage;
-        final nextRanking = (index + 1 < rankings.length) ? rankings[index + 1] : null;
-        final double? nextScore = nextRanking != null ? (_rankingSortOption == '니즈파인 순' ? nextRanking.avgScore : nextRanking.avgUserRating) : null;
+
+        final nextRanking = (index + 1 < rankings.length)
+            ? rankings[index + 1]
+            : null;
+
+        final double? nextScore = nextRanking != null
+            ? (_rankingSortOption == '니즈파인 순' ? nextRanking.avgScore : nextRanking.avgUserRating)
+            : null;
+
         final bool isNextBelowAverage = nextScore != null && nextScore < overallAverage;
         final bool showDivider = isAboveAverage && isNextBelowAverage;
 
         return Column(
           children: [
-            StoreRankingCard(
-              ranking: ranking,
-              sortOption: _rankingSortOption,
+            GestureDetector(
+              onTap: () {
+                searchTrigger.value = SearchTarget(query: ranking.storeName);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ranking.storeName} (으)로 이동합니다.")));
+              },
+              child: StoreRankingCard(
+                ranking: ranking,
+                sortOption: _rankingSortOption,
+              ),
             ),
+
             if (showDivider) _buildAverageDivider(overallAverage),
+
             if (!showDivider && index < rankings.length - 1)
               const Divider(height: 1),
           ],
