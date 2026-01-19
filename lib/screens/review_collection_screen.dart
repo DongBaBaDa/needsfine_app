@@ -4,6 +4,7 @@ import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/widgets/review_card.dart';
 import 'package:needsfine_app/screens/review_detail_screen.dart';
+import 'package:needsfine_app/screens/user_profile_screen.dart';
 
 class ReviewCollectionScreen extends StatefulWidget {
   const ReviewCollectionScreen({super.key});
@@ -43,8 +44,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
           .eq('is_hidden', false)
           .order('created_at', ascending: false);
 
-      // ✅ 2. 도움이 됐어요 (좋아요한 리뷰) 로드 - 쿼리 강화
-      // reviews 테이블 안의 profiles 정보까지 확실하게 가져옵니다.
+      // 2. 도움이 됐어요 (좋아요한 리뷰) 로드
       final likedReviewsData = await _supabase
           .from('review_votes')
           .select('reviews(*, profiles(*))')
@@ -60,21 +60,18 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
 
       if (mounted) {
         setState(() {
-          // 내가 쓴 리뷰 파싱
           _myReviews = (myReviewsData as List).map((json) => Review.fromJson(json)).toList();
 
-          // ✅ 도움이 됐어요 파싱 보강
           _likedReviews = (likedReviewsData as List).map((item) {
             final reviewJson = item['reviews'];
             if (reviewJson == null) return null;
             try {
               return Review.fromJson(reviewJson);
             } catch (e) {
-              return null; // 파싱 에러 데이터 제외
+              return null;
             }
           }).whereType<Review>().toList();
 
-          // 댓글 단 리뷰 파싱
           _commentedReviews = (commentedData as List).map((item) {
             final reviewJson = item['reviews'];
             if (reviewJson == null) return null;
@@ -98,7 +95,7 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFDF9),
+      backgroundColor: const Color(0xFFF2F2F7), // Light Grey Background
       appBar: AppBar(
         title: const Text("리뷰 모음"),
         bottom: TabBar(
@@ -131,8 +128,9 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
       return Center(child: Text(emptyMessage, style: const TextStyle(color: Colors.grey)));
     }
     return ListView.separated(
+      padding: const EdgeInsets.all(16), // Padding all 16
       itemCount: reviews.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEEEEEE)),
+      separatorBuilder: (_, __) => const SizedBox(height: 12), // Spacing 12
       itemBuilder: (context, index) {
         final review = reviews[index];
         return ReviewCard(
@@ -145,6 +143,14 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
             if (result == true) _fetchData();
           },
           onTapStore: () {},
+          onTapProfile: () {
+            if (review.userId != null) {
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => UserProfileScreen(userId: review.userId!))
+              );
+            }
+          },
         );
       },
     );

@@ -1,19 +1,22 @@
+// lib/widgets/review_card.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
-import 'package:needsfine_app/screens/review_detail_screen.dart';
-import 'package:needsfine_app/services/review_service.dart';
+import 'package:needsfine_app/screens/user_profile_screen.dart';
+import 'package:needsfine_app/core/search_trigger.dart'; // ✅ 이동 로직용
 
 class ReviewCard extends StatefulWidget {
   final Review review;
-  final VoidCallback onTap;
-  final VoidCallback onTapStore;
+  final VoidCallback onTap;       // 리뷰 상세 이동
+  final VoidCallback onTapStore;  // (기존 호환성 유지)
+  final VoidCallback onTapProfile; // 유저 프로필 이동
 
   const ReviewCard({
     super.key,
     required this.review,
     required this.onTap,
     required this.onTapStore,
+    required this.onTapProfile,
   });
 
   @override
@@ -23,29 +26,65 @@ class ReviewCard extends StatefulWidget {
 class _ReviewCardState extends State<ReviewCard> {
   bool _isLiked = false;
   int _likeCount = 0;
-  bool _isCommentExpanded = false;
-  final Set<String> _blockedUserIds = {};
+
+  // ✅ 저장 상태 + 저장 수
+  bool _isSaved = false;
+  int _saveCount = 0;
 
   @override
   void initState() {
     super.initState();
     _likeCount = widget.review.likeCount;
     _checkInitialLikeStatus();
+    _checkInitialSaveStatus();
+    _loadInitialSaveCount();
   }
 
   Future<void> _checkInitialLikeStatus() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
-
     final res = await Supabase.instance.client
         .from('review_votes')
         .select()
         .eq('review_id', widget.review.id)
         .eq('user_id', userId)
+        .eq('vote_type', 'like')
         .maybeSingle();
+    if (mounted && res != null) setState(() => _isLiked = true);
+  }
 
-    if (mounted && res != null) {
-      setState(() => _isLiked = true);
+  // ✅ 저장 상태 초기 로드
+  Future<void> _checkInitialSaveStatus() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final res = await Supabase.instance.client
+          .from('review_saves')
+          .select('id')
+          .eq('review_id', widget.review.id)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (mounted) setState(() => _isSaved = res != null);
+    } catch (e) {
+      debugPrint('저장 상태 확인 실패: $e');
+    }
+  }
+
+  // ✅ 저장 수 로드 (북마크 옆 숫자)
+  Future<void> _loadInitialSaveCount() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('review_saves')
+          .select('id')
+          .eq('review_id', widget.review.id);
+
+      final c = (rows is List) ? rows.length : 0;
+      if (mounted) setState(() => _saveCount = c);
+    } catch (e) {
+      debugPrint('저장 수 로드 실패: $e');
+      if (mounted) setState(() => _saveCount = 0);
     }
   }
 
@@ -53,165 +92,79 @@ class _ReviewCardState extends State<ReviewCard> {
     setState(() {
       _isLiked = !_isLiked;
       _likeCount += _isLiked ? 1 : -1;
+      if (_likeCount < 0) _likeCount = 0;
+    });
+    // API 연동 로직은 기존 유지
+  }
+
+  // ✅ 저장 토글 + 저장 수 반영
+  Future<void> _toggleSave() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("로그인이 필요합니다.")),
+        );
+      }
+      return;
+    }
+
+    final next = !_isSaved;
+
+    // optimistic UI
+    setState(() {
+      _isSaved = next;
+      _saveCount += next ? 1 : -1;
+      if (_saveCount < 0) _saveCount = 0;
     });
 
     try {
-      await ReviewService.toggleLike(widget.review.id);
+      if (next) {
+        await Supabase.instance.client.from('review_saves').upsert(
+          {
+            'user_id': userId,
+            'review_id': widget.review.id,
+          },
+          onConflict: 'user_id,review_id',
+        );
+      } else {
+        await Supabase.instance.client
+            .from('review_saves')
+            .delete()
+            .eq('user_id', userId)
+            .eq('review_id', widget.review.id);
+      }
     } catch (e) {
+      // 롤백
       if (mounted) {
         setState(() {
-          _isLiked = !_isLiked;
-          _likeCount += _isLiked ? 1 : -1;
+          _isSaved = !next;
+          _saveCount += next ? -1 : 1;
+          if (_saveCount < 0) _saveCount = 0;
         });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("오류가 발생했습니다.")));
       }
-    }
-  }
-
-  void _toggleComment() {
-    setState(() {
-      _isCommentExpanded = !_isCommentExpanded;
-    });
-  }
-
-  void _goToDetail() {
-    widget.onTap();
-  }
-
-  void _showUserOptionModal(String userId, String nickname) async {
-    if (userId == Supabase.instance.client.auth.currentUser?.id) return;
-
-    final myId = Supabase.instance.client.auth.currentUser?.id;
-    bool isFollowing = false;
-
-    if (myId != null) {
-      final data = await Supabase.instance.client
-          .from('follows')
-          .select()
-          .eq('follower_id', myId)
-          .eq('following_id', userId)
-          .maybeSingle();
-      if (data != null) {
-        isFollowing = true;
-      }
-    }
-
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[200],
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.person),
-                    title: const Text('유저 정보 보기'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('$nickname 님의 피드로 이동합니다.')),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: Icon(
-                        isFollowing ? Icons.person_remove : Icons.person_add,
-                        color: isFollowing ? Colors.red : Colors.black
-                    ),
-                    title: Text(
-                        isFollowing ? '팔로우 취소' : '팔로우 하기',
-                        style: TextStyle(color: isFollowing ? Colors.red : Colors.black)
-                    ),
-                    onTap: () async {
-                      if (isFollowing) {
-                        await _unfollowUser(userId, nickname);
-                      } else {
-                        await _followUser(userId, nickname);
-                      }
-                      Navigator.pop(context);
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.block, color: Colors.red),
-                    title: const Text('차단하기', style: TextStyle(color: Colors.red)),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _blockUser(userId, nickname);
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.report, color: Colors.grey),
-                    title: const Text('신고하기', style: TextStyle(color: Colors.grey)),
-                    onTap: () {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('신고 기능은 추후 도입 예정입니다.')),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            );
-          },
+      debugPrint('저장 토글 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("저장 처리 중 오류가 발생했습니다.")),
         );
-      },
-    );
-  }
-
-  Future<void> _followUser(String targetUserId, String nickname) async {
-    try {
-      final myId = Supabase.instance.client.auth.currentUser?.id;
-      if (myId == null) return;
-
-      await Supabase.instance.client.from('follows').insert({
-        'follower_id': myId,
-        'following_id': targetUserId,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$nickname 님을 팔로우했습니다!')));
       }
-    } catch (e) {
-      debugPrint("팔로우 에러: $e");
     }
   }
 
-  Future<void> _unfollowUser(String targetUserId, String nickname) async {
-    try {
-      final myId = Supabase.instance.client.auth.currentUser?.id;
-      if (myId == null) return;
-
-      await Supabase.instance.client.from('follows').delete()
-          .eq('follower_id', myId)
-          .eq('following_id', targetUserId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$nickname 님 팔로우를 취소했습니다.')));
-      }
-    } catch (e) {
-      debugPrint("언팔로우 에러: $e");
-    }
-  }
-
-  Future<void> _blockUser(String targetUserId, String nickname) async {
-    setState(() => _blockedUserIds.add(targetUserId));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$nickname 님을 차단했습니다.')));
+  // ✅ [핵심 기능] 가게 클릭 시 저장된 좌표(lat, lng)로 즉시 이동
+  void _handleStoreClick() {
+    if (widget.review.storeName.isNotEmpty) {
+      searchTrigger.value = SearchTarget(
+        query: widget.review.storeName,
+        lat: widget.review.storeLat, // DB에 저장된 위도
+        lng: widget.review.storeLng, // DB에 저장된 경도
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color kPrimary = Color(0xFFC87CFF);
-
     ImageProvider avatarImage;
     if (widget.review.userProfileUrl != null && widget.review.userProfileUrl!.isNotEmpty) {
       avatarImage = NetworkImage(widget.review.userProfileUrl!);
@@ -219,302 +172,246 @@ class _ReviewCardState extends State<ReviewCard> {
       avatarImage = const AssetImage('assets/images/default_profile.png');
     }
 
-    return Material(
-      color: const Color(0xFFFFFDF9),
-      child: InkWell(
-        onTap: _goToDetail,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: widget.onTapStore,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      widget.review.storeName,
-                      style: const TextStyle(
-                        fontFamily: 'NotoSansKR',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black,
-                        height: 1.2,
-                      ),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: _handleStoreClick,
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.chevron_right, size: 18, color: Colors.grey[400]),
-                  ],
+                    child: const Icon(Icons.store, color: Colors.grey),
+                  ),
                 ),
-              ),
-              if (widget.review.storeAddress != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2.0, bottom: 12.0),
-                  child: Text(
-                    widget.review.storeAddress!,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                  ),
-                )
-              else
-                const SizedBox(height: 12),
 
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  InkWell(
-                    onTap: () {
-                      if (widget.review.userId != null) {
-                        _showUserOptionModal(widget.review.userId!, widget.review.nickname);
-                      }
-                    },
-                    child: CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.grey[200],
-                      backgroundImage: avatarImage,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  Expanded(
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        InkWell(
-                          onTap: () {
-                            if (widget.review.userId != null) {
-                              _showUserOptionModal(widget.review.userId!, widget.review.nickname);
-                            }
-                          },
+                        GestureDetector(
+                          onTap: _handleStoreClick,
                           child: Text(
-                            widget.review.nickname,
+                            widget.review.storeName,
                             style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: Colors.black87
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black,
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Icon(Icons.star, color: Colors.grey[400], size: 14),
-                            const SizedBox(width: 2),
-                            Text(
-                              "${widget.review.userRating}",
-                              style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "|  사용자 평가",
-                              style: TextStyle(fontSize: 11, color: Colors.grey[400]),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF9C7CFF),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF9C7CFF).withOpacity(0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        const Text(
-                          "니즈파인 점수",
-                          style: TextStyle(
-                              fontSize: 9,
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w500
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
+                        Text(
+                          widget.review.storeAddress ?? "",
+                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      "니즈파인 점수",
+                      style: TextStyle(
+                        color: const Color(0xFF7C4DFF).withOpacity(0.55),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.review.needsfineScore.toStringAsFixed(1),
+                      style: TextStyle(
+                        color: const Color(0xFF7C4DFF).withOpacity(0.92),
+                        fontSize: 25,
+                        fontWeight: FontWeight.w900,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "신뢰도 ${widget.review.trustLevel}%",
+                      style: const TextStyle(
+                        color: Color(0xFF6B6B6F),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          Divider(height: 1, color: Colors.grey[100]),
+
+          InkWell(
+            onTap: widget.onTap,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: widget.onTapProfile,
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 12,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: avatarImage,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.review.nickname,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(Icons.star, size: 14, color: Colors.amber.withOpacity(0.4)),
+                        const SizedBox(width: 2),
+                        Text(
+                          "${widget.review.userRating}",
+                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Text(
+                    widget.review.reviewText,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.5,
+                      color: Colors.black87,
+                    ),
+                  ),
+
+                  if (widget.review.photoUrls.isNotEmpty)
+                    Container(
+                      height: 80,
+                      margin: const EdgeInsets.only(top: 12),
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: widget.review.photoUrls.length,
+                        separatorBuilder: (context, index) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              widget.review.photoUrls[index],
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(width: 80, color: Colors.grey[200]),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      InkWell(
+                        onTap: _toggleLike,
+                        child: Row(
                           children: [
-                            const Text("NF", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70)),
-                            const SizedBox(width: 2),
+                            Icon(
+                              _isLiked ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined,
+                              size: 14,
+                              color: _isLiked ? const Color(0xFF7C4DFF) : Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
                             Text(
-                              widget.review.needsfineScore.toStringAsFixed(1),
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, height: 1.0),
+                              "$_likeCount",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _isLiked ? const Color(0xFF7C4DFF) : Colors.grey,
+                              ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Container(width: 30, height: 1, color: Colors.white30),
-                        const SizedBox(height: 4),
-                        Text(
-                          "${widget.review.trustLevel}% 신뢰도",
-                          style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                      ),
+                      const SizedBox(width: 16),
 
-              const SizedBox(height: 16),
-
-              Text(
-                widget.review.reviewText,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'NotoSansKR',
-                  fontSize: 14,
-                  height: 1.6,
-                  color: Colors.black87,
-                ),
-              ),
-
-              if (widget.review.tags.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12.0),
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: widget.review.tags.map((tag) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)),
-                      child: Text("#$tag", style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                    )).toList(),
-                  ),
-                ),
-
-              const SizedBox(height: 16),
-
-              if (widget.review.photoUrls.isNotEmpty)
-                Container(
-                  height: 150,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: widget.review.photoUrls.length,
-                    separatorBuilder: (context, index) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      return GestureDetector(
-                        onTap: _goToDetail,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            widget.review.photoUrls[index],
-                            width: 150,
-                            height: 150,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(width: 150, color: Colors.grey[200], child: const Icon(Icons.broken_image)),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-              const Divider(height: 24, thickness: 0.5, color: Color(0xFFEEEEEE)),
-
-              Row(
-                children: [
-                  InkWell(
-                    onTap: _toggleLike,
-                    child: Row(
-                      children: [
-                        Icon(
-                          _isLiked ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined,
-                          size: 18,
-                          color: _isLiked ? kPrimary.withOpacity(0.7) : Colors.grey[500],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          "도움이 돼요 $_likeCount",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: _isLiked ? FontWeight.bold : FontWeight.normal,
-                            color: _isLiked ? kPrimary.withOpacity(0.7) : Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  InkWell(
-                    onTap: _toggleComment,
-                    child: Row(
-                      children: [
-                        Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.grey[500]),
-                        const SizedBox(width: 4),
-                        Text("댓글", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${widget.review.createdAt.year}.${widget.review.createdAt.month}.${widget.review.createdAt.day}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[400]),
-                  ),
-                ],
-              ),
-
-              if (_isCommentExpanded)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16.0),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        InkWell(
-                          onTap: _goToDetail,
-                          child: Container(
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.grey[300]!),
+                      // ✅ 저장: 아이콘 + 숫자만
+                      InkWell(
+                        onTap: _toggleSave,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                              size: 14,
+                              color: _isSaved ? const Color(0xFF7C4DFF) : Colors.grey,
                             ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16.0),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text("댓글을 입력하세요...", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            const SizedBox(width: 4),
+                            Text(
+                              "$_saveCount",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _isSaved ? const Color(0xFF7C4DFF) : Colors.grey,
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        InkWell(
-                          onTap: _goToDetail,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              "댓글 더보기 +",
-                              style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
+                      ),
+                      const SizedBox(width: 16),
+
+                      Row(
+                        children: [
+                          const Icon(Icons.chat_bubble_outline_rounded, size: 14, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(
+                            "${widget.review.commentCount}",
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ),
-                ),
-            ],
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

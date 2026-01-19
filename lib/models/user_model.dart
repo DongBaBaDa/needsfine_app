@@ -13,6 +13,9 @@ class UserProfile {
   List<String> tastes;
   DateTime? birthDate;
 
+  // ✅ [추가] 취향 태그 (UserProfileScreen에서 사용됨)
+  List<String> tasteTags;
+
   UserProfile({
     required this.nickname,
     this.introduction = '',
@@ -25,5 +28,7 @@ class UserProfile {
     this.snsLinks = const [],
     this.tastes = const [],
     this.birthDate,
+    // ✅ [추가] 생성자 초기화
+    this.tasteTags = const [],
   });
 }

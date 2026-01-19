@@ -1,3 +1,4 @@
+// lib/screens/nearby_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
@@ -8,9 +9,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:needsfine_app/services/naver_map_service.dart';
 import 'package:needsfine_app/services/naver_search_service.dart';
 import 'package:needsfine_app/models/app_data.dart';
-import 'package:needsfine_app/core/search_trigger.dart';
+import 'package:needsfine_app/core/search_trigger.dart'; // ✅ 전역 트리거
 import 'package:needsfine_app/screens/write_review_screen.dart';
 import 'package:needsfine_app/screens/store_reviews_screen.dart';
+
+// ✅ Supabase 조회(1번 문제 해결 + 댓글/저장 카운트)
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NearbyScreen extends StatefulWidget {
   const NearbyScreen({super.key});
@@ -20,7 +24,7 @@ class NearbyScreen extends StatefulWidget {
 
 class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClientMixin {
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => true; // 탭 이동 시 지도 상태 유지
 
   final Completer<NaverMapController> _controller = Completer();
   final _searchController = TextEditingController();
@@ -39,9 +43,18 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   bool _isSearching = false;
 
   static const NCameraPosition _initialPosition = NCameraPosition(
-    target: NLatLng(37.5665, 126.9780),
+    target: NLatLng(37.5665, 126.9780), // 기본 위치 (서울시청)
     zoom: 14.0,
   );
+
+  // ✅ Supabase
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  // ✅ 매장 저장 상태/카운트, 댓글 카운트
+  bool _isStoreSaved = false;
+  bool _isSavingStore = false;
+  int _storeSaveCount = 0;
+  int _storeCommentCount = 0;
 
   @override
   void initState() {
@@ -50,20 +63,20 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     _searchService = NaverSearchService();
     _initializeMap();
 
-    // 외부(리뷰 등)에서 검색 요청이 왔을 때 리스너 연결
+    // ✅ [핵심] 외부(리뷰 작성 완료, 랭킹 화면 등)에서 검색/이동 요청이 왔을 때 감지
     searchTrigger.addListener(_handleExternalSearch);
   }
 
-  // ✅ 외부(리뷰 상세 등)에서 넘어왔을 때 처리
+  // ✅ 외부 요청 처리 로직
   void _handleExternalSearch() async {
     final target = searchTrigger.value;
     if (target != null) {
       _searchController.text = target.query;
-      searchTrigger.value = null; // 초기화
+      searchTrigger.value = null; // 트리거 초기화 (재실행 방지)
       FocusScope.of(context).unfocus();
       setState(() => _autocompleteResults = []); // 자동완성 닫기
 
-      // 1. 좌표가 명확한 경우 (리뷰 상세에서 이동) -> 즉시 이동
+      // 1. 좌표가 명확한 경우 (리뷰 작성 후, 랭킹 상세에서 이동 등) -> 즉시 이동
       if (target.lat != null && target.lng != null) {
         final position = NLatLng(target.lat!, target.lng!);
         final dummyPlace = NaverPlace(
@@ -72,9 +85,10 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
           address: '',
           roadAddress: '',
         );
+        // 지오코딩 없이 바로 좌표로 이동
         _selectPlaceWithCoordinates(dummyPlace, position);
       }
-      // 2. 좌표가 없는 경우 (단순 검색어) -> 검색 실행
+      // 2. 좌표가 없는 경우 (단순 텍스트 검색) -> 검색 API 실행
       else {
         _handleManualSearch(target.query);
       }
@@ -83,7 +97,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
 
   @override
   void dispose() {
-    searchTrigger.removeListener(_handleExternalSearch);
+    searchTrigger.removeListener(_handleExternalSearch); // 리스너 해제
     _searchController.dispose();
     _debounce?.cancel();
     super.dispose();
@@ -114,7 +128,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     }
   }
 
-  // ✅ [기능 추가] 검색어 입력 시 자동완성 (Debounce 적용)
+  // ✅ 검색어 입력 시 자동완성 (Debounce 적용)
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
@@ -129,8 +143,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         final results = await _searchService.searchPlaces(query);
         if (mounted) {
           setState(() {
-            // 최대 5개까지만 표시
-            _autocompleteResults = results.take(5).toList();
+            _autocompleteResults = results.take(5).toList(); // 최대 5개
           });
         }
       } catch (e) {
@@ -141,11 +154,11 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     });
   }
 
-  // 검색 버튼 눌렀을 때 (키보드 완료 or 돋보기)
+  // 검색 버튼 눌렀을 때 (수동 검색)
   Future<void> _handleManualSearch(String query) async {
     if (query.isEmpty) return;
     FocusScope.of(context).unfocus();
-    setState(() => _autocompleteResults = []); // 검색 실행 시 자동완성 닫기
+    setState(() => _autocompleteResults = []);
 
     final places = await _searchService.searchPlaces(query);
     if (places.isEmpty) {
@@ -172,7 +185,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     } catch (_) {}
   }
 
-  // ✅ [수정] 핀 디자인 개선 (흰 배경 + 검은 글씨 + 보라 테두리)
+  // ✅ 커스텀 마커 위젯 (흰 배경 + 검은 글씨 + 보라 테두리)
   Widget _buildCustomMarkerWidget(String title) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -180,7 +193,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white, // 흰색 배경
+            color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
@@ -189,7 +202,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                 offset: const Offset(0, 3),
               )
             ],
-            // 니즈파인 컬러 테두리
             border: Border.all(color: const Color(0xFF9C7CFF), width: 2.5),
           ),
           child: Row(
@@ -197,20 +209,18 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             children: [
               const Icon(Icons.place, color: Color(0xFF9C7CFF), size: 20),
               const SizedBox(width: 6),
-              // 검은색 굵은 글씨로 변경하여 가독성 확보
               Text(
                 title,
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 14,
-                  color: Colors.black, // 글씨색 검정
+                  color: Colors.black,
                   height: 1.2,
                 ),
               ),
             ],
           ),
         ),
-        // 말풍선 꼬리
         ClipPath(
           clipper: _TriangleClipper(),
           child: Container(
@@ -223,20 +233,25 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     );
   }
 
+  String _normalizedAddress(NaverPlace place) {
+    final raw = (place.roadAddress.isNotEmpty ? place.roadAddress : place.address);
+    return raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  // ✅ 좌표가 이미 있는 경우 바로 이동 (리뷰 작성 후 호출됨)
   Future<void> _selectPlaceWithCoordinates(NaverPlace place, NLatLng position) async {
     _updateUI(place, position);
   }
 
-  // 검색 결과 선택 시 (자동완성 or 리스트)
+  // 검색 결과 선택 시 (좌표 변환 필요)
   Future<void> _selectPlace(NaverPlace place) async {
     setState(() {
-      _searchController.text = place.cleanTitle; // 검색창에 선택한 가게 이름 표시
-      _autocompleteResults = []; // 자동완성 목록 닫기
+      _searchController.text = place.cleanTitle;
+      _autocompleteResults = [];
     });
     FocusScope.of(context).unfocus();
 
     try {
-      // ✅ 도로명 주소 우선 사용 (정확도 향상)
       final queryAddr = place.roadAddress.isNotEmpty ? place.roadAddress : place.address;
       final response = await _geocodingService.searchAddress(queryAddr);
 
@@ -252,7 +267,274 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     }
   }
 
+  // ✅ (중요) Store 생성자 파라미터명이 프로젝트마다 달라서
+  // Function.apply로 후보 이름을 시도해서 "컴파일 에러 없이" 생성
+  Store _createStoreFlexible({
+    required String name,
+    required double latitude,
+    required double longitude,
+    required double needsFineScore,
+    required int avgTrust,
+    required int reviewCount,
+    required List<String> allPhotos,
+  }) {
+    final ctor = Store.new as Function;
+
+    final common = <Symbol, dynamic>{
+      #name: name,
+      #latitude: latitude,
+      #longitude: longitude,
+      #needsFineScore: needsFineScore,
+      #reviewCount: reviewCount,
+      #allPhotos: allPhotos,
+    };
+
+    final candidates = <Map<Symbol, dynamic>>[
+      {...common, #averageTrustLevel: avgTrust},
+      {...common, #averageTrust: avgTrust},
+      {...common, #trustLevel: avgTrust},
+      {...common, #avgTrust: avgTrust},
+    ];
+
+    for (final named in candidates) {
+      try {
+        return Function.apply(ctor, const [], named) as Store;
+      } catch (_) {}
+    }
+
+    // 마지막: trust 없이라도 생성(최악에도 화면은 떠야 함)
+    return Function.apply(ctor, const [], common) as Store;
+  }
+
+  // ✅ (추가) store_saves / 댓글 카운트 로딩
+  Future<void> _loadStoreCountsAndState(NaverPlace place, NLatLng position) async {
+    final userId = _supabase.auth.currentUser?.id;
+    final name = place.cleanTitle;
+    final addr = _normalizedAddress(place);
+
+    // 1) 저장 수
+    try {
+      final rows = await _supabase
+          .from('store_saves')
+          .select('id')
+          .eq('store_name', name)
+          .eq('store_address', addr);
+      final c = (rows is List) ? rows.length : 0;
+      if (mounted) setState(() => _storeSaveCount = c);
+    } catch (e) {
+      debugPrint("store_saves count 실패: $e");
+      if (mounted) setState(() => _storeSaveCount = 0);
+    }
+
+    // 2) 저장 상태
+    try {
+      if (userId == null) {
+        if (mounted) setState(() => _isStoreSaved = false);
+      } else {
+        final saved = await _supabase
+            .from('store_saves')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('store_name', name)
+            .eq('store_address', addr)
+            .maybeSingle();
+        if (mounted) setState(() => _isStoreSaved = saved != null);
+      }
+    } catch (e) {
+      debugPrint("store_saves state 실패: $e");
+      if (mounted) setState(() => _isStoreSaved = false);
+    }
+
+    // 3) 댓글 수: reviews.comment_count 합산 (없으면 0)
+    try {
+      // 우선 name+addr
+      final rows = await _supabase
+          .from('reviews')
+          .select('comment_count, store_lat, store_lng, is_hidden')
+          .eq('store_name', name)
+          .eq('store_address', addr);
+
+      List list = (rows is List) ? rows : [];
+
+      // fallback: 좌표 근접 검색(주소가 달라서 매칭 안 되는 케이스 대응)
+      if (list.isEmpty) {
+        final eps = 0.0007;
+        final rows2 = await _supabase
+            .from('reviews')
+            .select('comment_count, store_lat, store_lng, is_hidden')
+            .gte('store_lat', position.latitude - eps)
+            .lte('store_lat', position.latitude + eps)
+            .gte('store_lng', position.longitude - eps)
+            .lte('store_lng', position.longitude + eps);
+
+        list = (rows2 is List) ? rows2 : [];
+      }
+
+      int sum = 0;
+      for (final r in list) {
+        final m = r as Map;
+        final hidden = m['is_hidden'];
+        if (hidden is bool && hidden == true) continue;
+
+        final v = m['comment_count'];
+        if (v is int) sum += v;
+        if (v is num) sum += v.toInt();
+      }
+
+      if (mounted) setState(() => _storeCommentCount = sum);
+    } catch (e) {
+      debugPrint("comment_count 합산 실패: $e");
+      if (mounted) setState(() => _storeCommentCount = 0);
+    }
+  }
+
+  // ✅ (추가) 매장 저장 토글
+  Future<void> _toggleStoreSave() async {
+    if (_isSavingStore) return;
+
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
+      }
+      return;
+    }
+
+    final place = _searchedPlace;
+    if (place == null) return;
+
+    final name = place.cleanTitle;
+    final addr = _normalizedAddress(place);
+
+    final next = !_isStoreSaved;
+
+    setState(() {
+      _isSavingStore = true;
+      _isStoreSaved = next; // optimistic
+      _storeSaveCount += next ? 1 : -1;
+      if (_storeSaveCount < 0) _storeSaveCount = 0;
+    });
+
+    try {
+      if (next) {
+        await _supabase.from('store_saves').insert({
+          'user_id': userId,
+          'store_name': name,
+          'store_address': addr,
+        });
+      } else {
+        await _supabase
+            .from('store_saves')
+            .delete()
+            .eq('user_id', userId)
+            .eq('store_name', name)
+            .eq('store_address', addr);
+      }
+    } catch (e) {
+      // rollback
+      if (mounted) {
+        setState(() {
+          _isStoreSaved = !next;
+          _storeSaveCount += next ? -1 : 1;
+          if (_storeSaveCount < 0) _storeSaveCount = 0;
+        });
+      }
+      debugPrint("store_saves 토글 실패: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("저장 처리 중 오류가 발생했습니다.")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingStore = false);
+    }
+  }
+
+  // ✅ [1번 해결] DB에서 매장 리뷰 요약을 읽어 Store로 구성 (flutter clean/run 해도 동일)
+  Future<Store?> _fetchStoreFromSupabase(NaverPlace place, NLatLng position) async {
+    final name = place.cleanTitle;
+    final addr = _normalizedAddress(place);
+
+    // 1) name+addr로 reviews 조회
+    List rows = [];
+    try {
+      final res = await _supabase
+          .from('reviews')
+          .select('needsfine_score, trust_level, photo_urls, is_hidden, store_lat, store_lng')
+          .eq('store_name', name)
+          .eq('store_address', addr);
+
+      rows = (res is List) ? res : [];
+    } catch (e) {
+      debugPrint("reviews(name+addr) 조회 실패: $e");
+    }
+
+    // 2) fallback: 좌표 근접 검색 (주소 표기 차이로 매칭 안 되는 케이스 대응)
+    if (rows.isEmpty) {
+      try {
+        final eps = 0.0007;
+        final res2 = await _supabase
+            .from('reviews')
+            .select('needsfine_score, trust_level, photo_urls, is_hidden, store_lat, store_lng, store_name, store_address')
+            .gte('store_lat', position.latitude - eps)
+            .lte('store_lat', position.latitude + eps)
+            .gte('store_lng', position.longitude - eps)
+            .lte('store_lng', position.longitude + eps);
+
+        rows = (res2 is List) ? res2 : [];
+      } catch (e) {
+        debugPrint("reviews(lat/lng) 조회 실패: $e");
+      }
+    }
+
+    if (rows.isEmpty) return null;
+
+    double totalScore = 0.0;
+    int totalTrust = 0;
+    int count = 0;
+
+    final photos = <String>{};
+
+    for (final r in rows) {
+      final m = r as Map;
+
+      final hidden = m['is_hidden'];
+      if (hidden is bool && hidden == true) continue;
+
+      final s = m['needsfine_score'];
+      final t = m['trust_level'];
+
+      totalScore += (s is num) ? s.toDouble() : 0.0;
+      totalTrust += (t is num) ? t.round() : 0;
+      count++;
+
+      final pu = m['photo_urls'];
+      if (pu is List) {
+        for (final x in pu) {
+          if (x is String && x.isNotEmpty) photos.add(x);
+        }
+      }
+    }
+
+    if (count == 0) return null;
+
+    final avgScore = totalScore / count;
+    final avgTrust = (totalTrust / count).round();
+
+    return _createStoreFlexible(
+      name: name,
+      latitude: position.latitude,
+      longitude: position.longitude,
+      needsFineScore: avgScore,
+      avgTrust: avgTrust,
+      reviewCount: count,
+      allPhotos: photos.toList(),
+    );
+  }
+
+  // ✅ 지도 이동 및 UI 업데이트 (공통 로직)
   void _updateUI(NaverPlace place, NLatLng position) async {
+    // 1) 기존 AppData 매칭은 그대로 유지(있으면 즉시 사용)
     Store? matched;
     try {
       matched = AppData().stores.firstWhere(
@@ -266,12 +548,23 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       _searchedPlace = place;
       _matchedStore = matched;
       _selectedPosition = position;
-      _showBottomSheet = true;
+      _showBottomSheet = true; // 바텀시트 열기
     });
 
+    // ✅ 댓글/저장 카운트/상태 로딩
+    await _loadStoreCountsAndState(place, position);
+
+    // ✅ [1번 해결] DB에서 매장 요약 재조회 후 반영
+    final dbStore = await _fetchStoreFromSupabase(place, position);
+    if (dbStore != null && mounted) {
+      setState(() => _matchedStore = dbStore);
+    }
+
     final controller = await _controller.future;
+    // 카메라 이동
     controller.updateCamera(NCameraUpdate.scrollAndZoomTo(target: position, zoom: 16));
 
+    // 마커 추가
     final iconImage = await NOverlayImage.fromWidget(
       widget: _buildCustomMarkerWidget(place.cleanTitle),
       context: context,
@@ -308,6 +601,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     );
   }
 
+  // 리뷰 작성 화면으로 이동
   Future<void> _navigateToWriteReview() async {
     final result = await Navigator.push(
       context,
@@ -323,8 +617,10 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       ),
     );
 
+    // 리뷰 작성 완료 후 돌아왔을 때
     if (result == true) {
       if (_searchedPlace != null && _selectedPosition != null) {
+        // 해당 위치를 다시 선택하여 갱신
         _selectPlaceWithCoordinates(_searchedPlace!, _selectedPosition!);
       }
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("소중한 리뷰 감사합니다!")));
@@ -335,7 +631,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      resizeToAvoidBottomInset: false, // 키보드 올라와도 지도 리사이즈 방지
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           // 1. 지도
@@ -347,7 +643,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             ),
             onMapReady: (controller) { if (!_controller.isCompleted) _controller.complete(controller); },
             onMapTapped: (_, __) {
-              // 지도 빈 곳 터치 시 검색결과/자동완성 닫기
               if (_showBottomSheet) setState(() => _showBottomSheet = false);
               if (_autocompleteResults.isNotEmpty) setState(() => _autocompleteResults = []);
               FocusScope.of(context).unfocus();
@@ -371,9 +666,9 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                       ),
                       child: TextField(
                         controller: _searchController,
-                        onChanged: _onSearchChanged, // ✅ 입력 시 자동완성 호출
+                        onChanged: _onSearchChanged,
                         decoration: const InputDecoration(
-                          hintText: '맛집 검색 (예: 광춘원)',
+                          hintText: '매장 검색',
                           prefixIcon: Icon(Icons.search, color: Color(0xFF9C7CFF)),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -382,11 +677,11 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                       ),
                     ),
 
-                    // ✅ 자동완성 리스트 (검색 결과가 있을 때만 표시)
+                    // 자동완성 리스트
                     if (_autocompleteResults.isNotEmpty)
                       Container(
                         margin: const EdgeInsets.only(top: 8),
-                        constraints: const BoxConstraints(maxHeight: 250), // 최대 높이 제한 (스크롤 가능)
+                        constraints: const BoxConstraints(maxHeight: 250),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
@@ -407,7 +702,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                                 maxLines: 1, overflow: TextOverflow.ellipsis,
                               ),
                               onTap: () {
-                                _selectPlace(place); // 선택 시 해당 장소로 이동
+                                _selectPlace(place);
                               },
                             );
                           },
@@ -419,7 +714,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             ),
           ),
 
-          // 3. 장소 정보 바텀 시트
+          // 3. 장소 정보 바텀 시트 (✅ 디자인은 롤백 유지 + 요청 기능만 추가)
           if (_showBottomSheet && _searchedPlace != null)
             DraggableScrollableSheet(
               initialChildSize: 0.35,
@@ -439,7 +734,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                         Container(
                           margin: const EdgeInsets.only(top: 12, bottom: 8),
                           width: 40, height: 4,
-                          decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                          decoration: BoxDecoration(color: Colors.grey, borderRadius: BorderRadius.circular(2)),
                         ),
                         _buildSheetContent(),
                       ],
@@ -457,15 +752,61 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     final place = _searchedPlace!;
     final store = _matchedStore;
 
+    final title = place.cleanTitle;
+    final addrText = (place.roadAddress.isNotEmpty ? place.roadAddress : place.address);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(place.cleanTitle, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          // ✅ 이름 + 저장하기 버튼 (요청)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 10),
+              InkWell(
+                onTap: _toggleStoreSave,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _isStoreSaved ? const Color(0xFF9C7CFF) : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF9C7CFF)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isStoreSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                        size: 18,
+                        color: _isStoreSaved ? Colors.white : const Color(0xFF9C7CFF),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _isStoreSaved ? "저장됨" : "저장하기",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: _isStoreSaved ? Colors.white : const Color(0xFF9C7CFF),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
           const SizedBox(height: 4),
-          if (place.roadAddress.isNotEmpty || place.address.isNotEmpty)
-            Text(place.roadAddress.isNotEmpty ? place.roadAddress : place.address, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          if (addrText.isNotEmpty)
+            Text(addrText, style: const TextStyle(color: Colors.grey, fontSize: 13)),
           const SizedBox(height: 16),
 
           if (store != null) ...[
@@ -473,12 +814,63 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _buildScoreBox("니즈파인 점수", store.needsFineScore.toStringAsFixed(1), const Color(0xFF9C7CFF)),
-                _buildScoreBox("평균 신뢰도", "${store.averageTrustLevel}%", store.averageTrustLevel >= 50 ? Colors.green : Colors.orange),
+                _buildScoreBox(
+                  "평균 신뢰도",
+                  "${store.averageTrustLevel}%",
+                  store.averageTrustLevel >= 50 ? Colors.green : Colors.orange,
+                ),
               ],
             ),
             const SizedBox(height: 16),
             Text("리뷰 ${store.reviewCount}개", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 10),
+
+            // ✅ 댓글 버튼 + 댓글 수 / 저장 버튼 + 저장 수 (요청)
+            Row(
+              children: [
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => StoreReviewsScreen(store: store)),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Colors.grey),
+                        const SizedBox(width: 6),
+                        Text("$_storeCommentCount", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                InkWell(
+                  onTap: _toggleStoreSave,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _isStoreSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                          size: 18,
+                          color: const Color(0xFF9C7CFF),
+                        ),
+                        const SizedBox(width: 6),
+                        Text("$_storeSaveCount", style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF9C7CFF))),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
             const SizedBox(height: 12),
+
             if (store.allPhotos.isNotEmpty)
               SizedBox(
                 height: 100,
@@ -505,6 +897,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                 decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
                 child: const Center(child: Text("등록된 사진이 없습니다", style: TextStyle(color: Colors.grey))),
               ),
+
             const SizedBox(height: 20),
             Row(
               children: [
@@ -543,7 +936,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
               padding: const EdgeInsets.all(20),
               width: double.infinity,
               decoration: BoxDecoration(
-                color: Colors.grey[50],
+                color: Colors.grey[5],
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey[200]!),
               ),
@@ -576,12 +969,12 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             children: [
               const Icon(Icons.location_on_outlined, color: Colors.grey),
               const SizedBox(width: 8),
-              Expanded(child: Text(
-                  (place.roadAddress.isNotEmpty ? place.roadAddress : place.address).isNotEmpty
-                      ? (place.roadAddress.isNotEmpty ? place.roadAddress : place.address)
-                      : "위치 정보 없음 (좌표 기반)",
-                  style: const TextStyle(color: Colors.black87)
-              )),
+              Expanded(
+                child: Text(
+                  addrText.isNotEmpty ? addrText : "위치 정보 없음 (좌표 기반)",
+                  style: const TextStyle(color: Colors.black87),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 100),

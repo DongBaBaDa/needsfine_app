@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cached_network_image/cached_network_image.dart'; // ✅ 추가
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
+import 'package:needsfine_app/models/ranking_models.dart';
+import '../models/user_model.dart';
+
+// ✅ 화면 이동을 위한 import
 import 'package:needsfine_app/screens/taste_selection_screen.dart';
 import 'package:needsfine_app/screens/myfeed_screen.dart';
 import 'package:needsfine_app/screens/follow_list_screen.dart';
 import 'package:needsfine_app/screens/review_collection_screen.dart';
-import 'package:needsfine_app/models/ranking_models.dart'; // ✅ [Fix] Review 타입 import 추가
-import '../models/user_model.dart';
-import 'profile_edit_screen.dart';
-import 'info_edit_screen.dart';
-import 'notice_screen.dart';
-import 'suggestion_write_screen.dart';
-import 'inquiry_write_screen.dart';
-import 'admin_dashboard_screen.dart';
+import 'package:needsfine_app/screens/profile_edit_screen.dart';
+import 'package:needsfine_app/screens/info_edit_screen.dart';
+import 'package:needsfine_app/screens/notice_screen.dart';
+import 'package:needsfine_app/screens/suggestion_write_screen.dart';
+import 'package:needsfine_app/screens/inquiry_write_screen.dart';
+import 'package:needsfine_app/screens/admin_dashboard_screen.dart';
+import 'package:needsfine_app/screens/my_lists_screen.dart'; // ✅ [추가] 나만의 리스트 화면
+
+// ✅ 알림 뱃지 위젯
 import 'package:needsfine_app/widgets/notification_badge.dart';
 
 class UserMyPageScreen extends StatefulWidget {
@@ -26,15 +31,10 @@ class UserMyPageScreen extends StatefulWidget {
 class _UserMyPageScreenState extends State<UserMyPageScreen> {
   final _supabase = Supabase.instance.client;
   UserProfile? _userProfile;
-
-  // ✅ [Fix] MyFeedScreen에 넘길 때 Review 타입을 쓰므로 List<Review>로 유지
   List<Review> _myReviews = [];
-
   List<String> _myTags = [];
   bool _isLoading = true;
   bool _isAdmin = false;
-
-  // ✅ 계산된 통계 변수
   double _avgNeedsFineScore = 0.0;
   int _avgTrustLevel = 0;
 
@@ -45,6 +45,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   }
 
   Future<void> _fetchUserData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -53,53 +54,41 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       final profileData = await _supabase.from('profiles').select().eq('id', userId).maybeSingle();
       final reviewData = await _supabase.from('reviews').select().eq('user_id', userId).order('created_at', ascending: false);
 
-      // 팔로우 수 카운트
       final followerCountResponse = await _supabase.from('follows').count(CountOption.exact).eq('following_id', userId);
       final followingCountResponse = await _supabase.from('follows').count(CountOption.exact).eq('follower_id', userId);
 
-      // ✅ [Fix] reviewData를 안전하게 리스트로 변환
       final List<dynamic> rawList = (reviewData is List) ? reviewData : <dynamic>[];
 
-      // ✅ [Fix] 평균 점수 및 신뢰도 계산 (raw map 기준으로 계산)
+      // 평균 점수 및 신뢰도 계산
       if (rawList.isNotEmpty) {
         double totalScore = 0.0;
         int totalTrust = 0;
-
         for (final item in rawList) {
           final review = (item is Map) ? Map<String, dynamic>.from(item as Map) : <String, dynamic>{};
-
-          // ✅ [Fix] num -> double
           totalScore += ((review['needsfine_score'] as num?) ?? 0).toDouble();
-
-          // ✅ [Fix] num -> int (round/toInt 중 택1, 여기선 round)
           totalTrust += (((review['trust_level'] as num?) ?? 0).round());
         }
-
         _avgNeedsFineScore = totalScore / rawList.length;
         _avgTrustLevel = (totalTrust / rawList.length).round();
       } else {
         _avgNeedsFineScore = 0.0;
-        _avgTrustLevel = 0; // 리뷰 없으면 0
+        _avgTrustLevel = 0;
       }
 
-      // ✅ [Fix] MyFeed에 넘길 리뷰 목록은 Review 객체로 변환해서 보관
-      final List<Review> reviewObjects = rawList
-          .whereType<Map>()
-          .map((m) => Review.fromJson(Map<String, dynamic>.from(m)))
-          .toList();
+      // 리뷰 객체 변환
+      final List<Review> reviewObjects = rawList.whereType<Map>().map((m) => Review.fromJson(Map<String, dynamic>.from(m))).toList();
 
       if (profileData != null && mounted) {
         setState(() {
           _isAdmin = profileData['is_admin'] ?? false;
           _myTags = List<String>.from(profileData['taste_tags'] ?? []);
           _myReviews = reviewObjects;
-
           _userProfile = UserProfile(
             nickname: profileData['nickname'] ?? "이름 없음",
-            introduction: profileData['introduction'] ?? "자신을 알릴 수 있는 소개글을 작성해 주세요.",
-            activityZone: profileData['activity_zone'] ?? "활동 지역 미설정",
+            introduction: profileData['introduction'] ?? "소개글이 없습니다.",
+            activityZone: profileData['activity_zone'] ?? "지역 미설정",
             profileImageUrl: profileData['profile_image_url'] ?? "",
-            reliability: _avgTrustLevel, // ✅ [Fix] 계산된 평균 신뢰도로 교체
+            reliability: _avgTrustLevel,
             followerCount: followerCountResponse,
             followingCount: followingCountResponse,
           );
@@ -112,11 +101,10 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     }
   }
 
-  // ... (고객센터 로직 유지)
   void _showCustomerService(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFFFFFDF9),
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => SafeArea(
         child: Column(
@@ -126,20 +114,20 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             const Text("고객센터", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             ListTile(
-              leading: const Icon(Icons.rate_review_outlined),
-              title: const Text("건의사항 보내기"),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const SuggestionWriteScreen()));
-              },
+                leading: const Icon(Icons.rate_review_outlined),
+                title: const Text("건의사항 보내기"),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SuggestionWriteScreen()));
+                }
             ),
             ListTile(
-              leading: const Icon(Icons.email_outlined),
-              title: const Text("1:1 문의 (앱 내 작성)"),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const InquiryWriteScreen()));
-              },
+                leading: const Icon(Icons.email_outlined),
+                title: const Text("1:1 문의"),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const InquiryWriteScreen()));
+                }
             ),
             const SizedBox(height: 20),
           ],
@@ -151,52 +139,31 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_userProfile == null) return const Scaffold(body: Center(child: Text("사용자 정보를 찾을 수 없습니다.")));
+    if (_userProfile == null) return const Scaffold(body: Center(child: Text("정보를 불러올 수 없습니다.")));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFDF9),
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: const Text("마이페이지"),
+        title: const Text("마이파인", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
         actions: [
           NotificationBadge(onTap: () => Navigator.pushNamed(context, '/notifications')),
-          IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InfoEditScreen()))),
+          IconButton(
+              icon: const Icon(Icons.settings_outlined, color: Colors.black),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InfoEditScreen()))
+          ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _fetchUserData,
-        color: kNeedsFinePurple,
+        color: const Color(0xFF8A2BE2),
         child: ListView(
+          padding: const EdgeInsets.only(bottom: 40),
           children: [
-            _buildProfileHeader(context),
-            const Divider(thickness: 8, color: kNeedsFinePurpleLight),
-            _buildMenuListItem(
-              icon: Icons.collections_bookmark_outlined,
-              title: "리뷰 모음",
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReviewCollectionScreen())),
-            ),
-            _buildMenuListItem(
-                icon: Icons.restaurant_menu,
-                title: "나의 입맛",
-                isPoint: true,
-                onTap: () async {
-                  final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => const TasteSelectionScreen()));
-                  if (result == true) _fetchUserData();
-                }
-            ),
-            _buildMenuListItem(icon: Icons.support_agent, title: "고객센터", onTap: () => _showCustomerService(context)),
-            _buildMenuListItem(icon: Icons.notifications_none, title: "공지사항", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const NoticeScreen()))),
-            if (_isAdmin) ...[
-              const Divider(thickness: 1, height: 1),
-              Container(
-                color: Colors.deepPurple.withOpacity(0.05),
-                child: _buildMenuListItem(
-                  icon: Icons.admin_panel_settings,
-                  title: "소중한 피드백 (관리자)",
-                  isPoint: true,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminDashboardScreen())),
-                ),
-              ),
-            ],
+            Container(color: Colors.white, padding: const EdgeInsets.only(bottom: 24), child: _buildProfileHeader(context)),
+            const SizedBox(height: 16),
+            _buildMenuSection(),
           ],
         ),
       ),
@@ -204,158 +171,193 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   }
 
   Widget _buildProfileHeader(BuildContext context) {
-    // ✅ [Fix] CachedNetworkImageProvider 사용
-    ImageProvider profileImage;
-    if (_userProfile!.profileImageUrl.isNotEmpty) {
-      profileImage = CachedNetworkImageProvider(_userProfile!.profileImageUrl);
-    } else {
-      profileImage = const AssetImage('assets/images/default_profile.png');
-    }
+    ImageProvider profileImage = _userProfile!.profileImageUrl.isNotEmpty
+        ? CachedNetworkImageProvider(_userProfile!.profileImageUrl)
+        : const AssetImage('assets/images/default_profile.png') as ImageProvider;
 
     return Padding(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(height: 20),
+          CircleAvatar(radius: 45, backgroundImage: profileImage, backgroundColor: Colors.grey[200]),
+          const SizedBox(height: 16),
+          Text(_userProfile!.nickname, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.black)),
+          const SizedBox(height: 8),
+          Text(_userProfile!.introduction, style: TextStyle(fontSize: 14, color: Colors.grey[600]), textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+
+          // 통계 뱃지
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _StatBadge(label: "니즈파인 ${_avgNeedsFineScore.toStringAsFixed(1)}", color: const Color(0xFF8A2BE2)),
+              const SizedBox(width: 8),
+              _StatBadge(label: "신뢰도 $_avgTrustLevel%", color: Colors.blueAccent),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // 팔로워/팔로잉
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _FollowStat(label: "팔로워", count: _userProfile!.followerCount, onTap: () {}),
+              Container(height: 24, width: 1, color: Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 30)),
+              _FollowStat(label: "팔로잉", count: _userProfile!.followingCount, onTap: () {}),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // 버튼 그룹
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.grey.withOpacity(0.3))),
-                child: CircleAvatar(radius: 50, backgroundImage: profileImage, backgroundColor: kNeedsFinePurpleLight),
-              ),
-              const SizedBox(width: 20),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_userProfile!.nickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-
-                    // ✅ [New] 평균 니즈파인 점수 & 신뢰도 표시
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: kNeedsFinePurple, borderRadius: BorderRadius.circular(8)),
-                          child: Text("NF ${_avgNeedsFineScore.toStringAsFixed(1)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: kNeedsFinePurpleLight, borderRadius: BorderRadius.circular(8)),
-                          child: Text("신뢰도 $_avgTrustLevel%", style: const TextStyle(color: kNeedsFinePurple, fontWeight: FontWeight.bold, fontSize: 13)),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-                    if (_myTags.isNotEmpty)
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _myTags.take(5).map((tag) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.grey.withOpacity(0.4)), borderRadius: BorderRadius.circular(20)),
-                          child: Text("#$tag", style: TextStyle(fontSize: 11, color: Colors.grey[800], fontWeight: FontWeight.w500)),
-                        )).toList(),
-                      ),
-                  ],
+                child: OutlinedButton(
+                  onPressed: () async {
+                    await Navigator.push(context, MaterialPageRoute(builder: (context) => ProfileEditScreen(userProfile: _userProfile!)));
+                    _fetchUserData();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: BorderSide(color: Colors.grey[300]!),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("프로필 수정", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => MyFeedScreen(userProfile: _userProfile!, reviews: _myReviews)));
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8A2BE2),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: const Text("나의 피드", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.grey.withOpacity(0.3)),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("소개", style: TextStyle(fontSize: 12, color: kNeedsFinePurple, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(_userProfile!.introduction, style: TextStyle(color: Colors.grey[800], fontSize: 15, height: 1.5)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(child: _buildStatBox("팔로워", "${_userProfile!.followerCount}", 0)),
-              const SizedBox(width: 16),
-              Expanded(child: _buildStatBox("팔로잉", "${_userProfile!.followingCount}", 1)),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () async {
-                await Navigator.push(context, MaterialPageRoute(builder: (context) => ProfileEditScreen(userProfile: _userProfile!)));
-                _fetchUserData();
-              },
-              style: OutlinedButton.styleFrom(side: const BorderSide(color: kNeedsFinePurple)),
-              child: const Text("프로필 수정", style: TextStyle(color: kNeedsFinePurple)),
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                // ✅ [Fix] 이미 List<Review>라서 캐스팅 불필요
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MyFeedScreen(
-                      userProfile: _userProfile!,
-                      reviews: _myReviews,
-                    ),
-                  ),
-                );
-              },
-              child: const Text("나의 피드", style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          )
         ],
       ),
     );
   }
 
-  Widget _buildStatBox(String title, String value, int tabIndex) {
-    return InkWell(
-      onTap: () {
-        Navigator.push(context, MaterialPageRoute(builder: (context) => FollowListScreen(
-          userId: _supabase.auth.currentUser!.id,
-          nickname: _userProfile!.nickname,
-          initialTabIndex: tabIndex,
-        )));
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kNeedsFinePurpleLight), borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          children: [
-            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kNeedsFinePurple)),
-            const SizedBox(height: 4),
-            Text(title, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-          ],
-        ),
+  Widget _buildMenuSection() {
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: [
+          _MenuItem(
+              icon: Icons.bookmark_border_rounded,
+              title: "리뷰 모음",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReviewCollectionScreen()))
+          ),
+          _MenuItem(
+              icon: Icons.list_alt_rounded, // ✅ [추가] 나만의 리스트
+              title: "나만의 리스트",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListsScreen()))
+          ),
+          _MenuItem(
+              icon: Icons.restaurant_menu_rounded,
+              title: "나의 입맛",
+              onTap: () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => const TasteSelectionScreen()));
+                _fetchUserData();
+              }
+          ),
+          const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFF2F2F7)), // ✅ 더 섬세한 구분선
+          _MenuItem(
+              icon: Icons.headset_mic_outlined,
+              title: "고객센터",
+              onTap: () => _showCustomerService(context)
+          ),
+          _MenuItem(
+              icon: Icons.notifications_none_rounded,
+              title: "공지사항",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticeScreen()))
+          ),
+          if (_isAdmin)
+            _MenuItem(
+                icon: Icons.admin_panel_settings_outlined,
+                title: "관리자 메뉴",
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen())),
+                isDestructive: true
+            ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildMenuListItem({required IconData icon, required String title, required VoidCallback onTap, bool isPoint = false}) {
-    return ListTile(
-      leading: Icon(icon, color: isPoint ? kNeedsFinePurple : Colors.black87),
-      title: Text(title, style: TextStyle(color: isPoint ? kNeedsFinePurple : Colors.black87)),
-      trailing: const Icon(Icons.chevron_right, size: 20),
+class _StatBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _StatBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+    );
+  }
+}
+
+class _FollowStat extends StatelessWidget {
+  final String label;
+  final int count;
+  final VoidCallback onTap;
+  const _FollowStat({required this.label, required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
       onTap: onTap,
+      child: Column(
+        children: [
+          Text("$count", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.black)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  const _MenuItem({required this.icon, required this.title, required this.onTap, this.isDestructive = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color titleColor = isDestructive ? const Color(0xFFD32F2F) : const Color(0xFF1C1C1E);
+    final Color iconColor  = isDestructive ? const Color(0xFFD32F2F) : const Color(0xFF3A3A3C);
+
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+      minLeadingWidth: 28,
+      leading: Icon(icon, color: iconColor, size: 22), // ✅ 네모 배경 제거(키즈/아기자기 느낌 제거)
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: titleColor,
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFAEAEB2), size: 22),
     );
   }
 }

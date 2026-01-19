@@ -6,6 +6,8 @@ import 'package:needsfine_app/services/review_service.dart';
 import 'package:needsfine_app/widgets/star_rating.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
 import 'package:needsfine_app/screens/write_review_screen.dart';
+// ✅ 유저 프로필 화면 이동을 위해 임포트
+import 'package:needsfine_app/screens/user_profile_screen.dart';
 
 class ReviewDetailScreen extends StatefulWidget {
   final Review review;
@@ -24,6 +26,9 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   List<Map<String, dynamic>> _comments = [];
   bool _isLiked = false;
 
+  // ✅ 저장 상태
+  bool _isSaved = false;
+
   final Color _primaryColor = const Color(0xFFC87CFF);
   final Color _backgroundColor = const Color(0xFFFFFDF9);
 
@@ -33,6 +38,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     _checkOwnership();
     _fetchComments();
     _checkLikeStatus();
+    _checkSaveStatus(); // ✅ 저장 상태 확인
   }
 
   @override
@@ -81,6 +87,63 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
         .maybeSingle();
 
     if (mounted) setState(() => _isLiked = res != null);
+  }
+
+  // ✅ 저장 상태 확인
+  Future<void> _checkSaveStatus() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final res = await _supabase
+          .from('review_saves')
+          .select('id')
+          .eq('review_id', widget.review.id)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (mounted) setState(() => _isSaved = res != null);
+    } catch (e) {
+      debugPrint('저장 상태 확인 실패: $e');
+    }
+  }
+
+  // ✅ 저장 토글
+  Future<void> _toggleSave() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
+      }
+      return;
+    }
+
+    final next = !_isSaved;
+    setState(() => _isSaved = next);
+
+    try {
+      if (next) {
+        await _supabase.from('review_saves').upsert(
+          {
+            'user_id': userId,
+            'review_id': widget.review.id,
+          },
+          onConflict: 'user_id,review_id',
+        );
+      } else {
+        await _supabase
+            .from('review_saves')
+            .delete()
+            .eq('user_id', userId)
+            .eq('review_id', widget.review.id);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isSaved = !next);
+      debugPrint('저장 토글 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("저장 처리 중 오류가 발생했습니다.")));
+      }
+    }
   }
 
   // ✅ 좋아요 토글
@@ -228,29 +291,57 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                   if (widget.review.tags.isNotEmpty)
                     Wrap(spacing: 8.0, runSpacing: 8.0, children: widget.review.tags.map((tag) => _buildTag(tag)).toList()),
                   const SizedBox(height: 32),
-                  Center(
-                    child: OutlinedButton.icon(
-                      onPressed: _toggleLike,
-                      icon: Icon(
-                        _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                        size: 18,
-                        color: _isLiked ? Colors.white : _primaryColor,
-                      ),
-                      label: Text(
-                        "도움이 됐어요",
-                        style: TextStyle(
+
+                  // ✅ 도움이 됐어요 + 저장하기 (나란히)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _toggleLike,
+                        icon: Icon(
+                          _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                          size: 18,
                           color: _isLiked ? Colors.white : _primaryColor,
-                          fontWeight: FontWeight.bold,
+                        ),
+                        label: Text(
+                          "도움이 됐어요",
+                          style: TextStyle(
+                            color: _isLiked ? Colors.white : _primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: _isLiked ? _primaryColor : Colors.white,
+                          side: BorderSide(color: _primaryColor),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                         ),
                       ),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: _isLiked ? _primaryColor : Colors.white,
-                        side: BorderSide(color: _primaryColor),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: _toggleSave,
+                        icon: Icon(
+                          _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                          size: 18,
+                          color: _isSaved ? Colors.white : _primaryColor,
+                        ),
+                        label: Text(
+                          _isSaved ? "저장됨" : "저장하기",
+                          style: TextStyle(
+                            color: _isSaved ? Colors.white : _primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: _isSaved ? _primaryColor : Colors.white,
+                          side: BorderSide(color: _primaryColor),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
+
                   const Divider(height: 64, thickness: 1, color: Color(0xFFEEEEEE)),
                   Text("댓글 ${_comments.length}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
@@ -272,6 +363,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                         profile?['nickname'] ?? '익명',
                         comment['content'] ?? '',
                         profile?['profile_image_url'],
+                        comment['user_id'], // ✅ [수정] user_id 전달
                       );
                     },
                   ),
@@ -326,18 +418,36 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   Widget _buildUserInfo() {
     return Row(
       children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: Colors.grey[200],
-          backgroundImage: (widget.review.userProfileUrl != null && widget.review.userProfileUrl!.isNotEmpty)
-              ? CachedNetworkImageProvider(widget.review.userProfileUrl!)
-              : null,
-          child: (widget.review.userProfileUrl == null || widget.review.userProfileUrl!.isEmpty)
-              ? const Icon(Icons.person, color: Colors.grey, size: 20)
-              : null,
+        // ✅ 프로필 클릭 시 피드로 이동
+        InkWell(
+          onTap: () {
+            if (widget.review.userId != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => UserProfileScreen(userId: widget.review.userId!),
+                ),
+              );
+            }
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.grey[200],
+                backgroundImage: (widget.review.userProfileUrl != null && widget.review.userProfileUrl!.isNotEmpty)
+                    ? CachedNetworkImageProvider(widget.review.userProfileUrl!)
+                    : null,
+                child: (widget.review.userProfileUrl == null || widget.review.userProfileUrl!.isEmpty)
+                    ? const Icon(Icons.person, color: Colors.grey, size: 20)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Text(widget.review.nickname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
         ),
-        const SizedBox(width: 10),
-        Text(widget.review.nickname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         const Spacer(),
         StarRating(rating: widget.review.userRating, size: 20),
       ],
@@ -407,17 +517,26 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     );
   }
 
-  Widget _buildCommentItem(String user, String text, String? profileUrl) {
+  // ✅ [수정] userId를 받아서 프로필 클릭 시 이동 기능 추가
+  Widget _buildCommentItem(String user, String text, String? profileUrl, String? userId) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: Colors.grey[200],
-            backgroundImage: profileUrl != null ? NetworkImage(profileUrl) : null,
-            child: profileUrl == null ? const Icon(Icons.person, size: 16, color: Colors.grey) : null,
+          // 프로필 사진 클릭
+          InkWell(
+            onTap: () {
+              if (userId != null) {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)));
+              }
+            },
+            child: CircleAvatar(
+              radius: 14,
+              backgroundColor: Colors.grey[200],
+              backgroundImage: profileUrl != null ? NetworkImage(profileUrl) : null,
+              child: profileUrl == null ? const Icon(Icons.person, size: 16, color: Colors.grey) : null,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -430,7 +549,15 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  // 닉네임 클릭
+                  InkWell(
+                    onTap: () {
+                      if (userId != null) {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)));
+                      }
+                    },
+                    child: Text(user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
                   const SizedBox(height: 4),
                   Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87)),
                 ],

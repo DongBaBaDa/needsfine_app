@@ -11,10 +11,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/config/supabase_config.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 
-// ✅ 알림 및 상세 화면 임포트
-import 'package:needsfine_app/screens/notification_list_screen.dart';
-import 'package:needsfine_app/screens/notice_detail_screen.dart'; // 공지 상세
-import 'package:needsfine_app/screens/inquiry_detail_screen.dart'; // 문의 상세
+// ✅ [수정] 알림 화면 파일명 및 클래스명 변경 반영
+import 'package:needsfine_app/screens/notification_screen.dart';
+
+// 공지/문의 상세 화면 (파일이 존재한다고 가정)
+import 'package:needsfine_app/screens/notice_detail_screen.dart';
+import 'package:needsfine_app/screens/inquiry_detail_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,9 +78,12 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const MainShell(),
         '/join': (context) => const UserJoinScreen(),
         '/find': (context) => const EmailPWFindScreen(),
-        '/notifications': (context) => const NotificationListScreen(),
 
-        // ✅ 상세 페이지 경로 추가 (알림 클릭 시 이동 목적)
+        // ✅ [수정] NotificationListScreen -> NotificationScreen 으로 변경
+        '/notifications': (context) => const NotificationScreen(),
+
+        // 상세 페이지 경로
+        // (만약 에러가 난다면 const를 제거해보세요: (context) => NoticeDetailScreen())
         '/notice_detail': (context) => const NoticeDetailScreen(),
         '/inquiry_detail': (context) => const InquiryDetailScreen(),
       },

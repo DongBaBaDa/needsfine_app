@@ -18,7 +18,7 @@ class Review {
   final String? userProfileUrl;
   final int commentCount;
 
-  // ✅ [추가] 좌표 필드
+  // ✅ [기존 유지] 좌표 필드
   final double? storeLat;
   final double? storeLng;
 
@@ -44,8 +44,8 @@ class Review {
     required this.nickname,
     this.userProfileUrl,
     this.commentCount = 0,
-    this.storeLat, // 추가
-    this.storeLng, // 추가
+    this.storeLat,
+    this.storeLng,
     this.myCommentText,
     this.myCommentCreatedAt,
   });
@@ -93,11 +93,8 @@ class Review {
       nickname: displayNickname,
       userProfileUrl: profileUrl,
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
-
-      // ✅ [추가] 좌표 파싱
       storeLat: (json['store_lat'] as num?)?.toDouble(),
       storeLng: (json['store_lng'] as num?)?.toDouble(),
-
       myCommentText: json['comment_content']?.toString(),
       myCommentCreatedAt: json['comment_created_at'] != null
           ? DateTime.parse(json['comment_created_at'].toString())
@@ -115,6 +112,7 @@ class Review {
   }
 }
 
+// ✅ [수정됨] StoreRanking 클래스에 좌표 및 주소 필드 추가
 class StoreRanking {
   final String storeName;
   final double avgScore;
@@ -124,6 +122,11 @@ class StoreRanking {
   final int rank;
   final List<String>? topTags;
 
+  // 추가된 필드
+  final double? storeLat;
+  final double? storeLng;
+  final String? storeAddress;
+
   StoreRanking({
     required this.storeName,
     required this.avgScore,
@@ -132,6 +135,9 @@ class StoreRanking {
     required this.avgTrust,
     required this.rank,
     this.topTags,
+    this.storeLat,      // 추가
+    this.storeLng,      // 추가
+    this.storeAddress,  // 추가
   });
 
   factory StoreRanking.fromViewJson(Map<String, dynamic> json, int rankIndex) {
@@ -142,6 +148,10 @@ class StoreRanking {
       avgTrust: (json['avg_trust'] as num?)?.toDouble() ?? 0.0,
       reviewCount: (json['review_count'] as num?)?.toInt() ?? 0,
       rank: rankIndex,
+      // ✅ JSON에서 좌표/주소 파싱 (DB 컬럼명이 store_lat, store_lng, store_address 라고 가정)
+      storeLat: (json['store_lat'] as num?)?.toDouble(),
+      storeLng: (json['store_lng'] as num?)?.toDouble(),
+      storeAddress: json['store_address']?.toString(),
     );
   }
 }

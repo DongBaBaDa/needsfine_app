@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:needsfine_app/screens/home_screen.dart';
-import 'package:needsfine_app/screens/ranking_screen.dart';
+// ✅ [수정] 충돌 방지를 위해 별칭(alias) 사용
+import 'package:needsfine_app/screens/ranking_screen.dart' as ranking;
 import 'package:needsfine_app/screens/nearby_screen.dart';
 import 'package:needsfine_app/screens/user_mypage_screen.dart';
 
@@ -19,10 +20,10 @@ class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
 
   final List<Widget> _widgetOptions = const <Widget>[
-    HomeScreen(),        // 0: 홈
-    RankingScreen(),     // 1: 랭킹 (리뷰)
-    NearbyScreen(),      // 2: 내 주변
-    UserMyPageScreen(),  // 3: 마이파인
+    HomeScreen(),                 // 0: 홈
+    ranking.RankingScreen(),      // 1: 랭킹 (리뷰) - ✅ 별칭 사용으로 충돌 해결
+    NearbyScreen(),               // 2: 내 주변
+    UserMyPageScreen(),           // 3: 마이파인
   ];
 
   @override

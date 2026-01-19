@@ -3,13 +3,10 @@ import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/services/review_service.dart';
 import 'package:needsfine_app/screens/write_review_screen.dart';
 import 'package:needsfine_app/screens/review_detail_screen.dart';
-
-// ✅ 분리된 위젯 임포트
+import 'package:needsfine_app/screens/user_profile_screen.dart';
 import 'package:needsfine_app/widgets/review_card.dart';
 import 'package:needsfine_app/widgets/store_ranking_card.dart';
-
-// ✅ 전역 트리거 임포트
-import 'package:needsfine_app/core/search_trigger.dart';
+import 'package:needsfine_app/core/search_trigger.dart'; // ✅ 전역 트리거
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
@@ -85,7 +82,7 @@ class _RankingScreenState extends State<RankingScreen> {
         });
       }
     } catch (e) {
-      print('❌ 데이터 로드 실패: $e');
+      debugPrint('❌ 데이터 로드 실패: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -110,7 +107,7 @@ class _RankingScreenState extends State<RankingScreen> {
         });
       }
     } catch (e) {
-      print('❌ 추가 데이터 로드 실패: $e');
+      debugPrint('❌ 추가 데이터 로드 실패: $e');
     } finally {
       if (mounted) setState(() => _isMoreLoading = false);
     }
@@ -145,7 +142,6 @@ class _RankingScreenState extends State<RankingScreen> {
       rankings.sort((a, b) => b.avgScore.compareTo(a.avgScore));
     }
 
-    // 순위 재할당
     for (int i = 0; i < rankings.length; i++) {
       rankings[i] = StoreRanking(
           storeName: rankings[i].storeName,
@@ -243,7 +239,8 @@ class _RankingScreenState extends State<RankingScreen> {
         DropdownButton<String>(
           value: _tabIndex == 0 ? _reviewSortOption : _rankingSortOption,
           underline: const SizedBox(),
-          items: (_tabIndex == 0 ? ['최신순', '니즈파인 점수순', '신뢰도순', '쓴소리'] : ['니즈파인 순', '사용자 별점 순']).map((String value) {
+          items: (_tabIndex == 0 ? ['최신순', '니즈파인 점수순', '신뢰도순', '쓴소리'] : ['니즈파인 순', '사용자 별점 순'])
+              .map((String value) {
             return DropdownMenuItem<String>(value: value, child: Text(value, style: const TextStyle(fontSize: 14)));
           }).toList(),
           onChanged: (newValue) {
@@ -280,17 +277,27 @@ class _RankingScreenState extends State<RankingScreen> {
         return ReviewCard(
           review: reviews[index],
           onTap: () async {
-            // ✅ [수정] 상세 페이지 이동 및 결과 대기 (삭제/수정 후 갱신)
             final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: reviews[index])));
             if (result == true) _loadInitialData();
           },
+          // ✅ [핵심 수정] 가게 이름 뿐만 아니라 좌표도 함께 전달!
           onTapStore: () {
             if (reviews[index].storeName.isNotEmpty) {
-              // ✅ [수정] SearchTarget 객체 전달 (좌표 포함)
               searchTrigger.value = SearchTarget(
-                  query: reviews[index].storeName,
-                  lat: reviews[index].storeLat,
-                  lng: reviews[index].storeLng
+                query: reviews[index].storeName,
+                lat: reviews[index].storeLat, // 위도 전달
+                lng: reviews[index].storeLng, // 경도 전달
+              );
+              // (선택 사항) 탭 전환이 필요하다면 여기서 MainShell의 탭 인덱스 변경 로직 추가 필요
+              // 예: DefaultTabController를 사용하지 않는 외부 탭이라면 별도 통신 필요
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("지도로 이동합니다.")));
+            }
+          },
+          onTapProfile: () {
+            if (reviews[index].userId != null) {
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => UserProfileScreen(userId: reviews[index].userId!))
               );
             }
           },
@@ -299,7 +306,6 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 
-  // ✅ [수정] 구분선 로직이 반영된 매장 리스트 빌더
   Widget _buildStoreRankingList() {
     final rankings = _getSortedRankings();
     final double overallAverage = _stats?.average ?? 0.0;
@@ -310,28 +316,11 @@ class _RankingScreenState extends State<RankingScreen> {
       itemCount: rankings.length,
       itemBuilder: (context, index) {
         final ranking = rankings[index];
-
-        // 현재 매장 점수
-        final double currentScore = _rankingSortOption == '니즈파인 순'
-            ? ranking.avgScore
-            : ranking.avgUserRating;
-
-        // 현재가 평균 이상인지
+        final double currentScore = _rankingSortOption == '니즈파인 순' ? ranking.avgScore : ranking.avgUserRating;
         final bool isAboveAverage = currentScore >= overallAverage;
-
-        // 다음 매장 점수 (없으면 null)
-        final nextRanking = (index + 1 < rankings.length)
-            ? rankings[index + 1]
-            : null;
-
-        final double? nextScore = nextRanking != null
-            ? (_rankingSortOption == '니즈파인 순' ? nextRanking.avgScore : nextRanking.avgUserRating)
-            : null;
-
-        // 다음 매장이 평균 미만인지 확인
+        final nextRanking = (index + 1 < rankings.length) ? rankings[index + 1] : null;
+        final double? nextScore = nextRanking != null ? (_rankingSortOption == '니즈파인 순' ? nextRanking.avgScore : nextRanking.avgUserRating) : null;
         final bool isNextBelowAverage = nextScore != null && nextScore < overallAverage;
-
-        // ✅ 구분선 표시 조건: (현재 >= 평균) && (다음 < 평균)
         final bool showDivider = isAboveAverage && isNextBelowAverage;
 
         return Column(
@@ -340,10 +329,7 @@ class _RankingScreenState extends State<RankingScreen> {
               ranking: ranking,
               sortOption: _rankingSortOption,
             ),
-
             if (showDivider) _buildAverageDivider(overallAverage),
-
-            // 카드 사이의 기본 구분선 (마지막 아이템 제외)
             if (!showDivider && index < rankings.length - 1)
               const Divider(height: 1),
           ],
@@ -352,20 +338,16 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 
-  // ✅ 평균 점수 구분선 위젯
   Widget _buildAverageDivider(double average) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 1. 니즈파인색 점선
           CustomPaint(
             size: const Size(double.infinity, 1),
             painter: _DashedLinePainter(),
           ),
-
-          // 2. 중앙 배지
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
@@ -391,7 +373,6 @@ class _RankingScreenState extends State<RankingScreen> {
   }
 }
 
-// ✅ 점선 그리기용 Painter
 class _DashedLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {

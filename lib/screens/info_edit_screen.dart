@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:needsfine_app/screens/privacy_setting_screen.dart';
-import 'package:needsfine_app/screens/reservation_link_screen.dart';
-import 'package:needsfine_app/screens/password_change_screen.dart'; // ✅ 비밀번호 변경 화면 (생성 필요)
-import 'package:needsfine_app/screens/initial_screen.dart';
+import 'package:needsfine_app/screens/email_login_screen.dart';
+import 'package:needsfine_app/screens/password_change_screen.dart';
+import 'package:needsfine_app/screens/terms_screen.dart'; // ✅ 약관 화면 임포트
 
 class InfoEditScreen extends StatefulWidget {
   const InfoEditScreen({super.key});
@@ -14,196 +13,273 @@ class InfoEditScreen extends StatefulWidget {
 
 class _InfoEditScreenState extends State<InfoEditScreen> {
   final _supabase = Supabase.instance.client;
+  bool _isLoading = true;
 
-  // --- [로직] 로그아웃 구현 ---
-  Future<void> _handleLogout() async {
-    final confirm = await _showConfirmDialog('로그아웃', '정말 로그아웃 하시겠습니까?');
-    if (confirm == true) {
-      await _supabase.auth.signOut();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const InitialScreen()),
-              (route) => false,
-        );
-      }
-    }
+  String _phone = '';
+  String _email = '';
+  String _gender = '미설정';
+  bool _isNotificationOn = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserInfo();
   }
 
-  // --- [로직] 회원탈퇴 구현 ---
-  Future<void> _handleDeleteAccount() async {
-    final confirm = await _showConfirmDialog(
-      '회원 탈퇴',
-      '탈퇴 시 모든 데이터가 복구 불가능하게 삭제됩니다. 정말 탈퇴하시겠습니까?',
-      isDestructive: true,
-    );
+  Future<void> _fetchUserInfo() async {
+    setState(() => _isLoading = true);
+    final user = _supabase.auth.currentUser;
+    if (user != null) {
+      _email = user.email ?? '';
 
-    if (confirm == true) {
       try {
-        // 실제로는 Edge Function이나 별도 RPC를 통해 Auth와 Profile을 동시에 지우는 것이 안전합니다.
-        // 여기서는 기본적으로 Auth 유저 삭제 로직을 타겟팅합니다.
-        // await _supabase.rpc('delete_user_account'); 
+        final data = await _supabase
+            .from('profiles')
+            .select('phone, gender')
+            .eq('id', user.id)
+            .maybeSingle();
 
-        await _supabase.auth.signOut(); // 임시로 로그아웃 처리
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('회원 탈퇴가 완료되었습니다.')));
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const InitialScreen()),
-                (route) => false,
-          );
+        if (data != null) {
+          _phone = data['phone'] ?? '';
+          _gender = data['gender'] ?? '미설정';
         }
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('탈퇴 처리 중 에러: $e')));
+        debugPrint('프로필 정보 로드 실패: $e');
       }
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _logout() async {
+    await _supabase.auth.signOut();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const EmailLoginScreen()),
+            (route) => false,
+      );
     }
   }
 
-  // 공통 확인 다이얼로그
-  Future<bool?> _showConfirmDialog(String title, String message, {bool isDestructive = false}) {
-    return showDialog<bool>(
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
+        title: const Text("회원 탈퇴"),
+        content: const Text("정말로 탈퇴하시겠습니까? 계정 정보와 활동 내역이 모두 삭제됩니다."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("취소")),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(title, style: TextStyle(color: isDestructive ? Colors.red : Colors.blue)),
+            child: const Text("탈퇴", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
+
+    if (confirm == true) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("회원 탈퇴 처리가 완료되었습니다.")));
+      _logout();
+    }
   }
 
-  // 정보 수정용 다이얼로그 (이름, 번호 등)
-  void _showEditField(String title, String currentValue) {
-    showModalBottomSheet(
+  void _showPhoneAuthDialog() {
+    final phoneController = TextEditingController(text: _phone);
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('$title 변경', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            TextField(
-              decoration: InputDecoration(hintText: currentValue, border: const OutlineInputBorder()),
-              autofocus: true,
-            ),
-            const SizedBox(height: 20),
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("휴대폰 번호 인증"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  hintText: "휴대폰 번호 입력 (- 없이)",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text("인증번호가 발송됩니다. (모의 기능)", style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소")),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-              onPressed: () => Navigator.pop(context),
-              child: const Text('저장하기'),
+              onPressed: () async {
+                final newPhone = phoneController.text.trim();
+                if (newPhone.isNotEmpty) {
+                  try {
+                    await _supabase.from('profiles').update({'phone': newPhone}).eq('id', _supabase.auth.currentUser!.id);
+                    setState(() => _phone = newPhone);
+                    if(mounted) Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("인증 완료되었습니다.")));
+                  } catch(e) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("저장 실패")));
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8A2BE2), foregroundColor: Colors.white),
+              child: const Text("인증"),
             ),
-            const SizedBox(height: 20),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
-        title: const Text('설정'), // ✅ 내 정보 수정 -> 설정으로 변경
-        centerTitle: true,
+        title: const Text('설정', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        backgroundColor: const Color(0xFFF2F2F7),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: ListView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+        padding: const EdgeInsets.all(16.0),
         children: [
-          // 이름 수정
-          _buildInfoTile(context, title: '이름', value: '오재준', onTap: () => _showEditField('이름', '오재준')),
-
-          // 휴대폰 번호 수정
-          _buildInfoTile(context, title: '휴대폰 번호', value: '010-5195-6372', isVerified: true,
-              onTap: () => _showEditField('휴대폰 번호', '010-5195-6372')),
-
-          // 비밀번호 변경 -> 화면 이동
-          _buildInfoTile(context, title: '비밀번호', value: '변경하기',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PasswordChangeScreen()))),
-
-          _buildInfoTile(context, title: '간편 로그인', value: '카카오'),
-
-          // 성별 선택
-          _buildInfoTile(context, title: '성별', value: '선택안함',
-              onTap: () => _showEditField('성별', '성별을 선택해주세요')),
-
-          const Divider(),
-
-          ListTile(
-            title: const Text('알림 설정'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
-          ),
-
-          // 프로필 공개 설정
-          ListTile(
-            title: const Text('프로필 공개 설정'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacySettingScreen())),
-          ),
-
-          ListTile(
-            title: const Text('예약/주문 연동'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReservationLinkScreen())),
-          ),
-
-          const Divider(),
-
-          // ✅ 로그아웃 구현
-          ListTile(
-            title: const Text('로그아웃', style: TextStyle(color: Colors.redAccent)),
-            onTap: _handleLogout,
-          ),
-
-          const Divider(),
-
-          // ✅ 회원 탈퇴 구현
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
-            child: Center(
-              child: TextButton(
-                onPressed: _handleDeleteAccount,
-                child: const Text(
-                  '회원탈퇴를 하시려면 여기를 눌러주세요',
-                  style: TextStyle(color: Colors.grey, decoration: TextDecoration.underline),
-                ),
-              ),
+          const SizedBox(height: 10),
+          _buildSectionHeader("계정 정보"),
+          _buildSectionContainer([
+            _buildSettingsItem(
+              icon: Icons.phone_iphone,
+              label: "휴대폰 번호",
+              value: _phone.isEmpty ? "인증 필요" : _phone,
+              onTap: _showPhoneAuthDialog,
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            _buildDivider(),
+            _buildSettingsItem(
+              icon: Icons.email_outlined,
+              label: "이메일",
+              value: _email,
+              showArrow: false,
+            ),
+            _buildDivider(),
+            // ✅ [성별 표시]
+            _buildSettingsItem(
+              icon: Icons.wc,
+              label: "성별",
+              value: _gender, // DB에서 가져온 값 표시
+              showArrow: false,
+            ),
+          ]),
 
-  Widget _buildInfoTile(BuildContext context, {required String title, required String value, bool isVerified = false, VoidCallback? onTap}) {
-    return ListTile(
-      title: Row(
-        children: [
-          Text(title),
-          if (isVerified)
+          const SizedBox(height: 24),
+          _buildSectionHeader("보안 및 알림"),
+          _buildSectionContainer([
+            _buildSettingsItem(
+              icon: Icons.lock_outline,
+              label: "비밀번호 변경",
+              value: "",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PasswordChangeScreen())),
+            ),
+            _buildDivider(),
             Padding(
-              padding: const EdgeInsets.only(left: 8.0),
-              child: Chip(
-                label: const Text('인증', style: TextStyle(fontSize: 10)),
-                backgroundColor: Colors.blue[50],
-                side: BorderSide.none,
-                visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_outlined, size: 22, color: Colors.black87),
+                  const SizedBox(width: 12),
+                  const Text("알림 설정", style: TextStyle(fontSize: 16, color: Colors.black87)),
+                  const Spacer(),
+                  Switch(
+                    value: _isNotificationOn,
+                    activeColor: const Color(0xFF8A2BE2),
+                    onChanged: (val) => setState(() => _isNotificationOn = val),
+                  ),
+                ],
               ),
             ),
+          ]),
+
+          const SizedBox(height: 24),
+          // ✅ [이용약관 버튼 추가]
+          _buildSectionHeader("정보"),
+          _buildSectionContainer([
+            _buildSettingsItem(
+              icon: Icons.description_outlined,
+              label: "이용약관",
+              value: "",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TermsScreen())),
+            ),
+          ]),
+
+          const SizedBox(height: 40),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: TextButton(
+              onPressed: _logout,
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: const Text("로그아웃", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+          const Center(child: Text("현재 버전 1.0.0", style: TextStyle(color: Colors.grey, fontSize: 12))),
+          const SizedBox(height: 10),
+
+          // ✅ [회원탈퇴: 눈에 안 띄게 회색 처리]
+          Center(
+            child: TextButton(
+              onPressed: _deleteAccount,
+              child: Text(
+                "회원 탈퇴하기",
+                style: TextStyle(color: Colors.grey[400], fontSize: 12, decoration: TextDecoration.underline),
+              ),
+            ),
+          ),
+          const SizedBox(height: 40),
         ],
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(value, style: const TextStyle(color: Colors.grey)),
-          const Icon(Icons.chevron_right, color: Colors.grey),
-        ],
-      ),
-      onTap: onTap,
     );
   }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, bottom: 8),
+      child: Text(title, style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Widget _buildSectionContainer(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildSettingsItem({required IconData icon, required String label, required String value, VoidCallback? onTap, bool showArrow = true}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: Colors.black87),
+            const SizedBox(width: 12),
+            Text(label, style: const TextStyle(fontSize: 16, color: Colors.black87)),
+            const SizedBox(width: 16),
+            Expanded(child: Text(value, style: const TextStyle(fontSize: 15, color: Colors.grey), textAlign: TextAlign.right, overflow: TextOverflow.ellipsis)),
+            if (showArrow) ...[const SizedBox(width: 8), const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey)],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDivider() => const Divider(height: 1, indent: 50, endIndent: 0, color: Color(0xFFEEEEEE));
 }
