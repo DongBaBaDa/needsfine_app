@@ -5,6 +5,9 @@ import 'package:needsfine_app/screens/review_detail_screen.dart';
 import 'package:needsfine_app/screens/notice_screen.dart';
 // import 'package:needsfine_app/screens/user_profile_screen.dart'; // 상대방 프로필 화면 (필요 시 주석 해제)
 
+// ✅ 다국어 패키지 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
 
@@ -46,11 +49,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   // ✅ 2. 상세 페이지 이동 로직 (로직 유지)
   Future<void> _navigateToDetail(Map<String, dynamic> noti) async {
+    // l10n 사용을 위해 context 접근이 필요하지만 async 함수 내라 mounted 체크 필수
+    final l10n = AppLocalizations.of(context)!;
+
     final String type = noti['type'] ?? '';
     final String? refId = noti['reference_id'];
 
     if (refId == null) {
-      _showSnackBar("연결된 정보를 찾을 수 없습니다.");
+      _showSnackBar(l10n.loadError); // "정보를 불러올 수 없습니다"
       return;
     }
 
@@ -72,12 +78,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
             MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: review)),
           );
         } else {
-          _showSnackBar("삭제된 리뷰입니다.");
+          _showSnackBar("삭제된 리뷰입니다."); // 특정 에러 메시지는 하드코딩 유지 (키 없음)
         }
       } else if (type == 'notice') {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticeScreen()));
       } else if (type == 'follow') {
-        _showSnackBar("상대방 프로필로 이동합니다. (구현 필요)");
+        _showSnackBar(l10n.developingMessage); // "현재 개발 중인 기능입니다."
         // Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: refId)));
       }
     } catch (e) {
@@ -130,11 +136,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ l10n 객체 가져오기
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       // ✅ [Design] 배경색 변경: Light Grey
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
-        title: const Text('알림', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        // "알림"
+        title: Text(l10n.notifications, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0, // ✅ [Design] 그림자 제거
         iconTheme: const IconThemeData(color: Colors.black),
@@ -146,7 +156,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
           final notifications = snapshot.data ?? [];
-          if (notifications.isEmpty) return _buildEmptyState();
+          if (notifications.isEmpty) return _buildEmptyState(l10n);
 
           return ListView.separated(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -155,7 +165,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final noti = notifications[index];
-              return _buildNotificationItem(noti);
+              return _buildNotificationItem(noti, l10n);
             },
           );
         },
@@ -163,7 +173,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(AppLocalizations l10n) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -174,18 +184,19 @@ class _NotificationScreenState extends State<NotificationScreen> {
             child: const Icon(Icons.notifications_off_outlined, size: 48, color: Colors.white),
           ),
           const SizedBox(height: 16),
-          const Text("새로운 알림이 없습니다.", style: TextStyle(color: Colors.grey, fontSize: 16)),
+          // "정보 없음" (또는 적절한 빈 상태 메시지)
+          Text(l10n.noInfo, style: const TextStyle(color: Colors.grey, fontSize: 16)),
         ],
       ),
     );
   }
 
   // ✅ [Design] 카드 스타일 적용
-  Widget _buildNotificationItem(Map<String, dynamic> noti) {
+  Widget _buildNotificationItem(Map<String, dynamic> noti, AppLocalizations l10n) {
     final String id = noti['id'];
     final bool isRead = noti['is_read'] ?? false;
     final String type = noti['type'] ?? 'info';
-    final String title = noti['title'] ?? '알림';
+    final String title = noti['title'] ?? l10n.notifications; // '알림'
     final String content = noti['content'] ?? '';
     final String date = _formatDate(noti['created_at']);
 
@@ -326,17 +337,18 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       alignment: Alignment.centerRight,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
+                          // "더보기" (자세히 보기)
                           Text(
-                            "자세히 보기",
-                            style: TextStyle(
+                            l10n.more,
+                            style: const TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF8A2BE2), // NeedsFine Purple
                                 fontWeight: FontWeight.bold
                             ),
                           ),
-                          SizedBox(width: 4),
-                          Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF8A2BE2)),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF8A2BE2)),
                         ],
                       ),
                     ),

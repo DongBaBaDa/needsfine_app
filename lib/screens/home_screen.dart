@@ -9,6 +9,9 @@ import 'package:needsfine_app/screens/category_placeholder_screen.dart';
 import 'package:needsfine_app/screens/weekly_ranking_screen.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
 
+// ✅ [추가] 다국어 패키지 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -132,6 +135,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    // ✅ l10n 객체 가져오기
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: _bg, // ✅ 배치는 동일, 배경만 고급스럽게
       appBar: AppBar(
@@ -159,21 +165,21 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           children: [
             _buildSearchBar(),
             const SizedBox(height: 24),
-            _sectionTitle('카테고리'),
-            _buildCategoryGrid(),
+            _sectionTitle(l10n.category), // "카테고리"
+            _buildCategoryGrid(l10n),
             const SizedBox(height: 32),
             _sectionTitle(
-              '주간 랭킹',
+              l10n.weeklyRanking, // "주간 랭킹"
               trailing: TextButton(
                 onPressed: _goToWeeklyMore,
                 style: TextButton.styleFrom(splashFactory: NoSplash.splashFactory),
-                child: const Text(
-                  '더보기',
-                  style: TextStyle(color: _brand, fontWeight: FontWeight.w700),
+                child: Text(
+                  l10n.more, // "더보기"
+                  style: const TextStyle(color: _brand, fontWeight: FontWeight.w700),
                 ),
               ),
             ),
-            _buildWeeklyHorizontal(),
+            _buildWeeklyHorizontal(l10n),
           ],
         ),
       ),
@@ -208,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           onSubmitted: _submitSearch,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: '맛집을 찾아보세요',
+            hintText: '맛집을 찾아보세요', // 이 부분도 필요하면 arb에 추가해서 l10n.searchHint로 사용 가능
             hintStyle: TextStyle(color: Colors.grey[400], fontWeight: FontWeight.w600),
             prefixIcon: const Icon(Icons.search_rounded, color: _brand),
             suffixIcon: IconButton(
@@ -223,18 +229,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  Widget _buildCategoryGrid() {
-    // ✅ 아이콘 교체(덜 귀엽고 더 일반적인 느낌)
+  Widget _buildCategoryGrid(AppLocalizations l10n) {
+    // ✅ 카테고리 이름 다국어 적용
     final categories = [
-      ('한식', Icons.restaurant_menu),
-      ('일식', Icons.set_meal),
-      ('중식', Icons.ramen_dining),
-      ('양식', Icons.local_pizza),
-      ('카페', Icons.local_cafe),
-      ('술집', Icons.local_bar),
-      ('디저트', Icons.icecream),
-      ('패스트푸드', Icons.fastfood),
-      ('분식', Icons.soup_kitchen),
+      (l10n.koreanFood, Icons.restaurant_menu),
+      (l10n.japaneseFood, Icons.set_meal),
+      (l10n.chineseFood, Icons.ramen_dining),
+      (l10n.westernFood, Icons.local_pizza),
+      (l10n.cafe, Icons.local_cafe),
+      ('술집', Icons.local_bar), // arb에 '술집'이 없어서 일단 유지 (필요 시 추가)
+      (l10n.dessert, Icons.icecream),
+      (l10n.fastFood, Icons.fastfood),
+      (l10n.snackFood, Icons.soup_kitchen),
       ('기타', Icons.more_horiz),
     ];
 
@@ -257,11 +263,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  Widget _buildWeeklyHorizontal() {
+  Widget _buildWeeklyHorizontal(AppLocalizations l10n) {
     if (_top100.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(20),
-        child: Text("데이터가 없습니다.", style: TextStyle(color: Colors.grey)),
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Text(l10n.noInfo, style: const TextStyle(color: Colors.grey)), // "정보 없음"
       );
     }
 
@@ -282,6 +288,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             onTap: () {
               if (r.storeName.isNotEmpty) searchTrigger.value = SearchTarget(query: r.storeName);
             },
+            l10n: l10n, // l10n 전달
           );
         },
       ),
@@ -350,8 +357,14 @@ class _WeeklyRankCard extends StatelessWidget {
   final StoreRanking ranking;
   final String imageUrl;
   final VoidCallback onTap;
+  final AppLocalizations l10n; // l10n 추가
 
-  const _WeeklyRankCard({required this.ranking, required this.imageUrl, required this.onTap});
+  const _WeeklyRankCard({
+    required this.ranking,
+    required this.imageUrl,
+    required this.onTap,
+    required this.l10n,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -461,8 +474,8 @@ class _WeeklyRankCard extends StatelessWidget {
                       border: Border.all(color: _brand.withOpacity(0.16)),
                     ),
                     child: Text(
-                      // ✅ NF -> 니즈파인
-                      '니즈파인 ${ranking.avgScore.toStringAsFixed(1)}',
+                      // ✅ NF -> 니즈파인 (다국어 적용)
+                      '${l10n.needsFine} ${ranking.avgScore.toStringAsFixed(1)}',
                       style: const TextStyle(
                         color: _brand,
                         fontWeight: FontWeight.w900,
@@ -482,7 +495,7 @@ class _WeeklyRankCard extends StatelessWidget {
                         border: Border.all(color: Colors.black.withOpacity(0.06)),
                       ),
                       child: Text(
-                        '신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%',
+                        '${l10n.reliability} ${ranking.avgTrust.toStringAsFixed(0)}%',
                         style: TextStyle(
                           color: Colors.grey[700],
                           fontSize: 12,

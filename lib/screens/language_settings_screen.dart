@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/main.dart'; // appLocaleNotifier 사용을 위해 import
 
+// ✅ 다국어 패키지 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class LanguageSettingsScreen extends StatefulWidget {
   const LanguageSettingsScreen({super.key});
 
@@ -12,10 +15,13 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
   // 현재 선택된 언어 (임시 저장용)
   late Locale _selectedLocale;
 
-  // 가나다순 정렬: 미얀마어(ㅁ) -> 영어(ㅇ) -> 한국어(ㅎ)
+  // ✅ [수정] 언어 표기 변경 (가나다순)
+  // 한국어 Korean (한국어만 예외)
+  // 영어 English
+  // 미얀마어 (미얀마어 번역 -> မြန်မာစာ)
   final List<Map<String, dynamic>> _languages = [
-    {'name': '미얀마어', 'code': 'my', 'country': null},
-    {'name': '영어', 'code': 'en', 'country': null},
+    {'name': '미얀마어 မြန်မာစာ', 'code': 'my', 'country': null},
+    {'name': '영어 English', 'code': 'en', 'country': null},
     {'name': '한국어', 'code': 'ko', 'country': 'KR'},
   ];
 
@@ -34,19 +40,24 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ l10n 객체 가져오기
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
-        title: const Text('언어 설정', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        // "언어 설정"
+        title: Text(l10n.languageSettings, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFFF2F2F7),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
         actions: [
           TextButton(
             onPressed: _applyLanguage,
-            child: const Text(
-              "적용",
-              style: TextStyle(
+            // "적용"
+            child: Text(
+              l10n.apply,
+              style: const TextStyle(
                 color: Color(0xFF8A2BE2), // NeedsFine Color
                 fontWeight: FontWeight.bold,
                 fontSize: 16,

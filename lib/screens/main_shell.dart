@@ -1,3 +1,4 @@
+// lib/screens/main_shell.dart
 import 'package:flutter/material.dart';
 
 import 'package:needsfine_app/screens/home_screen.dart';
@@ -9,6 +10,9 @@ import 'package:needsfine_app/screens/user_mypage_screen.dart';
 // ✅ SearchTarget이 정의된 파일 임포트
 import 'package:needsfine_app/core/search_trigger.dart';
 
+// ✅ [추가] 다국어 패키지 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -19,9 +23,11 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
 
+  // ⚠️ [수정] l10n은 build context가 필요하므로 static/const 제거하고 build 메서드 내부나 getter로 이동
+  // 화면 리스트는 상태 유지용이므로 그대로 둠
   final List<Widget> _widgetOptions = const <Widget>[
     HomeScreen(),                 // 0: 홈
-    ranking.RankingScreen(),      // 1: 랭킹 (리뷰) - ✅ 별칭 사용으로 충돌 해결
+    ranking.RankingScreen(),      // 1: 랭킹 (리뷰)
     NearbyScreen(),               // 2: 내 주변
     UserMyPageScreen(),           // 3: 마이파인
   ];
@@ -55,6 +61,8 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFFC87CFF);
+    // ✅ l10n 객체 가져오기
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFDF9),
@@ -86,22 +94,23 @@ class _MainShellState extends State<MainShell> {
             fontWeight: FontWeight.w500,
             fontFamily: 'NotoSansKR',
           ),
-          items: const [
+          // ✅ [수정] 라벨을 l10n 변수로 교체
+          items: [
             BottomNavigationBarItem(
-              icon: Icon(Icons.home_rounded),
-              label: '홈',
+              icon: const Icon(Icons.home_rounded),
+              label: l10n.home, // "홈"
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.emoji_events_rounded),
-              label: '리뷰',
+              icon: const Icon(Icons.emoji_events_rounded),
+              label: l10n.review, // "리뷰"
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.location_on_rounded),
-              label: '내 주변',
+              icon: const Icon(Icons.location_on_rounded),
+              label: l10n.mySurroundings, // "내 주변"
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.person_rounded),
-              label: '마이파인',
+              icon: const Icon(Icons.person_rounded),
+              label: l10n.myFine, // "마이파인"
             ),
           ],
         ),

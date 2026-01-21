@@ -7,7 +7,7 @@ import '../models/user_model.dart';
 
 // ✅ 화면 이동을 위한 import
 import 'package:needsfine_app/screens/taste_selection_screen.dart';
-import 'package:needsfine_app/screens/user_profile_screen.dart'; // ✅ [변경] UserProfileScreen 임포트
+import 'package:needsfine_app/screens/user_profile_screen.dart';
 import 'package:needsfine_app/screens/review_collection_screen.dart';
 import 'package:needsfine_app/screens/profile_edit_screen.dart';
 import 'package:needsfine_app/screens/info_edit_screen.dart';
@@ -19,6 +19,9 @@ import 'package:needsfine_app/screens/my_lists_screen.dart';
 
 // ✅ 알림 뱃지 위젯
 import 'package:needsfine_app/widgets/notification_badge.dart';
+
+// ✅ [추가] 다국어 패키지 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class UserMyPageScreen extends StatefulWidget {
   const UserMyPageScreen({super.key});
@@ -40,7 +43,10 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchUserData();
+    // context를 안전하게 사용하기 위해 화면이 빌드된 후 데이터 로드
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchUserData();
+    });
   }
 
   Future<void> _fetchUserData() async {
@@ -78,14 +84,17 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       final List<Review> reviewObjects = rawList.whereType<Map>().map((m) => Review.fromJson(Map<String, dynamic>.from(m))).toList();
 
       if (profileData != null && mounted) {
+        // ✅ l10n 객체 가져오기 (ARB 파일이 업데이트되었으므로 noName 등 접근 가능)
+        final l10n = AppLocalizations.of(context)!;
+
         setState(() {
           _isAdmin = profileData['is_admin'] ?? false;
           _myTags = List<String>.from(profileData['taste_tags'] ?? []);
           _myReviews = reviewObjects;
           _userProfile = UserProfile(
-            nickname: profileData['nickname'] ?? "이름 없음",
-            introduction: profileData['introduction'] ?? "소개글이 없습니다.",
-            activityZone: profileData['activity_zone'] ?? "지역 미설정",
+            nickname: profileData['nickname'] ?? l10n.noName, // "이름 없음"
+            introduction: profileData['introduction'] ?? l10n.noIntro, // "소개글이 없습니다"
+            activityZone: profileData['activity_zone'] ?? l10n.unspecified, // "미설정"
             profileImageUrl: profileData['profile_image_url'] ?? "",
             reliability: _avgTrustLevel,
             followerCount: followerCountResponse,
@@ -101,6 +110,9 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   }
 
   void _showCustomerService(BuildContext context) {
+    // ✅ l10n 가져오기
+    final l10n = AppLocalizations.of(context)!;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -110,11 +122,11 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 20),
-            const Text("고객센터", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(l10n.customerCenter, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             ListTile(
                 leading: const Icon(Icons.rate_review_outlined),
-                title: const Text("건의사항 보내기"),
+                title: Text(l10n.sendSuggestion), // "건의사항 보내기"
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const SuggestionWriteScreen()));
@@ -122,7 +134,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             ),
             ListTile(
                 leading: const Icon(Icons.email_outlined),
-                title: const Text("1:1 문의"),
+                title: Text(l10n.inquiry), // "1:1 문의"
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const InquiryWriteScreen()));
@@ -137,13 +149,16 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ l10n 가져오기
+    final l10n = AppLocalizations.of(context)!;
+
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_userProfile == null) return const Scaffold(body: Center(child: Text("정보를 불러올 수 없습니다.")));
+    if (_userProfile == null) return Scaffold(body: Center(child: Text(l10n.loadError))); // "정보를 불러올 수 없습니다."
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: const Text("마이파인", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: Text(l10n.myFine, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)), // "마이파인"
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -160,16 +175,16 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 40),
           children: [
-            Container(color: Colors.white, padding: const EdgeInsets.only(bottom: 24), child: _buildProfileHeader(context)),
+            Container(color: Colors.white, padding: const EdgeInsets.only(bottom: 24), child: _buildProfileHeader(context, l10n)),
             const SizedBox(height: 16),
-            _buildMenuSection(),
+            _buildMenuSection(l10n),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildProfileHeader(BuildContext context) {
+  Widget _buildProfileHeader(BuildContext context, AppLocalizations l10n) {
     ImageProvider profileImage = _userProfile!.profileImageUrl.isNotEmpty
         ? CachedNetworkImageProvider(_userProfile!.profileImageUrl)
         : const AssetImage('assets/images/default_profile.png') as ImageProvider;
@@ -190,9 +205,15 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _StatBadge(label: "니즈파인 ${_avgNeedsFineScore.toStringAsFixed(1)}", color: const Color(0xFF8A2BE2)),
+              _StatBadge(
+                  label: "${l10n.needsFine} ${_avgNeedsFineScore.toStringAsFixed(1)}", // "니즈파인 4.5"
+                  color: const Color(0xFF8A2BE2)
+              ),
               const SizedBox(width: 8),
-              _StatBadge(label: "신뢰도 $_avgTrustLevel%", color: Colors.blueAccent),
+              _StatBadge(
+                  label: "${l10n.reliability} $_avgTrustLevel%", // "신뢰도 90%"
+                  color: Colors.blueAccent
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -201,9 +222,9 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _FollowStat(label: "팔로워", count: _userProfile!.followerCount, onTap: () {}),
+              _FollowStat(label: l10n.follower, count: _userProfile!.followerCount, onTap: () {}),
               Container(height: 24, width: 1, color: Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 30)),
-              _FollowStat(label: "팔로잉", count: _userProfile!.followingCount, onTap: () {}),
+              _FollowStat(label: l10n.following, count: _userProfile!.followingCount, onTap: () {}),
             ],
           ),
           const SizedBox(height: 24),
@@ -222,14 +243,13 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                     side: BorderSide(color: Colors.grey[300]!),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text("프로필 수정", style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
+                  child: Text(l10n.editProfile, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    // ✅ [수정] 나의 피드 클릭 시 UserProfileScreen으로 이동
                     final currentUserId = _supabase.auth.currentUser?.id;
                     if (currentUserId != null) {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => UserProfileScreen(userId: currentUserId)));
@@ -241,7 +261,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
-                  child: const Text("나의 피드", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: Text(l10n.myFeed, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -251,24 +271,24 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     );
   }
 
-  Widget _buildMenuSection() {
+  Widget _buildMenuSection(AppLocalizations l10n) {
     return Container(
       color: Colors.white,
       child: Column(
         children: [
           _MenuItem(
               icon: Icons.bookmark_border_rounded,
-              title: "리뷰 모음",
+              title: l10n.reviewCollection, // "리뷰 모음"
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReviewCollectionScreen()))
           ),
           _MenuItem(
               icon: Icons.list_alt_rounded,
-              title: "나만의 리스트",
+              title: l10n.myOwnList, // "나만의 리스트"
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListsScreen()))
           ),
           _MenuItem(
               icon: Icons.restaurant_menu_rounded,
-              title: "나의 입맛",
+              title: l10n.myTaste, // "나의 입맛"
               onTap: () async {
                 await Navigator.push(context, MaterialPageRoute(builder: (_) => const TasteSelectionScreen()));
                 _fetchUserData();
@@ -277,18 +297,18 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFF2F2F7)),
           _MenuItem(
               icon: Icons.headset_mic_outlined,
-              title: "고객센터",
+              title: l10n.customerCenter, // "고객센터"
               onTap: () => _showCustomerService(context)
           ),
           _MenuItem(
               icon: Icons.notifications_none_rounded,
-              title: "공지사항",
+              title: l10n.notice, // "공지사항"
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticeScreen()))
           ),
           if (_isAdmin)
             _MenuItem(
                 icon: Icons.admin_panel_settings_outlined,
-                title: "관리자 메뉴",
+                title: l10n.adminMenu, // "관리자 메뉴"
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen())),
                 isDestructive: true
             ),

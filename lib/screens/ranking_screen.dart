@@ -13,6 +13,9 @@ import 'package:needsfine_app/widgets/store_ranking_card.dart';
 // ✅ 전역 트리거 임포트
 import 'package:needsfine_app/core/search_trigger.dart';
 
+// ✅ [추가] 다국어 패키지 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
   @override
@@ -28,6 +31,7 @@ class _RankingScreenState extends State<RankingScreen> {
   bool _isMoreLoading = false;
   bool _hasMore = true;
 
+  // 내부 로직용 변수
   String _reviewSortOption = '최신순';
   String _rankingSortOption = '니즈파인 순';
 
@@ -91,7 +95,8 @@ class _RankingScreenState extends State<RankingScreen> {
             CompositedTransformFollower(
               link: _layerLink,
               showWhenUnlinked: false,
-              offset: const Offset(-20, 30), // 버튼 아래쪽으로 약간 이동
+              // ✅ [중요 수정] 오프셋을 (-150, 30)으로 변경하여 팝업을 왼쪽으로 이동시킴 (짤림 방지)
+              offset: const Offset(-150, 30),
               child: Material(
                 color: Colors.transparent,
                 child: Container(
@@ -283,18 +288,35 @@ class _RankingScreenState extends State<RankingScreen> {
     return rankings;
   }
 
+  // ✅ [추가] 정렬 옵션 텍스트 다국어 처리 헬퍼 함수
+  String _getLocalizedSortLabel(String value, AppLocalizations l10n) {
+    switch (value) {
+      case '니즈파인 점수순': return l10n.sortByScore;
+      case '신뢰도순': return l10n.sortByReliability;
+      case '쓴소리': return l10n.bitterCriticism;
+      case '니즈파인 순': return l10n.sortByScore; // '니즈파인 점수순'과 동일한 키 사용
+      case '사용자 별점 순': return l10n.sortByUserRating;
+      case '리뷰 개수 순': return l10n.sortByReviewCount;
+      case '최신순': return l10n.latestOrder; // ✅ ARB에 추가된 키
+      default: return value;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // ✅ l10n 객체 가져오기
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFFDF9),
       appBar: AppBar(
-        // ✅ [수정] 타이틀 + 도움말 버튼을 Row로 배치
+        // ✅ 타이틀 + 도움말 버튼
         title: Row(
           mainAxisSize: MainAxisSize.min, // 가운데 정렬 유지
           children: [
-            const Text('리뷰 랭킹', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(l10n.reviewRanking, style: const TextStyle(fontWeight: FontWeight.bold)), // "리뷰 랭킹"
             const SizedBox(width: 8),
-            // ✅ [추가] 도움말 버튼 (작은 회색 원 + ?)
+            // ✅ 도움말 버튼
             CompositedTransformTarget(
               link: _layerLink,
               child: GestureDetector(
@@ -328,8 +350,8 @@ class _RankingScreenState extends State<RankingScreen> {
           ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9C7CFF))))
           : Column(
         children: [
-          if (_stats != null) _buildStatsHeader(),
-          _buildSortControls(),
+          if (_stats != null) _buildStatsHeader(l10n), // l10n 전달
+          _buildSortControls(l10n), // l10n 전달
           const Divider(height: 1),
           Expanded(
             child: DefaultTabController(
@@ -343,14 +365,17 @@ class _RankingScreenState extends State<RankingScreen> {
                 });
                 return Column(
                   children: [
-                    const TabBar(
-                      labelColor: Color(0xFF9C7CFF),
+                    TabBar(
+                      labelColor: const Color(0xFF9C7CFF),
                       unselectedLabelColor: Colors.grey,
-                      indicatorColor: Color(0xFF9C7CFF),
-                      tabs: [Tab(text: '리뷰 목록'), Tab(text: '매장 순위')],
+                      indicatorColor: const Color(0xFF9C7CFF),
+                      tabs: [
+                        Tab(text: l10n.reviewList), // "리뷰 목록"
+                        Tab(text: l10n.storeRanking) // "매장 순위"
+                      ],
                     ),
                     Expanded(
-                      child: TabBarView(children: [_buildReviewList(), _buildStoreRankingList()]),
+                      child: TabBarView(children: [_buildReviewList(l10n), _buildStoreRankingList(l10n)]),
                     ),
                   ],
                 );
@@ -370,15 +395,15 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 
-  Widget _buildStatsHeader() => Container(
+  Widget _buildStatsHeader(AppLocalizations l10n) => Container(
     padding: const EdgeInsets.all(16.0),
     color: const Color(0xFFF0E9FF),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _buildStatItem('총 리뷰', '${_stats!.total}개'),
-        _buildStatItem('평균 니즈파인 점수', _stats!.average == 0 ? '-' : _stats!.average.toStringAsFixed(1)),
-        _buildStatItem('평균 신뢰도', _stats!.avgTrust == 0 ? '-' : '${_stats!.avgTrust.toStringAsFixed(0)}%'),
+        _buildStatItem(l10n.totalReviews, '${_stats!.total}개'), // "총 리뷰"
+        _buildStatItem(l10n.avgNeedsFineScore, _stats!.average == 0 ? '-' : _stats!.average.toStringAsFixed(1)), // "평균 니즈파인 점수"
+        _buildStatItem(l10n.avgReliability, _stats!.avgTrust == 0 ? '-' : '${_stats!.avgTrust.toStringAsFixed(0)}%'), // "평균 신뢰도"
       ],
     ),
   );
@@ -391,7 +416,7 @@ class _RankingScreenState extends State<RankingScreen> {
     ],
   );
 
-  Widget _buildSortControls() => Padding(
+  Widget _buildSortControls(AppLocalizations l10n) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.end,
@@ -403,7 +428,11 @@ class _RankingScreenState extends State<RankingScreen> {
               ? ['최신순', '니즈파인 점수순', '신뢰도순', '쓴소리']
               : ['니즈파인 순', '사용자 별점 순', '리뷰 개수 순']
           ).map((String value) {
-            return DropdownMenuItem<String>(value: value, child: Text(value, style: const TextStyle(fontSize: 14)));
+            return DropdownMenuItem<String>(
+              value: value,
+              // ✅ 화면에 표시될 때만 번역 적용
+              child: Text(_getLocalizedSortLabel(value, l10n), style: const TextStyle(fontSize: 14)),
+            );
           }).toList(),
           onChanged: (newValue) {
             setState(() {
@@ -419,10 +448,10 @@ class _RankingScreenState extends State<RankingScreen> {
     ),
   );
 
-  Widget _buildReviewList() {
+  Widget _buildReviewList(AppLocalizations l10n) {
     final reviews = _getSortedReviews();
     if (reviews.isEmpty && !_isLoading) {
-      return const Center(child: Text('조건에 맞는 리뷰가 없습니다.'));
+      return Center(child: Text(l10n.noListGenerated)); // "생성된 리스트가 없습니다"
     }
 
     return ListView.separated(
@@ -449,7 +478,7 @@ class _RankingScreenState extends State<RankingScreen> {
                   lat: reviews[index].storeLat,
                   lng: reviews[index].storeLng
               );
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("지도로 이동합니다.")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("지도로 이동합니다."))); // 단순 토스트는 하드코딩 유지
             }
           },
           onTapProfile: () {
@@ -465,12 +494,12 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 
-  Widget _buildStoreRankingList() {
+  Widget _buildStoreRankingList(AppLocalizations l10n) {
     final rankings = _getSortedRankings();
     final double overallAverage = _stats?.average ?? 0.0;
 
     return rankings.isEmpty
-        ? const Center(child: Text('매장 데이터가 없습니다.'))
+        ? Center(child: Text(l10n.noInfo)) // "매장 데이터가 없습니다" -> 정보 없음
         : ListView.builder(
       itemCount: rankings.length,
       itemBuilder: (context, index) {
@@ -506,7 +535,7 @@ class _RankingScreenState extends State<RankingScreen> {
               ),
             ),
 
-            if (showDivider) _buildAverageDivider(overallAverage),
+            if (showDivider) _buildAverageDivider(overallAverage, l10n),
 
             if (!showDivider && index < rankings.length - 1)
               const Divider(height: 1),
@@ -516,7 +545,7 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 
-  Widget _buildAverageDivider(double average) {
+  Widget _buildAverageDivider(double average, AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
       child: Stack(
@@ -537,7 +566,7 @@ class _RankingScreenState extends State<RankingScreen> {
               ),
             ),
             child: Text(
-              '니즈파인 평균 점수 ${average.toStringAsFixed(1)}점',
+              '${l10n.avgNeedsFineScore} ${average.toStringAsFixed(1)}', // "평균 니즈파인 점수"
               style: const TextStyle(
                 color: Colors.black,
                 fontSize: 13,

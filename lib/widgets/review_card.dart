@@ -4,6 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart';
 
+// ✅ 다국어 패키지 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class ReviewCard extends StatefulWidget {
   final Review review;
   final VoidCallback onTap;        // 리뷰 상세 이동
@@ -101,6 +104,7 @@ class _ReviewCardState extends State<ReviewCard> {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) {
       if (mounted) {
+        // "로그인이 필요합니다" (키가 없어서 하드코딩 유지)
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("로그인이 필요합니다.")),
         );
@@ -153,6 +157,9 @@ class _ReviewCardState extends State<ReviewCard> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ l10n 객체 가져오기
+    final l10n = AppLocalizations.of(context)!;
+
     ImageProvider avatarImage;
     if (widget.review.userProfileUrl != null && widget.review.userProfileUrl!.isNotEmpty) {
       avatarImage = NetworkImage(widget.review.userProfileUrl!);
@@ -227,7 +234,7 @@ class _ReviewCardState extends State<ReviewCard> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      "니즈파인 점수",
+                      l10n.avgNeedsFineScore, // "평균 니즈파인 점수" (혹은 "니즈파인 점수")
                       style: TextStyle(
                         color: const Color(0xFF7C4DFF).withOpacity(0.55),
                         fontSize: 10,
@@ -247,7 +254,7 @@ class _ReviewCardState extends State<ReviewCard> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "신뢰도 ${widget.review.trustLevel}%",
+                      "${l10n.reliability} ${widget.review.trustLevel}%", // "신뢰도 XX%"
                       style: const TextStyle(
                         color: Color(0xFF6B6B6F),
                         fontSize: 10,

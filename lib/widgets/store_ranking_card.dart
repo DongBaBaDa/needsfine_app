@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 
+// ✅ [추가] 다국어 패키지 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class StoreRankingCard extends StatelessWidget {
   final StoreRanking ranking;
   final String sortOption;
@@ -14,6 +17,9 @@ class StoreRankingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ l10n 객체 가져오기
+    final l10n = AppLocalizations.of(context)!;
+
     // 1. 순위별 메달 색상 설정
     Color rankColor;
     if (ranking.rank == 1) {
@@ -146,9 +152,9 @@ class StoreRankingCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // '니즈파인 점수' 라벨
-              const Text(
-                '니즈파인 점수',
-                style: TextStyle(
+              Text(
+                l10n.avgNeedsFineScore, // "평균 니즈파인 점수"
+                style: const TextStyle(
                   fontSize: 11,
                   color: Color(0xFF9C7CFF), // 보라색
                   fontWeight: FontWeight.bold,
@@ -171,7 +177,7 @@ class StoreRankingCard extends StatelessWidget {
 
               // 신뢰도 (배지 없이 텍스트만)
               Text(
-                '신뢰도 ${ranking.avgTrust.toInt()}%',
+                '${l10n.reliability} ${ranking.avgTrust.toInt()}%',
                 style: const TextStyle(
                   fontSize: 12,
                   color: Color(0xFF666666), // 진한 회색
