@@ -1,4 +1,4 @@
-// lib/screens/home_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
@@ -9,7 +9,8 @@ import 'package:needsfine_app/screens/category_placeholder_screen.dart';
 import 'package:needsfine_app/screens/weekly_ranking_screen.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
 
-// ✅ [추가] 다국어 패키지 임포트
+// ✅ 지역 데이터 및 다국어 임포트
+import 'package:needsfine_app/data/korean_regions.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -30,7 +31,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   List<StoreRanking> _top100 = [];
   final Map<String, String> _storeImageMap = {};
 
-  // ✅ 디자인 토큰 (로직 영향 없음)
+  // ✅ 배너 데이터 리스트
+  List<String> _bannerList = [];
+
+  int _currentBannerIndex = 0;
+  int _selectedCategoryIndex = 0; // 0:종류, 1:테마, 2:지역
+  final PageController _bannerController = PageController();
+  Timer? _bannerTimer;
+
+  // ✅ [NEW] 지역 선택 상태
+  String? _selectedProvince;
+
+  // 디자인 토큰
   static const Color _brand = Color(0xFF8A2BE2);
   static const Color _bg = Color(0xFFF2F2F7);
   static const Color _card = Colors.white;
@@ -47,18 +59,47 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   void initState() {
     super.initState();
     _loadHomeData();
+    _startBannerTimer();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _bannerController.dispose();
+    _bannerTimer?.cancel();
     super.dispose();
+  }
+
+  void _startBannerTimer() {
+    _bannerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_bannerController.hasClients && _bannerList.isNotEmpty) {
+        int nextPage = _currentBannerIndex + 1;
+        if (nextPage >= _bannerList.length) nextPage = 0;
+        _bannerController.animateToPage(
+          nextPage,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
 
   Future<void> _loadHomeData() async {
     if (mounted) setState(() => _isLoading = true);
 
     try {
+      // 1. 배너 데이터 로드 (DB 연동)
+      final bannerData = await _supabase
+          .from('banners')
+          .select('image_url')
+          .order('created_at', ascending: true);
+
+      final List<String> loadedBanners = [];
+      for (var row in bannerData) {
+        loadedBanners.add(row['image_url'] as String);
+      }
+
+      // 2. 랭킹 데이터 로드
       final rankings = await ReviewService.fetchStoreRankings();
       final sorted = List<StoreRanking>.from(rankings);
       sorted.sort((a, b) => b.avgScore.compareTo(a.avgScore));
@@ -76,11 +117,13 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         );
       }
 
+      // 3. 매장 이미지 로드
       final names = top100.map((e) => e.storeName).where((e) => e.isNotEmpty).toSet().toList();
       final imageMap = await _fetchStoreImages(names);
 
       if (mounted) {
         setState(() {
+          _bannerList = loadedBanners; // 배너 리스트 갱신
           _top100 = top100;
           _storeImageMap..clear()..addAll(imageMap);
         });
@@ -120,26 +163,25 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   }
 
   void _goToWeeklyMore() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WeeklyRankingScreen(rankings: _top100, storeImageMap: _storeImageMap),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => WeeklyRankingScreen(rankings: _top100, storeImageMap: _storeImageMap)));
   }
 
   void _goToCategory(String title) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryPlaceholderScreen(title: title)));
   }
 
+  void _searchByRegion(String regionName) {
+    searchTrigger.value = SearchTarget(query: regionName);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$regionName(으)로 검색합니다.")));
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    // ✅ l10n 객체 가져오기
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: _bg, // ✅ 배치는 동일, 배경만 고급스럽게
+      backgroundColor: _bg,
       appBar: AppBar(
         backgroundColor: _bg,
         surfaceTintColor: _bg,
@@ -164,17 +206,33 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           padding: const EdgeInsets.only(bottom: 40),
           children: [
             _buildSearchBar(),
+            const SizedBox(height: 16),
+
+            _buildAdBanner(), // ✅ 0/0 처리 적용
             const SizedBox(height: 24),
-            _sectionTitle(l10n.category), // "카테고리"
-            _buildCategoryGrid(l10n),
+
+            _buildCategoryTabs(),
+            const SizedBox(height: 16),
+
+            AnimatedCrossFade(
+              firstChild: _buildCategoryGrid(l10n),
+              secondChild: _selectedCategoryIndex == 1
+                  ? _buildThemeList()
+                  : _buildLocationList(),
+              crossFadeState: _selectedCategoryIndex == 0
+                  ? CrossFadeState.showFirst
+                  : CrossFadeState.showSecond,
+              duration: const Duration(milliseconds: 300),
+            ),
+
             const SizedBox(height: 32),
             _sectionTitle(
-              l10n.weeklyRanking, // "주간 랭킹"
+              l10n.weeklyRanking,
               trailing: TextButton(
                 onPressed: _goToWeeklyMore,
                 style: TextButton.styleFrom(splashFactory: NoSplash.splashFactory),
                 child: Text(
-                  l10n.more, // "더보기"
+                  l10n.more,
                   style: const TextStyle(color: _brand, fontWeight: FontWeight.w700),
                 ),
               ),
@@ -214,7 +272,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           onSubmitted: _submitSearch,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: '맛집을 찾아보세요', // 이 부분도 필요하면 arb에 추가해서 l10n.searchHint로 사용 가능
+            hintText: '맛집을 찾아보세요',
             hintStyle: TextStyle(color: Colors.grey[400], fontWeight: FontWeight.w600),
             prefixIcon: const Icon(Icons.search_rounded, color: _brand),
             suffixIcon: IconButton(
@@ -229,15 +287,136 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
+  Widget _buildAdBanner() {
+    // ✅ 배너가 없을 때 (0개) 처리
+    bool isEmpty = _bannerList.isEmpty;
+    int totalCount = isEmpty ? 0 : _bannerList.length;
+    int displayIndex = isEmpty ? 0 : (_currentBannerIndex + 1);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: AspectRatio(
+        aspectRatio: 2.4,
+        child: Stack(
+          children: [
+            if (isEmpty)
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.image_not_supported_outlined, size: 48, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text("등록된 이미지가 없습니다.", style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                ),
+              )
+            else
+              PageView.builder(
+                controller: _bannerController,
+                itemCount: _bannerList.length,
+                onPageChanged: (index) {
+                  setState(() => _currentBannerIndex = index);
+                },
+                itemBuilder: (context, index) {
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 0),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.network(
+                        _bannerList[index],
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                        const Center(child: Icon(Icons.error, color: Colors.red)),
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+            // ✅ 인디케이터 (0/0)
+            Positioned(
+              bottom: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  "$displayIndex / $totalCount",
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryTabs() {
+    final tabs = ["종류별", "테마별", "지역별"];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: List.generate(tabs.length, (index) {
+          final isSelected = _selectedCategoryIndex == index;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedCategoryIndex = index;
+                  if (index != 2) _selectedProvince = null;
+                });
+              },
+              child: Container(
+                margin: EdgeInsets.only(right: index == tabs.length - 1 ? 0 : 8),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected ? _brand : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: isSelected
+                      ? [BoxShadow(color: _brand.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
+                      : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  tabs[index],
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   Widget _buildCategoryGrid(AppLocalizations l10n) {
-    // ✅ 카테고리 이름 다국어 적용
     final categories = [
       (l10n.koreanFood, Icons.restaurant_menu),
       (l10n.japaneseFood, Icons.set_meal),
       (l10n.chineseFood, Icons.ramen_dining),
       (l10n.westernFood, Icons.local_pizza),
       (l10n.cafe, Icons.local_cafe),
-      ('술집', Icons.local_bar), // arb에 '술집'이 없어서 일단 유지 (필요 시 추가)
+      ('술집', Icons.local_bar),
       (l10n.dessert, Icons.icecream),
       (l10n.fastFood, Icons.fastfood),
       (l10n.snackFood, Icons.soup_kitchen),
@@ -263,11 +442,108 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
+  Widget _buildThemeList() {
+    final themes = ["데이트 맛집", "가족 외식", "혼밥 추천", "회식 장소", "뷰 맛집"];
+    return SizedBox(
+      height: 50,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        scrollDirection: Axis.horizontal,
+        itemCount: themes.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          return ActionChip(
+            label: Text(themes[index]),
+            backgroundColor: Colors.white,
+            onPressed: () => _submitSearch(themes[index]),
+            side: BorderSide(color: Colors.grey.shade300),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLocationList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 50,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            scrollDirection: Axis.horizontal,
+            itemCount: koreanRegions.keys.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final province = koreanRegions.keys.elementAt(index);
+              final isSelected = _selectedProvince == province;
+              return ChoiceChip(
+                label: Text(province),
+                selected: isSelected,
+                selectedColor: _brand.withOpacity(0.2),
+                labelStyle: TextStyle(
+                  color: isSelected ? _brand : Colors.black87,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+                onSelected: (selected) {
+                  setState(() {
+                    _selectedProvince = selected ? province : null;
+                  });
+                },
+                backgroundColor: Colors.white,
+                side: BorderSide(color: isSelected ? _brand : Colors.grey.shade300),
+              );
+            },
+          ),
+        ),
+
+        if (_selectedProvince != null) ...[
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.subdirectory_arrow_right, size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text("$_selectedProvince 상세 지역", style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: koreanRegions[_selectedProvince]!.map((city) {
+                    return InkWell(
+                      onTap: () => _searchByRegion("$_selectedProvince $city"),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(city, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        ]
+      ],
+    );
+  }
+
   Widget _buildWeeklyHorizontal(AppLocalizations l10n) {
     if (_top100.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(20),
-        child: Text(l10n.noInfo, style: const TextStyle(color: Colors.grey)), // "정보 없음"
+        child: Text(l10n.noInfo, style: const TextStyle(color: Colors.grey)),
       );
     }
 
@@ -288,7 +564,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             onTap: () {
               if (r.storeName.isNotEmpty) searchTrigger.value = SearchTarget(query: r.storeName);
             },
-            l10n: l10n, // l10n 전달
+            l10n: l10n,
           );
         },
       ),
@@ -307,7 +583,6 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 미니멀 카드형 (귀여움↓ / 존재감↑)
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -357,7 +632,7 @@ class _WeeklyRankCard extends StatelessWidget {
   final StoreRanking ranking;
   final String imageUrl;
   final VoidCallback onTap;
-  final AppLocalizations l10n; // l10n 추가
+  final AppLocalizations l10n;
 
   const _WeeklyRankCard({
     required this.ranking,
@@ -368,7 +643,6 @@ class _WeeklyRankCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 기존 배치(이미지 위 + 정보 아래)는 유지, 스타일만 정리
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -388,7 +662,6 @@ class _WeeklyRankCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 이미지
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
@@ -402,7 +675,6 @@ class _WeeklyRankCard extends StatelessWidget {
                         color: Colors.grey[100],
                         child: const Icon(Icons.store, color: Colors.grey),
                       ),
-                    // 하단 그라데이션(텍스트 대비)
                     Positioned(
                       left: 0,
                       right: 0,
@@ -421,7 +693,6 @@ class _WeeklyRankCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // 랭크 배지
                     Positioned(
                       left: 12,
                       top: 12,
@@ -438,7 +709,6 @@ class _WeeklyRankCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // 가게명(이미지 위 하단)
                     Positioned(
                       left: 14,
                       right: 14,
@@ -459,13 +729,10 @@ class _WeeklyRankCard extends StatelessWidget {
                 ),
               ),
             ),
-
-            // 정보 영역
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               child: Row(
                 children: [
-                  // 니즈파인 점수 칩
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
@@ -474,7 +741,6 @@ class _WeeklyRankCard extends StatelessWidget {
                       border: Border.all(color: _brand.withOpacity(0.16)),
                     ),
                     child: Text(
-                      // ✅ NF -> 니즈파인 (다국어 적용)
                       '${l10n.needsFine} ${ranking.avgScore.toStringAsFixed(1)}',
                       style: const TextStyle(
                         color: _brand,
@@ -485,7 +751,6 @@ class _WeeklyRankCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // 신뢰도 칩
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

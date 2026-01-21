@@ -16,11 +16,12 @@ import 'package:needsfine_app/screens/suggestion_write_screen.dart';
 import 'package:needsfine_app/screens/inquiry_write_screen.dart';
 import 'package:needsfine_app/screens/admin_dashboard_screen.dart';
 import 'package:needsfine_app/screens/my_lists_screen.dart';
+import 'package:needsfine_app/screens/banner_management_screen.dart'; // ✅ 배너 관리 화면 임포트
 
 // ✅ 알림 뱃지 위젯
 import 'package:needsfine_app/widgets/notification_badge.dart';
 
-// ✅ [추가] 다국어 패키지 임포트
+// ✅ 다국어 패키지 임포트
 import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class UserMyPageScreen extends StatefulWidget {
@@ -43,7 +44,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   @override
   void initState() {
     super.initState();
-    // context를 안전하게 사용하기 위해 화면이 빌드된 후 데이터 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchUserData();
     });
@@ -64,7 +64,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
 
       final List<dynamic> rawList = (reviewData is List) ? reviewData : <dynamic>[];
 
-      // 평균 점수 및 신뢰도 계산
       if (rawList.isNotEmpty) {
         double totalScore = 0.0;
         int totalTrust = 0;
@@ -80,11 +79,9 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
         _avgTrustLevel = 0;
       }
 
-      // 리뷰 객체 변환
       final List<Review> reviewObjects = rawList.whereType<Map>().map((m) => Review.fromJson(Map<String, dynamic>.from(m))).toList();
 
       if (profileData != null && mounted) {
-        // ✅ l10n 객체 가져오기 (ARB 파일이 업데이트되었으므로 noName 등 접근 가능)
         final l10n = AppLocalizations.of(context)!;
 
         setState(() {
@@ -92,9 +89,9 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           _myTags = List<String>.from(profileData['taste_tags'] ?? []);
           _myReviews = reviewObjects;
           _userProfile = UserProfile(
-            nickname: profileData['nickname'] ?? l10n.noName, // "이름 없음"
-            introduction: profileData['introduction'] ?? l10n.noIntro, // "소개글이 없습니다"
-            activityZone: profileData['activity_zone'] ?? l10n.unspecified, // "미설정"
+            nickname: profileData['nickname'] ?? l10n.noName,
+            introduction: profileData['introduction'] ?? l10n.noIntro,
+            activityZone: profileData['activity_zone'] ?? l10n.unspecified,
             profileImageUrl: profileData['profile_image_url'] ?? "",
             reliability: _avgTrustLevel,
             followerCount: followerCountResponse,
@@ -110,7 +107,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   }
 
   void _showCustomerService(BuildContext context) {
-    // ✅ l10n 가져오기
     final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
@@ -126,7 +122,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             const SizedBox(height: 10),
             ListTile(
                 leading: const Icon(Icons.rate_review_outlined),
-                title: Text(l10n.sendSuggestion), // "건의사항 보내기"
+                title: Text(l10n.sendSuggestion),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const SuggestionWriteScreen()));
@@ -134,7 +130,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             ),
             ListTile(
                 leading: const Icon(Icons.email_outlined),
-                title: Text(l10n.inquiry), // "1:1 문의"
+                title: Text(l10n.inquiry),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const InquiryWriteScreen()));
@@ -149,16 +145,15 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ l10n 가져오기
     final l10n = AppLocalizations.of(context)!;
 
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_userProfile == null) return Scaffold(body: Center(child: Text(l10n.loadError))); // "정보를 불러올 수 없습니다."
+    if (_userProfile == null) return Scaffold(body: Center(child: Text(l10n.loadError)));
 
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: Text(l10n.myFine, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)), // "마이파인"
+        title: Text(l10n.myFine, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -201,24 +196,22 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           Text(_userProfile!.introduction, style: TextStyle(fontSize: 14, color: Colors.grey[600]), textAlign: TextAlign.center),
           const SizedBox(height: 16),
 
-          // 통계 뱃지
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _StatBadge(
-                  label: "${l10n.needsFine} ${_avgNeedsFineScore.toStringAsFixed(1)}", // "니즈파인 4.5"
+                  label: "${l10n.needsFine} ${_avgNeedsFineScore.toStringAsFixed(1)}",
                   color: const Color(0xFF8A2BE2)
               ),
               const SizedBox(width: 8),
               _StatBadge(
-                  label: "${l10n.reliability} $_avgTrustLevel%", // "신뢰도 90%"
+                  label: "${l10n.reliability} $_avgTrustLevel%",
                   color: Colors.blueAccent
               ),
             ],
           ),
           const SizedBox(height: 24),
 
-          // 팔로워/팔로잉
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -229,7 +222,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
           const SizedBox(height: 24),
 
-          // 버튼 그룹
           Row(
             children: [
               Expanded(
@@ -278,17 +270,17 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
         children: [
           _MenuItem(
               icon: Icons.bookmark_border_rounded,
-              title: l10n.reviewCollection, // "리뷰 모음"
+              title: l10n.reviewCollection,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReviewCollectionScreen()))
           ),
           _MenuItem(
               icon: Icons.list_alt_rounded,
-              title: l10n.myOwnList, // "나만의 리스트"
+              title: l10n.myOwnList,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListsScreen()))
           ),
           _MenuItem(
               icon: Icons.restaurant_menu_rounded,
-              title: l10n.myTaste, // "나의 입맛"
+              title: l10n.myTaste,
               onTap: () async {
                 await Navigator.push(context, MaterialPageRoute(builder: (_) => const TasteSelectionScreen()));
                 _fetchUserData();
@@ -297,21 +289,37 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFF2F2F7)),
           _MenuItem(
               icon: Icons.headset_mic_outlined,
-              title: l10n.customerCenter, // "고객센터"
+              title: l10n.customerCenter,
               onTap: () => _showCustomerService(context)
           ),
           _MenuItem(
               icon: Icons.notifications_none_rounded,
-              title: l10n.notice, // "공지사항"
+              title: l10n.notice,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticeScreen()))
           ),
-          if (_isAdmin)
+          // ✅ 관리자 메뉴 (배너 관리 추가)
+          if (_isAdmin) ...[
+            const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFF2F2F7)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 0, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(l10n.adminMenu, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+            ),
             _MenuItem(
                 icon: Icons.admin_panel_settings_outlined,
-                title: l10n.adminMenu, // "관리자 메뉴"
+                title: "관리자 대시보드",
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen())),
                 isDestructive: true
             ),
+            _MenuItem(
+                icon: Icons.view_carousel_outlined, // 배너 아이콘
+                title: "배너 관리",
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BannerManagementScreen())),
+                isDestructive: true
+            ),
+          ]
         ],
       ),
     );
