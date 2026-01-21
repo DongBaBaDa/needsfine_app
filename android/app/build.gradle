@@ -1,0 +1,83 @@
+import java.util.Properties
+import java.io.FileInputStream
+
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
+def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
+
+// ✅ android/key.properties 로딩 (android 폴더 기준)
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (!keystorePropertiesFile.exists()) {
+    throw new GradleException("Missing key.properties at: ${keystorePropertiesFile.absolutePath}")
+}
+keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+
+android {
+    namespace "com.needsfine.needsfine_app"
+    compileSdk 36
+    ndkVersion flutter.ndkVersion
+
+    defaultConfig {
+        applicationId "com.needsfine.needsfine_app"
+        minSdkVersion flutter.minSdkVersion
+        targetSdk 35
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+    }
+
+    // 경고 없애려면 17 권장(AGP 8.x 환경과도 잘 맞음)
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    sourceSets {
+        main.java.srcDirs += "src/main/kotlin"
+    }
+
+    signingConfigs {
+        release {
+            // ✅ storeFile은 "android/" 기준으로 해석되게 rootProject.file 사용
+            def ks = rootProject.file(keystoreProperties["storeFile"])
+            if (!ks.exists()) {
+                throw new GradleException("Keystore not found at: ${ks.absolutePath}")
+            }
+
+            storeFile ks
+            storePassword keystoreProperties["storePassword"]?.toString()
+            keyAlias keystoreProperties["keyAlias"]?.toString()
+            keyPassword keystoreProperties["keyPassword"]?.toString()
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+}
+
+flutter {
+    source "../.."
+}

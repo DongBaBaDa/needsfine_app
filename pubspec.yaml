@@ -76,6 +76,7 @@ flutter_native_splash:
 # Flutter 리소스 설정
 flutter:
   uses-material-design: true
+  generate: true  # ✅ [추가] 다국어 코드 자동 생성을 위해 필수!
   assets:
     - assets/images/
     - assets/icon.png

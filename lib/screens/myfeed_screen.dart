@@ -1,12 +1,17 @@
+// lib/screens/myfeed_screen.dart
 import 'package:flutter/material.dart';
-import '../core/needsfine_theme.dart';
-import '../models/user_model.dart';
-import 'package:needsfine_app/screens/follow_list_screen.dart'; // ✅ 임포트 추가
+import 'package:needsfine_app/core/needsfine_theme.dart';
+import 'package:needsfine_app/models/user_model.dart';
+import 'package:needsfine_app/screens/follow_list_screen.dart';
 import 'dart:io';
+
+// ✅ Review 모델 임포트 필수
+import 'package:needsfine_app/models/ranking_models.dart';
 
 class MyFeedScreen extends StatelessWidget {
   final UserProfile userProfile;
-  final List<dynamic> reviews;
+  // ✅ List<dynamic> -> List<Review>로 명확하게 타입 지정
+  final List<Review> reviews;
 
   const MyFeedScreen({
     super.key,
@@ -36,7 +41,7 @@ class MyFeedScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildProfileHeader(context),
-            Divider(thickness: 8, color: kNeedsFinePurpleLight),
+            const Divider(thickness: 8, color: kNeedsFinePurpleLight),
             _buildReviewSection(context),
           ],
         ),
@@ -74,7 +79,6 @@ class MyFeedScreen extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      // ✅ 클릭 가능하도록 GestureDetector 추가
                       GestureDetector(
                         onTap: () => _navigateToFollowList(context, 0),
                         child: Text("팔로워 ${userProfile.followerCount}", style: const TextStyle(color: Colors.grey)),
@@ -92,6 +96,7 @@ class MyFeedScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
+          // ✅ 실제 데이터가 있다면 연동 (현재는 하드코딩된 값 유지 혹은 계산된 값 전달 필요)
           _buildInfoRow("평균 별점", "5.0", isStar: true),
           const SizedBox(height: 14),
           _buildInfoRow("신뢰도", "${userProfile.reliability}%", isReliability: true),
@@ -104,20 +109,19 @@ class MyFeedScreen extends StatelessWidget {
               backgroundColor: kNeedsFinePurple,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text("+ 팔로우", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text("+ 팔로우", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
           ),
         ],
       ),
     );
   }
 
-  // ✅ 팔로우 리스트 화면으로 이동하는 헬퍼 함수
   void _navigateToFollowList(BuildContext context, int tabIndex) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => FollowListScreen(
-          userId: "현재_피드_주인의_ID", // 실제 구현 시 userProfile에 ID 필드를 추가하여 연동하세요.
+          userId: "current_user_id", // 실제 ID 연동 필요 시 userProfile에 id 필드 추가 권장
           nickname: userProfile.nickname,
           initialTabIndex: tabIndex,
         ),
@@ -167,7 +171,11 @@ class MyFeedScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildReviewCard(BuildContext context, dynamic review) {
+  // ✅ [수정 핵심] dynamic -> Review 객체 사용으로 변경
+  Widget _buildReviewCard(BuildContext context, Review review) {
+    // 날짜 포맷팅 (간단하게 구현)
+    final dateStr = "${review.createdAt.year}.${review.createdAt.month}.${review.createdAt.day}";
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -178,24 +186,39 @@ class MyFeedScreen extends StatelessWidget {
             decoration: BoxDecoration(color: kNeedsFinePurpleLight, borderRadius: BorderRadius.circular(10)),
             child: const Icon(Icons.restaurant, color: kNeedsFinePurple, size: 22),
           ),
-          title: Text(review['restaurant_name'] ?? "식당명", style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text("${review['category'] ?? '음식'} · ${review['location'] ?? '위치'}"),
+          // ✅ review['key'] 대신 review.property 사용
+          title: Text(review.storeName, style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(review.storeAddress ?? "주소 정보 없음"),
           onTap: () {},
         ),
 
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: GridView.count(
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 4,
-              children: List.generate(4, (index) => _buildPlaceholder()),
+        // 사진이 있는 경우 표시 (없으면 Placeholder 숨김 혹은 처리)
+        if (review.photoUrls.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: review.photoUrls.length > 4 ? 4 : review.photoUrls.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 4,
+                  crossAxisSpacing: 4,
+                ),
+                itemBuilder: (context, index) {
+                  return Image.network(
+                    review.photoUrls[index],
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+                  );
+                },
+              ),
             ),
-          ),
-        ),
+          )
+        else
+        // 사진 없으면 숨기거나 높이 0
+          const SizedBox.shrink(),
 
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -205,17 +228,19 @@ class MyFeedScreen extends StatelessWidget {
               Row(
                 children: [
                   const Icon(Icons.star, color: Colors.orange, size: 18),
-                  Text(" ${review['rating'] ?? '5.0'}  ·  ", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const Icon(Icons.wb_sunny_outlined, size: 16, color: Colors.grey),
-                  Text(" ${review['visit_time'] ?? '방문'} ", style: const TextStyle(color: Colors.grey)),
-                  const Spacer(),
-                  const Text("6일 전", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  // ✅ 점수 데이터 연결
+                  Text(" ${review.userRating.toStringAsFixed(1)}  ·  ", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
+                  Text(" $dateStr ", style: const TextStyle(color: Colors.grey, fontSize: 13)),
                 ],
               ),
               const SizedBox(height: 12),
+              // ✅ 리뷰 내용 연결
               Text(
-                review['content'] ?? "정말 맛있게 먹었습니다!",
+                review.reviewText,
                 style: const TextStyle(height: 1.5, fontSize: 15),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 24),
             ],

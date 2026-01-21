@@ -1,0 +1,31 @@
+pluginManagement {
+    def properties = new Properties()
+    def localPropertiesFile = file("local.properties")
+    assert localPropertiesFile.exists() : "local.properties not found (android/local.properties)"
+
+    localPropertiesFile.withInputStream { properties.load(it) }
+    def flutterSdkPath = properties.getProperty("flutter.sdk")
+    assert flutterSdkPath != null : "flutter.sdk not set in local.properties"
+
+    // Flutter Gradle tooling을 composite build로 포함
+    includeBuild("${flutterSdkPath}/packages/flutter_tools/gradle")
+
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    // Flutter 최신 템플릿 방식(플러그인 로더)
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+
+    // ✅ API 36(compileSdk 36) 지원하는 AGP로 업그레이드
+    id "com.android.application" version "8.12.0" apply false
+
+    // Kotlin은 당장 필수는 아니지만, 경고 제거 + 향후 대비로 업그레이드 추천
+    id "org.jetbrains.kotlin.android" version "2.1.0" apply false
+}
+
+include ":app"

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/screens/email_login_screen.dart';
 import 'package:needsfine_app/screens/password_change_screen.dart';
-import 'package:needsfine_app/screens/terms_screen.dart'; // ✅ 약관 화면 임포트
+import 'package:needsfine_app/screens/terms_screen.dart';
+import 'package:needsfine_app/screens/language_settings_screen.dart'; // ✅ 언어 설정 화면 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart'; // ✅ 다국어 패키지
 
 class InfoEditScreen extends StatefulWidget {
   const InfoEditScreen({super.key});
@@ -32,6 +34,13 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
     if (user != null) {
       _email = user.email ?? '';
 
+      // 1. user_metadata에서 성별 확인 (회원가입 시 보통 여기에 저장됨)
+      final metaGender = user.userMetadata?['gender'];
+      if (metaGender != null) {
+        _gender = metaGender.toString();
+      }
+
+      // 2. profiles 테이블에서도 확인 (DB 우선)
       try {
         final data = await _supabase
             .from('profiles')
@@ -41,7 +50,9 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
 
         if (data != null) {
           _phone = data['phone'] ?? '';
-          _gender = data['gender'] ?? '미설정';
+          if (data['gender'] != null && data['gender'] != '') {
+            _gender = data['gender'];
+          }
         }
       } catch (e) {
         debugPrint('프로필 정보 로드 실패: $e');
@@ -62,67 +73,50 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
   }
 
   Future<void> _deleteAccount() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("회원 탈퇴"),
+        title: Text(l10n.deleteAccount),
         content: const Text("정말로 탈퇴하시겠습니까? 계정 정보와 활동 내역이 모두 삭제됩니다."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("취소")),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("탈퇴", style: TextStyle(color: Colors.red)),
+            child: Text(l10n.deleteAccount, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("회원 탈퇴 처리가 완료되었습니다.")));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("회원 탈퇴 처리가 완료되었습니다.")));
       _logout();
     }
   }
 
+  // ✅ 휴대폰 번호 인증 (개발 중 팝업으로 변경)
   void _showPhoneAuthDialog() {
-    final phoneController = TextEditingController(text: _phone);
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("휴대폰 번호 인증"),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text(l10n.phoneNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  hintText: "휴대폰 번호 입력 (- 없이)",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text("인증번호가 발송됩니다. (모의 기능)", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const Icon(Icons.build_circle_outlined, size: 48, color: Color(0xFF8A2BE2)), // NeedsFine Color
+              const SizedBox(height: 16),
+              Text(l10n.developingMessage, style: const TextStyle(fontSize: 16)), // "현재 개발 중인 기능입니다."
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소")),
-            ElevatedButton(
-              onPressed: () async {
-                final newPhone = phoneController.text.trim();
-                if (newPhone.isNotEmpty) {
-                  try {
-                    await _supabase.from('profiles').update({'phone': newPhone}).eq('id', _supabase.auth.currentUser!.id);
-                    setState(() => _phone = newPhone);
-                    if(mounted) Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("인증 완료되었습니다.")));
-                  } catch(e) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("저장 실패")));
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8A2BE2), foregroundColor: Colors.white),
-              child: const Text("인증"),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.confirm, style: const TextStyle(color: Color(0xFF8A2BE2), fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -132,10 +126,12 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
-        title: const Text('설정', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: Text(l10n.settings, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         backgroundColor: const Color(0xFFF2F2F7),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
@@ -146,37 +142,49 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
         padding: const EdgeInsets.all(16.0),
         children: [
           const SizedBox(height: 10),
-          _buildSectionHeader("계정 정보"),
+          _buildSectionHeader(l10n.accountInfo),
           _buildSectionContainer([
             _buildSettingsItem(
               icon: Icons.phone_iphone,
-              label: "휴대폰 번호",
-              value: _phone.isEmpty ? "인증 필요" : _phone,
+              label: l10n.phoneNumber,
+              value: _phone.isEmpty ? l10n.verificationNeeded : _phone,
               onTap: _showPhoneAuthDialog,
             ),
             _buildDivider(),
             _buildSettingsItem(
               icon: Icons.email_outlined,
-              label: "이메일",
+              label: l10n.email,
               value: _email,
               showArrow: false,
             ),
             _buildDivider(),
-            // ✅ [성별 표시]
             _buildSettingsItem(
               icon: Icons.wc,
-              label: "성별",
-              value: _gender, // DB에서 가져온 값 표시
+              label: l10n.gender,
+              // 성별 정보 표시 (번역이 필요하면 조건문 추가 가능)
+              value: _gender == '미설정' ? l10n.unspecified : _gender,
               showArrow: false,
             ),
           ]),
 
           const SizedBox(height: 24),
-          _buildSectionHeader("보안 및 알림"),
+          _buildSectionHeader(l10n.general),
+          _buildSectionContainer([
+            // ✅ [수정] 아이콘 변경 (Icons.translate)
+            _buildSettingsItem(
+              icon: Icons.translate, // 구글 번역기 느낌의 아이콘
+              label: l10n.languageSettings,
+              value: "",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LanguageSettingsScreen())),
+            ),
+          ]),
+
+          const SizedBox(height: 24),
+          _buildSectionHeader(l10n.securityAndNotifications),
           _buildSectionContainer([
             _buildSettingsItem(
               icon: Icons.lock_outline,
-              label: "비밀번호 변경",
+              label: l10n.changePassword,
               value: "",
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PasswordChangeScreen())),
             ),
@@ -187,7 +195,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
                 children: [
                   const Icon(Icons.notifications_outlined, size: 22, color: Colors.black87),
                   const SizedBox(width: 12),
-                  const Text("알림 설정", style: TextStyle(fontSize: 16, color: Colors.black87)),
+                  Text(l10n.notificationSettings, style: const TextStyle(fontSize: 16, color: Colors.black87)),
                   const Spacer(),
                   Switch(
                     value: _isNotificationOn,
@@ -200,14 +208,23 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
           ]),
 
           const SizedBox(height: 24),
-          // ✅ [이용약관 버튼 추가]
-          _buildSectionHeader("정보"),
+          _buildSectionHeader(l10n.info),
           _buildSectionContainer([
             _buildSettingsItem(
               icon: Icons.description_outlined,
-              label: "이용약관",
+              label: l10n.termsOfService,
               value: "",
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TermsScreen())),
+            ),
+            _buildDivider(),
+            // 1:1 문의 추가 (선택사항)
+            _buildSettingsItem(
+              icon: Icons.support_agent,
+              label: l10n.inquiry,
+              value: "",
+              onTap: () {
+                // 문의 화면 이동 로직
+              },
             ),
           ]),
 
@@ -223,20 +240,19 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
-              child: const Text("로그아웃", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+              child: Text(l10n.logout, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ),
 
           const SizedBox(height: 20),
-          const Center(child: Text("현재 버전 1.0.0", style: TextStyle(color: Colors.grey, fontSize: 12))),
+          Center(child: Text("${l10n.currentVersion} 1.0.0", style: const TextStyle(color: Colors.grey, fontSize: 12))),
           const SizedBox(height: 10),
 
-          // ✅ [회원탈퇴: 눈에 안 띄게 회색 처리]
           Center(
             child: TextButton(
               onPressed: _deleteAccount,
               child: Text(
-                "회원 탈퇴하기",
+                l10n.deleteAccount,
                 style: TextStyle(color: Colors.grey[400], fontSize: 12, decoration: TextDecoration.underline),
               ),
             ),

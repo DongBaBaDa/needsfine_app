@@ -36,6 +36,10 @@ class _RankingScreenState extends State<RankingScreen> {
   final ScrollController _scrollController = ScrollController();
   final int _limit = 20;
 
+  // ✅ 팝업 위치를 잡기 위한 링크
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+
   @override
   void initState() {
     super.initState();
@@ -53,8 +57,114 @@ class _RankingScreenState extends State<RankingScreen> {
 
   @override
   void dispose() {
+    _removeOverlay(); // 화면 종료 시 팝업 닫기
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // ✅ 팝업 닫기 함수
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  // ✅ 도움말 팝업 표시 함수
+  void _showInfoPopup() {
+    if (_overlayEntry != null) {
+      _removeOverlay();
+      return;
+    }
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            // 1. 배경을 터치하면 팝업 닫기 (투명 버튼 역할)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _removeOverlay,
+                behavior: HitTestBehavior.translucent,
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+            // 2. 실제 말풍선 팝업
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: const Offset(-20, 30), // 버튼 아래쪽으로 약간 이동
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 300,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoTitle("니즈파인 점수란?"),
+                      const SizedBox(height: 4),
+                      const Text(
+                        "리뷰를 읽은 다른 사람이 그 가게에 대해 느낄 가능성을 점수로 수치화한 값",
+                        style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.4),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildScoreTier("4.5점 이상", "웨이팅 맛집"),
+                      _buildScoreTier("4.0점 이상", "지역 맛집"),
+                      _buildScoreTier("3.5점 이상", "맛있는 식당"),
+                      _buildScoreTier("3.0점 이상", "호불호 있는 식당"),
+                      const Divider(height: 24),
+                      _buildInfoTitle("신뢰도란?"),
+                      const SizedBox(height: 4),
+                      const Text(
+                        "리뷰가 믿을 만한 정도를 퍼센트로 나타낸 값",
+                        style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  Widget _buildInfoTitle(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF9C7CFF),
+      ),
+    );
+  }
+
+  Widget _buildScoreTier(String score, String desc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Text("• $score : ", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          Text(desc, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadInitialData({bool isRefresh = false}) async {
@@ -142,11 +252,9 @@ class _RankingScreenState extends State<RankingScreen> {
   List<StoreRanking> _getSortedRankings() {
     List<StoreRanking> rankings = List.from(_storeRankings);
 
-    // ✅ [수정됨] 정렬 로직에 '리뷰 개수 순' 추가
     if (_rankingSortOption == '사용자 별점 순') {
       rankings.sort((a, b) => b.avgUserRating.compareTo(a.avgUserRating));
     } else if (_rankingSortOption == '리뷰 개수 순') {
-      // 리뷰 개수가 많은 순서대로 정렬 (동점일 경우 니즈파인 점수순)
       rankings.sort((a, b) {
         int compare = b.reviewCount.compareTo(a.reviewCount);
         if (compare == 0) {
@@ -155,11 +263,9 @@ class _RankingScreenState extends State<RankingScreen> {
         return compare;
       });
     } else {
-      // 기본: 니즈파인 순
       rankings.sort((a, b) => b.avgScore.compareTo(a.avgScore));
     }
 
-    // 순위 재할당 (화면 표시용 Rank 번호 갱신)
     for (int i = 0; i < rankings.length; i++) {
       rankings[i] = StoreRanking(
         storeName: rankings[i].storeName,
@@ -167,7 +273,7 @@ class _RankingScreenState extends State<RankingScreen> {
         avgUserRating: rankings[i].avgUserRating,
         reviewCount: rankings[i].reviewCount,
         avgTrust: rankings[i].avgTrust,
-        rank: i + 1, // 정렬된 순서대로 1위, 2위... 부여
+        rank: i + 1,
         topTags: rankings[i].topTags,
         address: rankings[i].address,
         lat: rankings[i].lat,
@@ -182,7 +288,34 @@ class _RankingScreenState extends State<RankingScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFFDF9),
       appBar: AppBar(
-        title: const Text('리뷰 랭킹', style: TextStyle(fontWeight: FontWeight.bold)),
+        // ✅ [수정] 타이틀 + 도움말 버튼을 Row로 배치
+        title: Row(
+          mainAxisSize: MainAxisSize.min, // 가운데 정렬 유지
+          children: [
+            const Text('리뷰 랭킹', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(width: 8),
+            // ✅ [추가] 도움말 버튼 (작은 회색 원 + ?)
+            CompositedTransformTarget(
+              link: _layerLink,
+              child: GestureDetector(
+                onTap: _showInfoPopup,
+                child: Container(
+                  width: 18, // 텍스트 절반 크기 정도
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.question_mark,
+                    size: 12,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
         backgroundColor: const Color(0xFF9C7CFF),
         actions: [
           IconButton(
@@ -266,7 +399,6 @@ class _RankingScreenState extends State<RankingScreen> {
         DropdownButton<String>(
           value: _tabIndex == 0 ? _reviewSortOption : _rankingSortOption,
           underline: const SizedBox(),
-          // ✅ [수정됨] 매장 순위 탭일 때 '리뷰 개수 순' 옵션 추가
           items: (_tabIndex == 0
               ? ['최신순', '니즈파인 점수순', '신뢰도순', '쓴소리']
               : ['니즈파인 순', '사용자 별점 순', '리뷰 개수 순']

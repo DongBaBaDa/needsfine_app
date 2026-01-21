@@ -6,6 +6,11 @@ import 'package:needsfine_app/models/user_model.dart';
 import 'package:needsfine_app/widgets/review_card.dart';
 import 'package:needsfine_app/screens/review_detail_screen.dart';
 
+// ✅ 리스트 상세 이동
+import 'package:needsfine_app/screens/my_list_detail_screen.dart';
+// ✅ 유저 리스트 목록 화면 임포트
+import 'package:needsfine_app/screens/user_lists_screen.dart';
+
 class UserProfileScreen extends StatefulWidget {
   final String userId;
 
@@ -21,6 +26,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   UserProfile? _userProfile;
   List<Review> _allReviews = [];
   List<Review> _filteredReviews = [];
+
+  // ✅ 유저의 리스트 데이터 저장
+  List<Map<String, dynamic>> _userLists = [];
 
   bool _isLoading = true;
   bool _isFollowing = false;
@@ -41,24 +49,33 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
     final myId = _supabase.auth.currentUser?.id;
 
     try {
+      // 1. 프로필 정보
       final profileData = await _supabase.from('profiles').select().eq('id', widget.userId).single();
       final followerCount = await _supabase.from('follows').count(CountOption.exact).eq('following_id', widget.userId);
       final followingCount = await _supabase.from('follows').count(CountOption.exact).eq('follower_id', widget.userId);
 
+      // 2. 팔로우 상태
       if (myId != null) {
         final followCheck = await _supabase.from('follows').select().eq('follower_id', myId).eq('following_id', widget.userId).maybeSingle();
         _isFollowing = followCheck != null;
       }
 
+      // 3. 리뷰 데이터
       final reviewData = await _supabase.from('reviews')
           .select('*, profiles(*)')
           .eq('user_id', widget.userId)
           .order('created_at', ascending: false);
 
-      // ✅ [Fix] 데이터를 안전하게 Review 객체 리스트로 변환
       final List<Review> reviews = (reviewData as List).map((e) => Review.fromJson(e)).toList();
-
       _calculateStats(reviews);
+
+      // 4. 유저의 리스트 데이터 불러오기 (최근 3개만 미리보기)
+      final listsData = await _supabase
+          .from('user_lists')
+          .select()
+          .eq('user_id', widget.userId)
+          .order('created_at', ascending: false)
+          .limit(3);
 
       if (mounted) {
         setState(() {
@@ -73,6 +90,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
             tasteTags: List<String>.from(profileData['taste_tags'] ?? []),
           );
           _allReviews = reviews;
+          _userLists = List<Map<String, dynamic>>.from(listsData);
           _applyFilter(0);
           _isLoading = false;
         });
@@ -156,19 +174,34 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _buildProfileHeader()),
+
+          // 1. Taste Identity
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
               child: _buildTasteIdentityCard(),
             ),
           ),
+
+          // 2. Score History
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
               child: _buildScoreDistributionCard(),
             ),
           ),
+
+          // 3. User Lists 카드
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+              child: _buildUserListsCard(),
+            ),
+          ),
+
           const SliverSizedBox(height: 16),
+
+          // 4. Filters & Reviews
           SliverPersistentHeader(
             pinned: true,
             delegate: _StickyFilterDelegate(
@@ -187,26 +220,113 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
               : SliverList(
             delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                // ✅ [Fix] review 객체를 그대로 전달 (Map 접근 아님)
                 return ReviewCard(
                   review: _filteredReviews[index],
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: _filteredReviews[index])));
                   },
                   onTapStore: () {},
-                  onTapProfile: () {}, // 내 피드는 클릭 방지
+                  onTapProfile: () {}, // 내 피드나 타인 피드 내에서는 클릭 방지
                 );
               },
               childCount: _filteredReviews.length,
             ),
           ),
-          const SliverSizedBox(height: 40),
+          // ✅ [수정] 스크롤 여백을 100으로 늘림 (기존 40)
+          const SliverSizedBox(height: 100),
         ],
       ),
     );
   }
 
-  // (아래 _buildProfileHeader, _buildTasteIdentityCard 등의 서브 위젯 코드는 이전과 동일하며 그대로 사용)
+  // User Lists 카드 위젯
+  Widget _buildUserListsCard() {
+    return GestureDetector(
+      onTap: () {
+        // 전체 보기 화면(UserListsScreen)으로 이동
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => UserListsScreen(
+              userId: widget.userId,
+              nickname: _userProfile!.nickname,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Text("User Lists", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_userLists.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Center(
+                  child: Text(
+                    "생성된 리스트가 없습니다.",
+                    style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                  ),
+                ),
+              )
+            else
+              Column(
+                children: _userLists.map((list) {
+                  return GestureDetector(
+                    onTap: () {
+                      // 개별 리스트 상세로 바로 이동
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MyListDetailScreen(
+                            listId: list['id'].toString(),
+                            listName: list['name'] ?? '이름 없음',
+                          ),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF2F2F7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.list_alt_rounded, size: 18, color: Color(0xFF8A2BE2)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              list['name'] ?? '이름 없음',
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProfileHeader() {
     ImageProvider profileImage = _userProfile!.profileImageUrl.isNotEmpty
         ? NetworkImage(_userProfile!.profileImageUrl)

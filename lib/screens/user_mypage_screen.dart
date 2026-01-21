@@ -7,8 +7,7 @@ import '../models/user_model.dart';
 
 // ✅ 화면 이동을 위한 import
 import 'package:needsfine_app/screens/taste_selection_screen.dart';
-import 'package:needsfine_app/screens/myfeed_screen.dart';
-import 'package:needsfine_app/screens/follow_list_screen.dart';
+import 'package:needsfine_app/screens/user_profile_screen.dart'; // ✅ [변경] UserProfileScreen 임포트
 import 'package:needsfine_app/screens/review_collection_screen.dart';
 import 'package:needsfine_app/screens/profile_edit_screen.dart';
 import 'package:needsfine_app/screens/info_edit_screen.dart';
@@ -16,7 +15,7 @@ import 'package:needsfine_app/screens/notice_screen.dart';
 import 'package:needsfine_app/screens/suggestion_write_screen.dart';
 import 'package:needsfine_app/screens/inquiry_write_screen.dart';
 import 'package:needsfine_app/screens/admin_dashboard_screen.dart';
-import 'package:needsfine_app/screens/my_lists_screen.dart'; // ✅ [추가] 나만의 리스트 화면
+import 'package:needsfine_app/screens/my_lists_screen.dart';
 
 // ✅ 알림 뱃지 위젯
 import 'package:needsfine_app/widgets/notification_badge.dart';
@@ -230,7 +229,11 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => MyFeedScreen(userProfile: _userProfile!, reviews: _myReviews)));
+                    // ✅ [수정] 나의 피드 클릭 시 UserProfileScreen으로 이동
+                    final currentUserId = _supabase.auth.currentUser?.id;
+                    if (currentUserId != null) {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => UserProfileScreen(userId: currentUserId)));
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF8A2BE2),
@@ -259,7 +262,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReviewCollectionScreen()))
           ),
           _MenuItem(
-              icon: Icons.list_alt_rounded, // ✅ [추가] 나만의 리스트
+              icon: Icons.list_alt_rounded,
               title: "나만의 리스트",
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListsScreen()))
           ),
@@ -271,7 +274,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                 _fetchUserData();
               }
           ),
-          const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFF2F2F7)), // ✅ 더 섬세한 구분선
+          const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFF2F2F7)),
           _MenuItem(
               icon: Icons.headset_mic_outlined,
               title: "고객센터",
@@ -348,7 +351,7 @@ class _MenuItem extends StatelessWidget {
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       minLeadingWidth: 28,
-      leading: Icon(icon, color: iconColor, size: 22), // ✅ 네모 배경 제거(키즈/아기자기 느낌 제거)
+      leading: Icon(icon, color: iconColor, size: 22),
       title: Text(
         title,
         style: TextStyle(
