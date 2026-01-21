@@ -13,7 +13,7 @@ import 'package:needsfine_app/core/search_trigger.dart'; // ✅ 전역 트리거
 import 'package:needsfine_app/screens/write_review_screen.dart';
 import 'package:needsfine_app/screens/store_reviews_screen.dart';
 
-// ✅ Supabase 조회(1번 문제 해결 + 댓글/저장 카운트)
+// ✅ Supabase 조회
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NearbyScreen extends StatefulWidget {
@@ -56,7 +56,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   int _storeSaveCount = 0;
   int _storeCommentCount = 0;
 
-  // ✅ (핵심) 좌표 트리거로 들어왔을 때(place 주소가 비어서 저장/리뷰매칭이 깨지던 문제 해결용
+  // ✅ (핵심) 좌표 트리거로 들어왔을 때 주소 복구용
   String? _resolvedStoreName;
   String? _resolvedStoreAddress;
 
@@ -71,7 +71,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     searchTrigger.addListener(_handleExternalSearch);
   }
 
-  // ✅ 외부 요청 처리 로직
+  // ✅ [수정됨] 외부 요청 처리 로직 (좌표 우선 / 중복 검색 방지)
   void _handleExternalSearch() async {
     final target = searchTrigger.value;
     if (target != null) {
@@ -80,11 +80,11 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       FocusScope.of(context).unfocus();
       if (mounted) setState(() => _autocompleteResults = []); // 자동완성 닫기
 
-      // 1) 좌표가 명확한 경우 -> 즉시 이동
-      if (target.lat != null && target.lng != null) {
+      // 1) 좌표가 명확한 경우 -> 즉시 이동 (가장 우선)
+      if (target.lat != null && target.lng != null && target.lat != 0 && target.lng != 0) {
         final position = NLatLng(target.lat!, target.lng!);
 
-        // ✅ 주소는 비어있을 수 있으므로 dummyPlace로 들어오되,
+        // 주소는 비어있을 수 있으므로 dummyPlace로 들어오되,
         // 이후 _fetchStoreFromSupabase에서 reviews로 address 복구(resolved)한다.
         final dummyPlace = NaverPlace(
           title: target.query,
@@ -96,7 +96,13 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       }
       // 2) 좌표가 없는 경우 -> 검색 API 실행
       else {
-        _handleManualSearch(target.query);
+        // ⚠️ [중요 수정] 만약 현재 보고 있는 매장과 이름이 같다면, 굳이 검색해서 목록 띄우지 말고 현재 상태 유지(새로고침)
+        if (_searchedPlace != null && _searchedPlace!.cleanTitle == target.query && _selectedPosition != null) {
+          _selectPlaceWithCoordinates(_searchedPlace!, _selectedPosition!);
+        } else {
+          // 다른 매장이면 검색 실행
+          _handleManualSearch(target.query);
+        }
       }
     }
   }
@@ -191,7 +197,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     } catch (_) {}
   }
 
-  // ✅ 커스텀 마커 위젯 (흰 배경 + 검은 글씨 + 보라 테두리)
+  // ✅ 커스텀 마커 위젯
   Widget _buildCustomMarkerWidget(String title) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -292,8 +298,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     }
   }
 
-  // ✅ (중요) Store 생성자 파라미터명이 프로젝트마다 달라서
-  // Function.apply로 후보 이름을 시도해서 "컴파일 에러 없이" 생성
+  // ✅ Store 유연한 생성
   Store _createStoreFlexible({
     required String name,
     required double latitude,
@@ -326,12 +331,9 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         return Function.apply(ctor, const [], named) as Store;
       } catch (_) {}
     }
-
-    // 마지막: trust 없이라도 생성(최악에도 화면은 떠야 함)
     return Function.apply(ctor, const [], common) as Store;
   }
 
-  // ✅ Store 내부 필드명이 다를 수 있어 dynamic으로 안전하게 읽기
   double _getStoreScore(Store s) {
     final d = s as dynamic;
     final getters = <dynamic Function()>[
@@ -409,12 +411,10 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     return const [];
   }
 
-  // ✅ reviews에서 대표 주소/이름을 복구 (좌표 트리거로 들어온 경우에도 저장/카운트가 깨지지 않게)
+  // ✅ reviews에서 대표 주소/이름을 복구
   Future<void> _ensureResolvedIdentity(NaverPlace place, NLatLng position) async {
-    // 이미 복구되어 있으면 패스
     if ((_resolvedStoreName?.trim().isNotEmpty ?? false) && (_resolvedStoreAddress?.trim().isNotEmpty ?? false)) return;
 
-    // place에 주소가 있으면 우선 반영
     final rawAddr = _normalizedAddress(place);
     if (rawAddr.isNotEmpty) {
       if (mounted) {
@@ -423,16 +423,13 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
           _resolvedStoreAddress ??= rawAddr;
         });
       }
-      // 주소가 있으니 굳이 DB복구까지는 필요없음
       return;
     }
 
-    // ✅ place 주소가 비어있으면 reviews에서 복구
     try {
       final name = place.cleanTitle;
-      final eps = 0.002; // 약 200m급 (너무 빡세게 잡으면 못 찾는다)
+      final eps = 0.002;
 
-      // 1) 이름으로 먼저 찾기
       final rowsByName = await _supabase
           .from('reviews')
           .select('store_name, store_address, is_hidden')
@@ -440,7 +437,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
 
       List list = (rowsByName is List) ? rowsByName : [];
 
-      // 2) 이름으로 못 찾으면 좌표 근접
       if (list.isEmpty) {
         final rowsByPos = await _supabase
             .from('reviews')
@@ -455,7 +451,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
 
       if (list.isEmpty) return;
 
-      // 가장 많이 등장하는 address를 대표로
       final addrCount = <String, int>{};
       String? bestName;
       for (final r in list) {
@@ -492,7 +487,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     }
   }
 
-  // ✅ (추가) store_saves / 댓글 카운트 로딩
+  // ✅ store_saves / 댓글 카운트 로딩
   Future<void> _loadStoreCountsAndState(NaverPlace place, NLatLng position) async {
     await _ensureResolvedIdentity(place, position);
 
@@ -500,7 +495,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     final name = _effectiveStoreName(place);
     final addr = _effectiveStoreAddress(place);
 
-    // 1) 저장 수 (addr 없으면 name만으로라도 fallback)
     try {
       dynamic rows;
       if (addr.isNotEmpty) {
@@ -523,7 +517,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       if (mounted) setState(() => _storeSaveCount = 0);
     }
 
-    // 2) 저장 상태
     try {
       if (userId == null) {
         if (mounted) setState(() => _isStoreSaved = false);
@@ -552,7 +545,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       if (mounted) setState(() => _isStoreSaved = false);
     }
 
-    // 3) 댓글 수: reviews.comment_count 합산 (없으면 0)
     try {
       dynamic rows = await _supabase
           .from('reviews')
@@ -561,7 +553,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
 
       List list = (rows is List) ? rows : [];
 
-      // addr가 있으면 우선 addr로 좁혀보기
       if (addr.isNotEmpty) {
         final filtered = list.where((r) {
           final m = r as Map;
@@ -570,7 +561,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         if (filtered.isNotEmpty) list = filtered;
       }
 
-      // fallback: 좌표 근접 검색(주소가 달라서 매칭 안 되는 케이스 대응)
       if (list.isEmpty) {
         final eps = 0.002;
         final rows2 = await _supabase
@@ -602,7 +592,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     }
   }
 
-  // ✅ (추가) 매장 저장 토글
+  // ✅ 매장 저장 토글
   Future<void> _toggleStoreSave() async {
     if (_isSavingStore) return;
 
@@ -623,7 +613,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     final name = _effectiveStoreName(place);
     final addr = _effectiveStoreAddress(place);
 
-    // 주소가 끝까지 복구 안 되면, 빈 주소로 저장하지 않게 막는다(나중에 못 찾는다)
     if (addr.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -637,7 +626,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
 
     setState(() {
       _isSavingStore = true;
-      _isStoreSaved = next; // optimistic
+      _isStoreSaved = next;
       _storeSaveCount += next ? 1 : -1;
       if (_storeSaveCount < 0) _storeSaveCount = 0;
     });
@@ -658,7 +647,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             .eq('store_address', addr);
       }
     } catch (e) {
-      // rollback
       if (mounted) {
         setState(() {
           _isStoreSaved = !next;
@@ -677,14 +665,13 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     }
   }
 
-  // ✅ [1번 해결] DB에서 매장 리뷰 요약을 읽어 Store로 구성 (flutter clean/run 해도 동일)
+  // ✅ DB에서 매장 리뷰 요약을 읽어 Store로 구성
   Future<_StoreFetchResult?> _fetchStoreFromSupabase(NaverPlace place, NLatLng position) async {
     await _ensureResolvedIdentity(place, position);
 
     final name = _effectiveStoreName(place);
     final addr = _effectiveStoreAddress(place);
 
-    // 1) name+addr로 reviews 조회 (addr 있을 때만)
     List rows = [];
     String? foundName;
     String? foundAddr;
@@ -707,7 +694,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       }
     }
 
-    // 2) fallback: name만으로 조회 (주소 표기 다르면 여기서라도 잡는다)
     if (rows.isEmpty) {
       try {
         final res = await _supabase
@@ -718,7 +704,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         rows = (res is List) ? res : [];
         if (rows.isNotEmpty) {
           foundName = name;
-          // 대표 address 뽑기
           final addrCount = <String, int>{};
           for (final r in rows) {
             final m = r as Map;
@@ -740,7 +725,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       }
     }
 
-    // 3) fallback: 좌표 근접 검색
     if (rows.isEmpty) {
       try {
         final eps = 0.002;
@@ -755,7 +739,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         rows = (res2 is List) ? res2 : [];
 
         if (rows.isNotEmpty) {
-          // 대표 이름/주소 복구
           final nameCount = <String, int>{};
           final addrCount = <String, int>{};
           for (final r in rows) {
@@ -850,9 +833,8 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     );
   }
 
-  // ✅ 지도 이동 및 UI 업데이트 (공통 로직)
+  // ✅ 지도 이동 및 UI 업데이트
   void _updateUI(NaverPlace place, NLatLng position) async {
-    // 1) 기존 AppData 매칭은 그대로 유지(있으면 즉시 사용)
     Store? matched;
     try {
       matched = AppData().stores.firstWhere(
@@ -862,24 +844,21 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       matched = null;
     }
 
-    // ✅ place 기반으로 일단 resolved값 초기화(주소가 있으면)
     final initialAddr = _normalizedAddress(place);
     if (mounted) {
       setState(() {
         _searchedPlace = place;
         _matchedStore = matched;
         _selectedPosition = position;
-        _showBottomSheet = true; // 바텀시트 열기
+        _showBottomSheet = true;
 
         if (place.cleanTitle.trim().isNotEmpty) _resolvedStoreName ??= place.cleanTitle.trim();
         if (initialAddr.trim().isNotEmpty) _resolvedStoreAddress ??= initialAddr.trim();
       });
     }
 
-    // ✅ 댓글/저장 카운트/상태 로딩
     await _loadStoreCountsAndState(place, position);
 
-    // ✅ [1번 해결] DB에서 매장 요약 재조회 후 반영
     final db = await _fetchStoreFromSupabase(place, position);
     if (db != null && mounted) {
       setState(() {
@@ -887,15 +866,12 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         if (db.storeName != null && db.storeName!.trim().isNotEmpty) _resolvedStoreName = db.storeName!.trim();
         if (db.storeAddress != null && db.storeAddress!.trim().isNotEmpty) _resolvedStoreAddress = db.storeAddress!.trim();
       });
-      // DB로 주소 복구된 이후 저장/카운트도 한 번 더 맞춘다(좌표 트리거 케이스)
       await _loadStoreCountsAndState(place, position);
     }
 
     final controller = await _controller.future;
-    // 카메라 이동
     controller.updateCamera(NCameraUpdate.scrollAndZoomTo(target: position, zoom: 16));
 
-    // 마커 추가
     final iconImage = await NOverlayImage.fromWidget(
       widget: _buildCustomMarkerWidget(place.cleanTitle),
       context: context,
@@ -950,10 +926,9 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       ),
     );
 
-    // 리뷰 작성 완료 후 돌아왔을 때
+    // ✅ 리뷰 작성 완료 후 돌아왔을 때, 현재 보고 있는 매장 정보만 갱신 (다시 검색하지 않음)
     if (result == true) {
       if (_searchedPlace != null && _selectedPosition != null) {
-        // 해당 위치를 다시 선택하여 갱신
         _selectPlaceWithCoordinates(_searchedPlace!, _selectedPosition!);
       }
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("소중한 리뷰 감사합니다!")));
@@ -992,7 +967,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    // 검색창
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -1012,7 +986,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                       ),
                     ),
 
-                    // 자동완성 리스트
                     if (_autocompleteResults.isNotEmpty)
                       Container(
                         margin: const EdgeInsets.only(top: 8),
@@ -1049,7 +1022,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             ),
           ),
 
-          // 3. 장소 정보 바텀 시트 (✅ 디자인은 롤백 유지 + 요청 기능만 추가)
+          // 3. 장소 정보 바텀 시트
           if (_showBottomSheet && _searchedPlace != null)
             DraggableScrollableSheet(
               initialChildSize: 0.35,
@@ -1090,8 +1063,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     final title = _effectiveStoreName(place);
     final addrText = _displayAddress(place);
 
-    // 🔴 [수정됨] 컴파일 에러 수정: 컬렉션 if 내부에서 변수 선언 불가능.
-    // 위젯 리스트 밖에서 미리 값을 계산해서 할당합니다.
     double score = 0.0;
     int trust = 0;
     int reviewCount = 0;
@@ -1109,7 +1080,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ✅ 이름 + 저장하기 버튼 (요청)
           Row(
             children: [
               Expanded(
@@ -1158,8 +1128,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             Text(addrText, style: const TextStyle(color: Colors.grey, fontSize: 13)),
           const SizedBox(height: 16),
 
-          // 🔴 [수정됨] if (store != null) 내부의 변수 선언을 제거하고
-          // 위에서 미리 계산된 변수(score, trust 등)를 사용합니다.
           if (store != null) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1176,7 +1144,6 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             Text("리뷰 $reviewCount개", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 10),
 
-            // ✅ 댓글 버튼 + 댓글 수 / 저장 버튼 + 저장 수 (요청)
             Row(
               children: [
                 InkWell(

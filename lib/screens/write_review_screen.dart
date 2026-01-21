@@ -15,6 +15,9 @@ import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
+// ✅ [추가] 좌표 전달을 위해 전역 트리거 import
+import 'package:needsfine_app/core/search_trigger.dart';
+
 class WriteReviewScreen extends StatefulWidget {
   final String? initialStoreName;
   final String? initialAddress;
@@ -240,8 +243,18 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
         );
       }
 
-      // ✅ [수정] 작성 후 지도로 이동하지 않고 팝업만 닫음 (리뷰 목록으로 복귀)
       if (!mounted) return;
+
+      // ✅ [핵심 수정] 리뷰 작성 성공 시, 해당 좌표 정보를 전역 트리거에 전달
+      // 이렇게 하면 지도가 다시 검색하지 않고 좌표로 바로 이동합니다.
+      if (_selectedLat != null && _selectedLng != null) {
+        searchTrigger.value = SearchTarget(
+          query: _selectedPlace!.cleanTitle,
+          lat: _selectedLat,
+          lng: _selectedLng,
+        );
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(_isEditMode ? '리뷰가 수정되었습니다!' : '리뷰가 등록되었습니다!'),
