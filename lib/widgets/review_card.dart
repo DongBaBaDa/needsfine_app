@@ -4,14 +4,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart';
 
-// ✅ 다국어 패키지 임포트
 import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class ReviewCard extends StatefulWidget {
   final Review review;
-  final VoidCallback onTap;        // 리뷰 상세 이동
-  final VoidCallback onTapStore;   // ✅ 가게 이동 (SearchTrigger는 바깥에서 처리)
-  final VoidCallback onTapProfile; // 유저 프로필 이동
+  final VoidCallback onTap;
+  final VoidCallback onTapStore;
+  final VoidCallback onTapProfile;
 
   const ReviewCard({
     super.key,
@@ -28,8 +27,6 @@ class ReviewCard extends StatefulWidget {
 class _ReviewCardState extends State<ReviewCard> {
   bool _isLiked = false;
   int _likeCount = 0;
-
-  // ✅ 저장 상태 + 저장 수
   bool _isSaved = false;
   int _saveCount = 0;
 
@@ -55,7 +52,6 @@ class _ReviewCardState extends State<ReviewCard> {
     if (mounted && res != null) setState(() => _isLiked = true);
   }
 
-  // ✅ 저장 상태 초기 로드
   Future<void> _checkInitialSaveStatus() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
@@ -74,7 +70,6 @@ class _ReviewCardState extends State<ReviewCard> {
     }
   }
 
-  // ✅ 저장 수 로드 (북마크 옆 숫자)
   Future<void> _loadInitialSaveCount() async {
     try {
       final rows = await Supabase.instance.client
@@ -96,15 +91,12 @@ class _ReviewCardState extends State<ReviewCard> {
       _likeCount += _isLiked ? 1 : -1;
       if (_likeCount < 0) _likeCount = 0;
     });
-    // API 연동 로직은 기존 유지
   }
 
-  // ✅ 저장 토글 + 저장 수 반영
   Future<void> _toggleSave() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) {
       if (mounted) {
-        // "로그인이 필요합니다" (키가 없어서 하드코딩 유지)
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("로그인이 필요합니다.")),
         );
@@ -114,7 +106,6 @@ class _ReviewCardState extends State<ReviewCard> {
 
     final next = !_isSaved;
 
-    // optimistic UI
     setState(() {
       _isSaved = next;
       _saveCount += next ? 1 : -1;
@@ -124,10 +115,7 @@ class _ReviewCardState extends State<ReviewCard> {
     try {
       if (next) {
         await Supabase.instance.client.from('review_saves').upsert(
-          {
-            'user_id': userId,
-            'review_id': widget.review.id,
-          },
+          { 'user_id': userId, 'review_id': widget.review.id },
           onConflict: 'user_id,review_id',
         );
       } else {
@@ -138,7 +126,6 @@ class _ReviewCardState extends State<ReviewCard> {
             .eq('review_id', widget.review.id);
       }
     } catch (e) {
-      // 롤백
       if (mounted) {
         setState(() {
           _isSaved = !next;
@@ -146,7 +133,6 @@ class _ReviewCardState extends State<ReviewCard> {
           if (_saveCount < 0) _saveCount = 0;
         });
       }
-      debugPrint('저장 토글 실패: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("저장 처리 중 오류가 발생했습니다.")),
@@ -157,7 +143,6 @@ class _ReviewCardState extends State<ReviewCard> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ l10n 객체 가져오기
     final l10n = AppLocalizations.of(context)!;
 
     ImageProvider avatarImage;
@@ -187,7 +172,7 @@ class _ReviewCardState extends State<ReviewCard> {
             child: Row(
               children: [
                 GestureDetector(
-                  onTap: widget.onTapStore, // ✅ 홈스크린 로직과 동일: 밖에서 SearchTrigger 처리
+                  onTap: widget.onTapStore,
                   child: Container(
                     width: 56,
                     height: 56,
@@ -206,7 +191,7 @@ class _ReviewCardState extends State<ReviewCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         GestureDetector(
-                          onTap: widget.onTapStore, // ✅
+                          onTap: widget.onTapStore,
                           child: Text(
                             widget.review.storeName,
                             style: const TextStyle(
@@ -234,7 +219,7 @@ class _ReviewCardState extends State<ReviewCard> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      l10n.avgNeedsFineScore, // "평균 니즈파인 점수" (혹은 "니즈파인 점수")
+                      l10n.needsFineScore,
                       style: TextStyle(
                         color: const Color(0xFF7C4DFF).withOpacity(0.55),
                         fontSize: 10,
@@ -254,7 +239,7 @@ class _ReviewCardState extends State<ReviewCard> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "${l10n.reliability} ${widget.review.trustLevel}%", // "신뢰도 XX%"
+                      "${l10n.reliability} ${widget.review.trustLevel}%",
                       style: const TextStyle(
                         color: Color(0xFF6B6B6F),
                         fontSize: 10,
@@ -302,6 +287,32 @@ class _ReviewCardState extends State<ReviewCard> {
                       ],
                     ),
                   ),
+
+                  // ✅ [추가] 태그 표시 로직
+                  if (widget.review.tags.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: widget.review.tags.map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0E9FF),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            "#$tag",
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF7C4DFF),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
 
                   const SizedBox(height: 12),
 
@@ -367,7 +378,6 @@ class _ReviewCardState extends State<ReviewCard> {
                       ),
                       const SizedBox(width: 16),
 
-                      // ✅ 저장: 아이콘 + 숫자만
                       InkWell(
                         onTap: _toggleSave,
                         child: Row(

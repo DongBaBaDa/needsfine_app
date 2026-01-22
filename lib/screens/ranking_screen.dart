@@ -81,9 +81,9 @@ class _RankingScreenState extends State<RankingScreen> {
 
     final l10n = AppLocalizations.of(context)!;
 
-    // ✅ 언어별 위치 조정
+    // 언어별 위치 조정
     final currentLang = Localizations.localeOf(context).languageCode;
-    final double xOffset = (currentLang == 'my') ? -150.0 : 0.0;
+    final double xOffset = (currentLang == 'my') ? -150.0 : -60.0;
 
     _overlayEntry = OverlayEntry(
       builder: (context) {
@@ -123,7 +123,7 @@ class _RankingScreenState extends State<RankingScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildInfoTitle(l10n.whatIsScore), // 이제 정상 작동
+                      _buildInfoTitle(l10n.whatIsScore),
                       const SizedBox(height: 4),
                       Text(
                         l10n.scoreDesc,
@@ -181,6 +181,7 @@ class _RankingScreenState extends State<RankingScreen> {
     if (!isRefresh && mounted) setState(() => _isLoading = true);
 
     try {
+      // ✅ 새로운 테이블 정보를 가져오도록 SQL이 업데이트된 Service 호출
       final statsFuture = ReviewService.fetchGlobalStats();
       final reviewsFuture = ReviewService.fetchReviews(limit: _limit, offset: 0);
       final rankingsFuture = ReviewService.fetchStoreRankings();
@@ -276,6 +277,7 @@ class _RankingScreenState extends State<RankingScreen> {
       rankings.sort((a, b) => b.avgScore.compareTo(a.avgScore));
     }
 
+    // ✅ [핵심] 정렬 후 순위를 다시 매길 때, 주소/좌표/태그 정보 유실 방지
     for (int i = 0; i < rankings.length; i++) {
       rankings[i] = StoreRanking(
         storeName: rankings[i].storeName,
@@ -284,6 +286,7 @@ class _RankingScreenState extends State<RankingScreen> {
         reviewCount: rankings[i].reviewCount,
         avgTrust: rankings[i].avgTrust,
         rank: i + 1,
+        // ✅ 아래 필드들을 반드시 복사해야 새 DB 정보가 반영됨
         topTags: rankings[i].topTags,
         address: rankings[i].address,
         lat: rankings[i].lat,
@@ -293,7 +296,6 @@ class _RankingScreenState extends State<RankingScreen> {
     return rankings;
   }
 
-  // ✅ 정렬 옵션 텍스트 다국어 처리 헬퍼 함수
   String _getLocalizedSortLabel(String value, AppLocalizations l10n) {
     switch (value) {
       case '니즈파인 점수순': return l10n.sortByScore;
@@ -319,7 +321,6 @@ class _RankingScreenState extends State<RankingScreen> {
           children: [
             Text(l10n.reviewRanking, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(width: 8),
-            // ✅ 도움말 버튼
             CompositedTransformTarget(
               link: _layerLink,
               child: GestureDetector(
@@ -528,6 +529,7 @@ class _RankingScreenState extends State<RankingScreen> {
           children: [
             GestureDetector(
               onTap: () {
+                // ✅ [핵심] 지도 검색 트리거 작동
                 searchTrigger.value = SearchTarget(query: ranking.storeName);
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ranking.storeName} ${l10n.movingToMap}")));
               },

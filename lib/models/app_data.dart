@@ -107,7 +107,7 @@ class AppData {
 
   List<Store> stores = [];
 
-  // ✅ [수정] 사진 URL 리스트까지 받도록 변경
+  // ✅ [수정] tags 파라미터 추가하여 에러 해결
   void addReview({
     required String storeName,
     required String content,
@@ -117,6 +117,7 @@ class AppData {
     required double lng,
     required List<String> photoUrls,
     String category = '음식점', // 기본 카테고리
+    List<String>? tags, // ✅ tags 파라미터 추가
   }) {
     try {
       // 1. 이미 등록된 가게인지 확인 (이름 + 좌표 근사치 매칭)
@@ -131,7 +132,7 @@ class AppData {
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           name: storeName,
           category: category,
-          tags: [],
+          tags: tags ?? [], // ✅ 태그 반영
           latitude: lat,
           longitude: lng,
           address: address,

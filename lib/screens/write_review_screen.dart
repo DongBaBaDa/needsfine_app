@@ -1,7 +1,8 @@
+// lib/screens/write_review_screen.dart
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'dart:async'; // Timer
+import 'dart:async';
 import 'package:needsfine_app/services/review_service.dart';
 import 'package:needsfine_app/services/score_calculator.dart';
 import 'package:needsfine_app/services/naver_search_service.dart';
@@ -15,7 +16,6 @@ import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
-// ✅ [추가] 좌표 전달을 위해 전역 트리거 import
 import 'package:needsfine_app/core/search_trigger.dart';
 
 class WriteReviewScreen extends StatefulWidget {
@@ -58,6 +58,12 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   bool _isInitialData = false;
   bool _isEditMode = false;
 
+  final List<String> _purposeOptions = ["데이트", "가족 외식", "혼밥", "회식", "힐링", "친구 모임", "기념일"];
+  String _selectedPurpose = "";
+
+  final List<String> _priceOptions = ["1만원 이하", "1~3만원", "3~5만원", "5만원 이상"];
+  String _selectedPrice = "";
+
   @override
   void initState() {
     super.initState();
@@ -80,6 +86,12 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       );
       _selectedLat = r.storeLat;
       _selectedLng = r.storeLng;
+
+      // 기존 태그 복원
+      for (var tag in r.tags) {
+        if (_purposeOptions.contains(tag)) _selectedPurpose = tag;
+        if (_priceOptions.contains(tag)) _selectedPrice = tag;
+      }
 
     } else if (widget.initialStoreName != null && widget.initialAddress != null) {
       _selectedPlace = NaverPlace(
@@ -110,7 +122,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     );
   }
 
-  // ✅ 검색 모달 (자동완성 포함)
   void _showStoreSearchSheet() {
     if (_isInitialData) return;
 
@@ -213,15 +224,20 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
       final finalPhotoUrls = [..._existingImageUrls, ...uploadedPhotoUrls];
 
+      // ✅ 태그 리스트 생성
+      List<String> tags = [];
+      if (_selectedPurpose.isNotEmpty) tags.add(_selectedPurpose);
+      if (_selectedPrice.isNotEmpty) tags.add(_selectedPrice);
+
       if (_isEditMode) {
         await ReviewService.updateReview(
           reviewId: widget.reviewToEdit!.id,
           content: _reviewTextController.text.trim(),
           rating: _rating,
           photoUrls: finalPhotoUrls,
+          tags: tags, // ✅ 태그 전달
         );
       } else {
-        // AppData 업데이트
         AppData().addReview(
           storeName: _selectedPlace!.cleanTitle,
           content: _reviewTextController.text.trim(),
@@ -230,6 +246,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           lat: _selectedLat ?? 0.0,
           lng: _selectedLng ?? 0.0,
           photoUrls: finalPhotoUrls,
+          tags: tags, // ✅ 태그 전달
         );
 
         await ReviewService.createReview(
@@ -240,13 +257,12 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           photoUrls: finalPhotoUrls,
           lat: _selectedLat,
           lng: _selectedLng,
+          tags: tags, // ✅ 태그 전달
         );
       }
 
       if (!mounted) return;
 
-      // ✅ [핵심 수정] 리뷰 작성 성공 시, 해당 좌표 정보를 전역 트리거에 전달
-      // 이렇게 하면 지도가 다시 검색하지 않고 좌표로 바로 이동합니다.
       if (_selectedLat != null && _selectedLng != null) {
         searchTrigger.value = SearchTarget(
           query: _selectedPlace!.cleanTitle,
@@ -362,7 +378,61 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
+
+              const Text("방문 목적", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _purposeOptions.map((purpose) {
+                    final isSelected = _selectedPurpose == purpose;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ChoiceChip(
+                        label: Text(purpose),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF9C7CFF),
+                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedPurpose = selected ? purpose : "";
+                          });
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              const Text("1인당 가격대", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _priceOptions.map((price) {
+                    final isSelected = _selectedPrice == price;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ChoiceChip(
+                        label: Text(price),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF9C7CFF),
+                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedPrice = selected ? price : "";
+                          });
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               TextFormField(
                 controller: _reviewTextController,
@@ -455,9 +525,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   }
 }
 
-// -----------------------------------------------------------------------------
-// ✅ [자동완성 기능 적용] 검색 모달 콘텐츠
-// -----------------------------------------------------------------------------
 class _StoreSearchContent extends StatefulWidget {
   final Function(NaverPlace) onPlaceSelected;
   final NaverSearchService searchService;
@@ -472,7 +539,6 @@ class _StoreSearchContentState extends State<_StoreSearchContent> {
   bool _isLoading = false;
   Timer? _debounce;
 
-  // ✅ 실시간 검색 (자동완성)
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
@@ -526,7 +592,7 @@ class _StoreSearchContentState extends State<_StoreSearchContent> {
             child: TextField(
               controller: _controller,
               autofocus: true,
-              onChanged: _onSearchChanged, // ✅ 입력 시마다 자동 호출
+              onChanged: _onSearchChanged,
               decoration: const InputDecoration(
                 hintText: '가게 이름 입력 (예: 스타벅스)',
                 prefixIcon: Icon(Icons.search, color: Color(0xFF9C7CFF)),

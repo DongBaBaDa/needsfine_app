@@ -1,3 +1,4 @@
+// lib/screens/review_collection_screen.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
@@ -163,11 +164,14 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
       storeAddress: original.storeAddress,
       reviewText: original.myCommentText ?? "내용 없음",
       userRating: original.userRating,
+
+      // 파라미터 전달 (이미 계산된 값 사용)
       needsfineScore: original.needsfineScore,
       trustLevel: original.trustLevel,
-      tags: original.tags,
-      photoUrls: original.photoUrls,
+      dbTags: original.tags,
       isCritical: original.isCritical,
+
+      photoUrls: original.photoUrls,
       isHidden: original.isHidden,
       createdAt: original.myCommentCreatedAt ?? original.createdAt,
       userId: original.userId,
@@ -176,6 +180,10 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
       nickname: original.nickname,
       userProfileUrl: original.userProfileUrl,
       commentCount: original.commentCount,
+
+      // ✅ [수정 완료] 누락되었던 필수 파라미터 추가
+      storeLat: original.storeLat ?? 0.0,
+      storeLng: original.storeLng ?? 0.0,
     );
   }
 }

@@ -30,6 +30,18 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
     _fetchListItems();
   }
 
+  // ------------------------------
+  // ✅ 문자열 정규화 (SQL norm_text와 동일한 의도)
+  // ------------------------------
+  String _norm(String? s) {
+    final v = (s ?? '').toLowerCase().trim();
+    return v.replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  String _pairKey(String storeName, String? storeAddress) {
+    return '${_norm(storeName)}|${_norm(storeAddress)}';
+  }
+
   Future<void> _fetchListItems() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
@@ -48,13 +60,18 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
           .order('created_at', ascending: false);
 
       final listRows = List<Map<String, dynamic>>.from(rows);
-      final reviewIds = listRows.map((e) => (e['review_id'] ?? '').toString()).where((v) => v.isNotEmpty).toList();
+      final reviewIds = listRows
+          .map((e) => (e['review_id'] ?? '').toString())
+          .where((v) => v.isNotEmpty)
+          .toList();
 
       if (reviewIds.isEmpty) {
-        if (mounted) setState(() {
-          _items = [];
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _items = [];
+            _isLoading = false;
+          });
+        }
         return;
       }
 
@@ -71,10 +88,12 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
         if (json != null) items.add(Review.fromJson(json));
       }
 
-      if (mounted) setState(() {
-        _items = items;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _items = items;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('리스트 아이템 로드 실패: $e');
       if (mounted) setState(() => _isLoading = false);
@@ -92,32 +111,55 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
     }
   }
 
-  Future<List<Review>> _loadSavedReviews() async {
+  // ==========================================================
+  // ✅ (수정) "저장한 매장"은 review_saves가 아니라 store_saves를 봐야 함
+  // ==========================================================
+  Future<List<Map<String, dynamic>>> _loadSavedStores() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return [];
 
-    final savedRows = await _supabase
-        .from('review_saves')
-        .select('review_id, created_at')
+    // ✅ 중복 제거 뷰 사용 (최신 1개만)
+    final rows = await _supabase
+        .from('store_saves_distinct_view')
+        .select('id, user_id, store_key, store_name, store_address, created_at')
         .eq('user_id', userId)
         .order('created_at', ascending: false);
 
-    final s = List<Map<String, dynamic>>.from(savedRows);
-    final ids = s.map((e) => (e['review_id'] ?? '').toString()).where((v) => v.isNotEmpty).toList();
-    if (ids.isEmpty) return [];
+    return List<Map<String, dynamic>>.from(rows);
+  }
 
-    final reviewRes = await _supabase.from('reviews').select().inFilter('id', ids);
-    final reviewMap = <String, Map<String, dynamic>>{
-      for (final r in List<Map<String, dynamic>>.from(reviewRes))
-        (r['id'] ?? '').toString(): Map<String, dynamic>.from(r),
-    };
+  // ✅ 선택한 매장(store_name/address) -> reviews에서 최신 리뷰 1개 id로 변환
+  // (스키마 안 건드리고 기존 user_list_items(review_id uuid) 유지하기 위한 최소 연결)
+  Future<List<String>> _resolveReviewIdsFromStores(List<Map<String, dynamic>> stores) async {
+    final ids = <String>[];
 
-    final list = <Review>[];
-    for (final id in ids) {
-      final json = reviewMap[id];
-      if (json != null) list.add(Review.fromJson(json));
+    for (final s in stores) {
+      final name = (s['store_name'] ?? '').toString();
+      final addr = (s['store_address'] ?? '').toString();
+
+      if (name.isEmpty) continue;
+
+      try {
+        // ✅ 해당 매장의 최신 리뷰 1개를 대표로 사용
+        final res = await _supabase
+            .from('reviews')
+            .select('id')
+            .eq('store_name', name)
+            .eq('store_address', addr)
+            .order('created_at', ascending: false)
+            .limit(1);
+
+        final list = List<Map<String, dynamic>>.from(res);
+        if (list.isNotEmpty) {
+          final rid = (list.first['id'] ?? '').toString();
+          if (rid.isNotEmpty) ids.add(rid);
+        }
+      } catch (e) {
+        debugPrint('리뷰 id 변환 실패: $e');
+      }
     }
-    return list;
+
+    return ids;
   }
 
   Future<void> _addReviewsToList(List<String> reviewIds) async {
@@ -127,11 +169,13 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
     if (reviewIds.isEmpty) return;
 
     try {
-      final payload = reviewIds.map((rid) => {
+      final payload = reviewIds
+          .map((rid) => {
         'user_id': userId,
         'list_id': widget.listId,
         'review_id': rid,
-      }).toList();
+      })
+          .toList();
 
       await _supabase.from('user_list_items').upsert(
         payload,
@@ -172,17 +216,23 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
   }
 
   Future<void> _openAddBottomSheet() async {
-    final existing = _items.map((e) => (e.id ?? '').toString()).where((e) => e.isNotEmpty).toSet();
+    // ✅ 이미 리스트에 들어있는 "매장"을 (storeName+address 정규화) 기준으로 집합화
+    final existingStorePairs = _items
+        .map((e) => _pairKey(e.storeName, e.storeAddress))
+        .where((v) => v.isNotEmpty)
+        .toSet();
 
-    final saved = await _loadSavedReviews();
+    // ✅ 바텀시트 열 때마다 최신 저장한 매장 조회
+    final savedStores = await _loadSavedStores();
     if (!mounted) return;
 
-    if (saved.isEmpty) {
+    if (savedStores.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("저장한 매장이 없습니다.")));
       return;
     }
 
-    final selected = <String>{};
+    // 선택은 store_key 기준(중복 제거/토글 안정)
+    final selectedStoreKeys = <String>{};
 
     await showModalBottomSheet(
       context: context,
@@ -199,7 +249,11 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(99))),
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(99)),
+                    ),
                     const SizedBox(height: 12),
                     const Align(
                       alignment: Alignment.centerLeft,
@@ -209,12 +263,16 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                     SizedBox(
                       height: 420,
                       child: ListView.separated(
-                        itemCount: saved.length,
+                        itemCount: savedStores.length,
                         separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[200]),
                         itemBuilder: (context, index) {
-                          final r = saved[index];
-                          final rid = (r.id ?? '').toString();
-                          final already = existing.contains(rid);
+                          final s = savedStores[index];
+
+                          final storeKey = (s['store_key'] ?? '').toString();
+                          final storeName = (s['store_name'] ?? '').toString();
+                          final storeAddr = (s['store_address'] ?? '').toString();
+
+                          final already = existingStorePairs.contains(_pairKey(storeName, storeAddr));
 
                           return ListTile(
                             enabled: !already,
@@ -222,21 +280,21 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                                 ? null
                                 : () {
                               setModalState(() {
-                                if (selected.contains(rid)) {
-                                  selected.remove(rid);
+                                if (selectedStoreKeys.contains(storeKey)) {
+                                  selectedStoreKeys.remove(storeKey);
                                 } else {
-                                  selected.add(rid);
+                                  selectedStoreKeys.add(storeKey);
                                 }
                               });
                             },
                             leading: Icon(
                               already
                                   ? Icons.check_circle
-                                  : (selected.contains(rid) ? Icons.check_circle : Icons.radio_button_unchecked),
+                                  : (selectedStoreKeys.contains(storeKey) ? Icons.check_circle : Icons.radio_button_unchecked),
                               color: already ? Colors.grey : const Color(0xFF8A2BE2),
                             ),
                             title: Text(
-                              r.storeName,
+                              storeName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -245,7 +303,7 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                               ),
                             ),
                             subtitle: Text(
-                              r.storeAddress ?? "",
+                              storeAddr,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(color: already ? Colors.grey : Colors.grey[600], fontSize: 12),
@@ -259,11 +317,28 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: selected.isEmpty
+                        onPressed: selectedStoreKeys.isEmpty
                             ? null
                             : () async {
+                          // ✅ 선택된 매장 row들만 추출
+                          final selectedStores = savedStores
+                              .where((e) => selectedStoreKeys.contains((e['store_key'] ?? '').toString()))
+                              .toList();
+
                           Navigator.pop(context);
-                          await _addReviewsToList(selected.toList());
+
+                          // ✅ store -> review_id 변환 후 기존 로직으로 추가
+                          final reviewIds = await _resolveReviewIdsFromStores(selectedStores);
+                          if (!mounted) return;
+
+                          if (reviewIds.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("추가할 수 있는 리뷰가 없는 매장입니다.")),
+                            );
+                            return;
+                          }
+
+                          await _addReviewsToList(reviewIds);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF8A2BE2),
@@ -273,7 +348,7 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         child: Text(
-                          selected.isEmpty ? "추가할 항목을 선택하세요" : "${selected.length}개 추가하기",
+                          selectedStoreKeys.isEmpty ? "추가할 항목을 선택하세요" : "${selectedStoreKeys.length}개 추가하기",
                           style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                       ),

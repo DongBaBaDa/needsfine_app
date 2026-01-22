@@ -216,9 +216,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
             AnimatedCrossFade(
               firstChild: _buildCategoryGrid(l10n),
-              secondChild: _selectedCategoryIndex == 1
-                  ? _buildThemeList()
-                  : _buildLocationList(),
+
+              // ✅ [수정] 테마별/지역별 선택 시 '개발 중' 문구 표시
+              // 실제 기능(_buildThemeList, _buildLocationList)은 숨겨둠
+              secondChild: _buildPlaceholder(l10n),
+
               crossFadeState: _selectedCategoryIndex == 0
                   ? CrossFadeState.showFirst
                   : CrossFadeState.showSecond,
@@ -442,6 +444,26 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
+  // ✅ [NEW] 개발 중 표시 위젯
+  Widget _buildPlaceholder(AppLocalizations l10n) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Icon(Icons.construction_rounded, size: 40, color: Colors.grey[300]),
+          const SizedBox(height: 12),
+          Text(
+            l10n.developingMessage, // "현재 개발 중인 기능입니다."
+            style: TextStyle(color: Colors.grey[500], fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ [숨김 처리] 테마 리스트 (나중에 복구 시 secondChild에 사용)
   Widget _buildThemeList() {
     final themes = ["데이트 맛집", "가족 외식", "혼밥 추천", "회식 장소", "뷰 맛집"];
     return SizedBox(
@@ -463,6 +485,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
+  // ✅ [숨김 처리] 지역 리스트 (나중에 복구 시 secondChild에 사용)
   Widget _buildLocationList() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

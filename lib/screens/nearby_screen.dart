@@ -16,6 +16,9 @@ import 'package:needsfine_app/screens/store_reviews_screen.dart';
 // ✅ Supabase 조회
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// ✅ 다국어 패키지 임포트
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class NearbyScreen extends StatefulWidget {
   const NearbyScreen({super.key});
   @override
@@ -50,11 +53,16 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   // ✅ Supabase
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // ✅ 매장 저장 상태/카운트, 댓글 카운트
+  // ✅ 매장 상태 관리 변수들 (UI 직결)
   bool _isStoreSaved = false;
   bool _isSavingStore = false;
   int _storeSaveCount = 0;
   int _storeCommentCount = 0;
+
+  // ✅ 화면 표시용 상태 (점수, 신뢰도, 태그)
+  double _displayScore = 0.0;
+  int _displayTrust = 0;
+  List<String> _displayTags = []; // ✅ 태그 리스트 추가
 
   // ✅ 좌표 트리거로 들어왔을 때 주소 복구용
   String? _resolvedStoreName;
@@ -71,7 +79,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     searchTrigger.addListener(_handleExternalSearch);
   }
 
-  // ✅ 외부 요청 처리 로직 (DB 좌표 복구 기능 포함)
+  // ✅ 외부 요청 처리 로직
   void _handleExternalSearch() async {
     final target = searchTrigger.value;
     if (target != null) {
@@ -82,13 +90,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       if (mounted) {
         setState(() {
           _autocompleteResults = [];
-          // 🔴 상태 초기화 (이전 매장 정보 삭제)
-          _resolvedStoreName = null;
-          _resolvedStoreAddress = null;
-          _matchedStore = null;
-          _isStoreSaved = false;
-          _storeSaveCount = 0;
-          _storeCommentCount = 0;
+          _resetStoreState();
         });
       }
 
@@ -96,18 +98,29 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       if (target.lat != null && target.lng != null && target.lat != 0 && target.lng != 0) {
         _moveToCoordinates(target.query, target.lat!, target.lng!);
       }
-      // 2) 좌표가 없는 경우 -> DB에서 좌표 찾기 시도 (Smart Fallback)
+      // 2) 좌표가 없는 경우 -> DB에서 좌표 찾기 시도 또는 검색 실행
       else {
         final dbCoords = await _findCoordinatesFromDB(target.query);
         if (dbCoords != null) {
-          // DB에 좌표가 있으면 그걸로 이동
           _moveToCoordinates(target.query, dbCoords.latitude, dbCoords.longitude);
         } else {
-          // DB에도 없으면 네이버 검색 실행
           _handleManualSearch(target.query);
         }
       }
     }
+  }
+
+  // ✅ 상태 초기화 헬퍼 함수
+  void _resetStoreState() {
+    _resolvedStoreName = null;
+    _resolvedStoreAddress = null;
+    _matchedStore = null;
+    _isStoreSaved = false;
+    _storeSaveCount = 0;
+    _storeCommentCount = 0;
+    _displayScore = 0.0;
+    _displayTrust = 0;
+    _displayTags = [];
   }
 
   // ✅ DB에서 가게 이름으로 좌표 찾기
@@ -211,16 +224,22 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     // 🔴 새로운 검색 시 상태 초기화
     setState(() {
       _autocompleteResults = [];
-      _resolvedStoreName = null;
-      _resolvedStoreAddress = null;
-      _matchedStore = null;
-      _isStoreSaved = false;
-      _storeSaveCount = 0;
-      _storeCommentCount = 0;
+      _resetStoreState();
     });
 
     final places = await _searchService.searchPlaces(query);
-    if (places.isEmpty) {
+
+    // ✅ [문제 2 해결] 검색 결과 중 이름이 정확히 일치하는 것이 있다면 즉시 선택
+    NaverPlace? exactMatch;
+    try {
+      exactMatch = places.firstWhere((p) => p.cleanTitle == query);
+    } catch (_) {
+      exactMatch = null;
+    }
+
+    if (exactMatch != null) {
+      _selectPlace(exactMatch); // 즉시 이동
+    } else if (places.isEmpty) {
       _moveMapToAddress(query);
     } else if (places.length == 1) {
       _selectPlace(places.first);
@@ -320,16 +339,11 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   }
 
   Future<void> _selectPlace(NaverPlace place) async {
+    // 🔴 상태 초기화
     setState(() {
       _searchController.text = place.cleanTitle;
       _autocompleteResults = [];
-      // 🔴 새로운 장소 선택 시 상태 초기화
-      _resolvedStoreName = null;
-      _resolvedStoreAddress = null;
-      _matchedStore = null;
-      _isStoreSaved = false;
-      _storeSaveCount = 0;
-      _storeCommentCount = 0;
+      _resetStoreState();
     });
     FocusScope.of(context).unfocus();
 
@@ -349,7 +363,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     }
   }
 
-  // ✅ Store 생성자
+  // ✅ Store 생성자 (유연하게 처리)
   Store _createStoreFlexible({
     required String name,
     required double latitude,
@@ -360,6 +374,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     required List<String> allPhotos,
     required String address,
   }) {
+    // Store 모델에 avgTrust 필드가 없어도 UI는 _displayTrust로 처리하므로 안전
     return Store(
       id: 'temp_id_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
@@ -375,24 +390,18 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     );
   }
 
-  double _getStoreScore(Store s) {
-    final d = s as dynamic;
-    try { return (d.needsFineScore as num).toDouble(); } catch (_) { return 0.0; }
-  }
-
-  int _getStoreTrust(Store s) {
-    return 0;
-  }
-
+  // ✅ [수정] 헬퍼 메소드 복구 (Store 모델에 맞게 처리)
   int _getStoreReviewCount(Store s) {
     final d = s as dynamic;
     try { return (d.reviewCount as num).toInt(); } catch (_) { return 0; }
   }
 
   List<String> _getStorePhotos(Store s) {
+    // DB에서 가져온 사진 리스트를 반환할 수도 있으나, Store 모델에 없다면 빈 리스트
     return [];
   }
 
+  // ✅ [복구] ID 해결 로직 (가장 많이 사용된 주소 찾기 등)
   Future<void> _ensureResolvedIdentity(NaverPlace place, NLatLng position) async {
     if (_resolvedStoreName == place.cleanTitle && (_resolvedStoreAddress?.trim().isNotEmpty ?? false)) return;
 
@@ -531,27 +540,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
 
       List list = (rows is List) ? rows : [];
 
-      if (addr.isNotEmpty) {
-        final filtered = list.where((r) {
-          final m = r as Map;
-          return ((m['store_address'] ?? '').toString().trim() == addr);
-        }).toList();
-        if (filtered.isNotEmpty) list = filtered;
-      }
-
-      if (list.isEmpty) {
-        final eps = 0.002;
-        final rows2 = await _supabase
-            .from('reviews')
-            .select('comment_count, is_hidden, store_lat, store_lng')
-            .gte('store_lat', position.latitude - eps)
-            .lte('store_lat', position.latitude + eps)
-            .gte('store_lng', position.longitude - eps)
-            .lte('store_lng', position.longitude + eps);
-
-        list = (rows2 is List) ? rows2 : [];
-      }
-
+      // 주소 필터링 없이 이름으로만 댓글 수 집계 (RankingScreen과 통일)
       int sum = 0;
       for (final r in list) {
         final m = r as Map;
@@ -644,81 +633,18 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     await _ensureResolvedIdentity(place, position);
 
     final name = _effectiveStoreName(place);
-    final addr = _effectiveStoreAddress(place);
 
+    // ✅ [문제 1 해결] 점수 불일치 해결을 위해 매장 이름으로 전체 검색 (주소 무관)
+    // RankingScreen과 로직을 통일하여 해당 이름의 모든 리뷰를 긁어옴
     List rows = [];
-    String? foundName;
-    String? foundAddr;
-
-    if (addr.isNotEmpty) {
-      try {
-        final res = await _supabase
-            .from('reviews')
-            .select('needsfine_score, trust_level, photo_urls, is_hidden, store_lat, store_lng, store_name, store_address')
-            .eq('store_name', name)
-            .eq('store_address', addr);
-        rows = (res is List) ? res : [];
-        if (rows.isNotEmpty) { foundName = name; foundAddr = addr; }
-      } catch (e) { debugPrint("reviews(name+addr) 조회 실패: $e"); }
-    }
-
-    if (rows.isEmpty) {
-      try {
-        final res = await _supabase
-            .from('reviews')
-            .select('needsfine_score, trust_level, photo_urls, is_hidden, store_lat, store_lng, store_name, store_address')
-            .eq('store_name', name);
-        rows = (res is List) ? res : [];
-        if (rows.isNotEmpty) {
-          foundName = name;
-          final addrCount = <String, int>{};
-          for (final r in rows) {
-            final m = r as Map;
-            final a = (m['store_address'] ?? '').toString().trim();
-            if (a.isNotEmpty) addrCount[a] = (addrCount[a] ?? 0) + 1;
-          }
-          String? best; int bestN = -1;
-          addrCount.forEach((k, v) { if (v > bestN) { bestN = v; best = k; } });
-          if (best != null && best!.isNotEmpty) foundAddr = best;
-        }
-      } catch (e) { debugPrint("reviews(name only) 조회 실패: $e"); }
-    }
-
-    if (rows.isEmpty) {
-      try {
-        final eps = 0.002;
-        final res2 = await _supabase
-            .from('reviews')
-            .select('needsfine_score, trust_level, photo_urls, is_hidden, store_lat, store_lng, store_name, store_address')
-            .gte('store_lat', position.latitude - eps)
-            .lte('store_lat', position.latitude + eps)
-            .gte('store_lng', position.longitude - eps)
-            .lte('store_lng', position.longitude + eps);
-        rows = (res2 is List) ? res2 : [];
-        if (rows.isNotEmpty) {
-          final nameCount = <String, int>{};
-          final addrCount = <String, int>{};
-          for (final r in rows) {
-            final m = r as Map;
-            final sn = (m['store_name'] ?? '').toString().trim();
-            final sa = (m['store_address'] ?? '').toString().trim();
-            if (sn.isNotEmpty) nameCount[sn] = (nameCount[sn] ?? 0) + 1;
-            if (sa.isNotEmpty) addrCount[sa] = (addrCount[sa] ?? 0) + 1;
-          }
-          String? bestName; int bn = -1;
-          nameCount.forEach((k, v) { if (v > bn) { bn = v; bestName = k; } });
-          String? bestAddr; int ba = -1;
-          addrCount.forEach((k, v) { if (v > ba) { ba = v; bestAddr = k; } });
-          if (bestName != null && bestName!.isNotEmpty) foundName = bestName;
-          if (bestAddr != null && bestAddr!.isNotEmpty) foundAddr = bestAddr;
-          if (mounted) {
-            setState(() {
-              if (foundName != null && foundName!.isNotEmpty) _resolvedStoreName = foundName;
-              if (foundAddr != null && foundAddr!.isNotEmpty) _resolvedStoreAddress = foundAddr;
-            });
-          }
-        }
-      } catch (e) { debugPrint("reviews(lat/lng) 조회 실패: $e"); }
+    try {
+      final res = await _supabase
+          .from('reviews')
+          .select('needsfine_score, trust_level, photo_urls, is_hidden, tags')
+          .eq('store_name', name);
+      rows = (res is List) ? res : [];
+    } catch (e) {
+      debugPrint("리뷰 전체 조회 실패: $e");
     }
 
     if (rows.isEmpty) return null;
@@ -727,19 +653,32 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     int totalTrust = 0;
     int count = 0;
     final photos = <String>{};
+    final tagCounts = <String, int>{}; // 태그 집계용
 
     for (final r in rows) {
       final m = r as Map;
       final hidden = m['is_hidden'];
       if (hidden is bool && hidden == true) continue;
+
       final s = m['needsfine_score'];
       final t = m['trust_level'];
+
       totalScore += (s is num) ? s.toDouble() : 0.0;
       totalTrust += (t is num) ? t.round() : 0;
       count++;
+
       final pu = m['photo_urls'];
       if (pu is List) {
         for (final x in pu) { if (x is String && x.isNotEmpty) photos.add(x); }
+      }
+
+      // ✅ [문제 1 해결] 태그 집계 (배열 파싱)
+      final tags = m['tags'];
+      if (tags is List) {
+        for (final tag in tags) {
+          final tStr = tag.toString();
+          if (tStr.isNotEmpty) tagCounts[tStr] = (tagCounts[tStr] ?? 0) + 1;
+        }
       }
     }
 
@@ -748,34 +687,36 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     final avgScore = totalScore / count;
     final avgTrust = (totalTrust / count).round();
 
+    // 상위 태그 3개 추출
+    final sortedTags = tagCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final topTags = sortedTags.take(3).map((e) => e.key).toList();
+
+    // Store 객체 생성 (호환용)
     final store = _createStoreFlexible(
-      name: foundName ?? name,
+      name: name,
       latitude: position.latitude,
       longitude: position.longitude,
       needsFineScore: avgScore,
       avgTrust: avgTrust,
       reviewCount: count,
       allPhotos: photos.toList(),
-      address: foundAddr ?? addr,
+      address: _effectiveStoreAddress(place),
     );
 
     return _StoreFetchResult(
       store: store,
-      storeName: foundName ?? name,
-      storeAddress: foundAddr,
+      storeName: name,
+      storeAddress: _effectiveStoreAddress(place),
+      avgScore: avgScore, // ✅ 계산된 점수 전달
+      avgTrust: avgTrust, // ✅ 계산된 신뢰도 전달
+      topTags: topTags,   // ✅ 계산된 태그 전달
     );
   }
 
   void _updateUI(NaverPlace place, NLatLng position) async {
-    // 🔴 [핵심] 이전 검색 정보 완전 초기화
-    setState(() {
-      _resolvedStoreName = null;
-      _resolvedStoreAddress = null;
-      _matchedStore = null;
-      _isStoreSaved = false;
-      _storeSaveCount = 0;
-      _storeCommentCount = 0;
-    });
+    // 1. 상태 초기화
+    _resetStoreState();
 
     Store? matched;
     try {
@@ -801,14 +742,28 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
 
     await _loadStoreCountsAndState(place, position);
 
-    final db = await _fetchStoreFromSupabase(place, position);
-    if (db != null && mounted) {
-      setState(() {
-        _matchedStore = db.store;
-        if (db.storeName != null && db.storeName!.trim().isNotEmpty) _resolvedStoreName = db.storeName!.trim();
-        if (db.storeAddress != null && db.storeAddress!.trim().isNotEmpty) _resolvedStoreAddress = db.storeAddress!.trim();
-      });
-      await _loadStoreCountsAndState(place, position);
+    // 2. Supabase 데이터 조회 및 점수 업데이트
+    final dbResult = await _fetchStoreFromSupabase(place, position);
+
+    if (mounted) {
+      if (dbResult != null) {
+        setState(() {
+          _matchedStore = dbResult.store;
+          if (dbResult.storeName != null && dbResult.storeName!.trim().isNotEmpty) {
+            _resolvedStoreName = dbResult.storeName!.trim();
+          }
+          if (dbResult.storeAddress != null && dbResult.storeAddress!.trim().isNotEmpty) {
+            _resolvedStoreAddress = dbResult.storeAddress!.trim();
+          }
+
+          // ✅ [핵심] DB에서 계산된 점수, 신뢰도, 태그를 화면 상태 변수에 반영
+          _displayScore = dbResult.avgScore;
+          _displayTrust = dbResult.avgTrust;
+          _displayTags = dbResult.topTags;
+        });
+      } else {
+        // 데이터가 없으면 초기값 유지
+      }
     }
 
     final controller = await _controller.future;
@@ -997,21 +952,20 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   }
 
   Widget _buildSheetContent() {
+    // ✅ l10n 객체 가져오기
+    final l10n = AppLocalizations.of(context)!;
+
     final place = _searchedPlace!;
     final store = _matchedStore;
 
     final title = _effectiveStoreName(place);
     final addrText = _displayAddress(place);
 
-    // 미리 변수 계산 (컴파일 에러 방지)
-    double score = 0.0;
-    int trust = 0;
+    // 리뷰 개수 및 사진은 Store 객체에서 가져옴 (없으면 0)
     int reviewCount = 0;
     List<String> photos = [];
 
     if (store != null) {
-      score = _getStoreScore(store);
-      trust = _getStoreTrust(store);
       reviewCount = _getStoreReviewCount(store);
       photos = _getStorePhotos(store);
     }
@@ -1021,6 +975,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 매장 이름 및 저장 버튼
           Row(
             children: [
               Expanded(
@@ -1064,27 +1019,61 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             ],
           ),
 
-          // ✅ [수정됨] 매장 이름 바로 아래 회색 주소 (요청사항 반영)
           const SizedBox(height: 4),
           if (addrText.isNotEmpty)
             Text(addrText, style: const TextStyle(color: Colors.grey, fontSize: 13)),
 
           const SizedBox(height: 16),
 
+          // ✅ 점수/신뢰도 표시 (Store 객체가 있으면 보여줌)
           if (store != null) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildScoreBox("니즈파인 점수", score.toStringAsFixed(1), const Color(0xFF9C7CFF)),
+                // 니즈파인 점수 (상태 변수 사용)
                 _buildScoreBox(
-                  "평균 신뢰도",
-                  "$trust%",
-                  trust >= 50 ? Colors.green : Colors.orange,
+                    l10n.avgNeedsFineScore,
+                    _displayScore.toStringAsFixed(1),
+                    const Color(0xFF9C7CFF)
+                ),
+
+                // 평균 신뢰도 (상태 변수 사용)
+                _buildScoreBox(
+                  l10n.avgReliability,
+                  "$_displayTrust%",
+                  _displayTrust >= 50 ? const Color(0xFF9C7CFF) : Colors.orange,
                 ),
               ],
             ),
+
+            // ✅ [문제 1 해결] 태그 표시
+            if (_displayTags.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _displayTags.map((tag) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0E9FF),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      "#$tag",
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF7C4DFF),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+
             const SizedBox(height: 16),
-            Text("리뷰 $reviewCount개", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text("${l10n.review} $reviewCount개", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 10),
 
             Row(
@@ -1250,11 +1239,23 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   }
 }
 
+// ✅ StoreFetchResult 수정 (점수/신뢰도/태그 추가 반환)
 class _StoreFetchResult {
   final Store store;
   final String? storeName;
   final String? storeAddress;
-  const _StoreFetchResult({required this.store, this.storeName, this.storeAddress});
+  final double avgScore;
+  final int avgTrust;
+  final List<String> topTags; // ✅ 태그 추가
+
+  const _StoreFetchResult({
+    required this.store,
+    this.storeName,
+    this.storeAddress,
+    this.avgScore = 0.0,
+    this.avgTrust = 0,
+    this.topTags = const [], // ✅ 기본값 설정
+  });
 }
 
 class _TriangleClipper extends CustomClipper<Path> {

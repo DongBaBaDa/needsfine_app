@@ -10,26 +10,58 @@ class ReviewService {
   static const String _baseUrl = 'https://hokjkmapqbinhsivkbnj.supabase.co/functions/v1/make-server-26899706';
 
   // --- 조회 (Fetch) ---
+
+  // ✅ [수정됨] 통계 조회 (에러 로그 추가)
   static Future<Map<String, dynamic>> fetchGlobalStats() async {
     try {
-      final response = await _supabase.from('global_stats_view').select().single();
-      return response;
+      final response = await _supabase.rpc('get_global_review_stats');
+      return response as Map<String, dynamic>;
     } catch (e) {
-      return {};
+      print("❌ fetchGlobalStats 에러: $e");
+      return {'total_reviews': 0, 'average_score': 0.0, 'avg_trust': 0.0};
     }
   }
 
+  // ✅ [핵심 수정] 매장 랭킹 조회 (디버깅 로그 대폭 추가)
+  // 이 함수가 실행될 때 콘솔(Run탭)을 확인해주세요!
   static Future<List<StoreRanking>> fetchStoreRankings() async {
     try {
-      final List<dynamic> response = await _supabase
-          .from('store_rankings_view')
-          .select()
-          .order('avg_score', ascending: false)
-          .limit(100);
-      return response.asMap().entries.map((entry) {
-        return StoreRanking.fromViewJson(entry.value, entry.key + 1);
+      print("🚀 [Debug] get_store_rankings RPC 호출 시작...");
+
+      // 1. RPC 호출
+      final response = await _supabase.rpc('get_store_rankings');
+
+      print("🔥 [Debug] DB 응답 원본: $response");
+
+      if (response == null) {
+        print("❌ [Debug] DB 응답이 NULL입니다.");
+        return [];
+      }
+
+      final List<dynamic> data = response as List<dynamic>;
+
+      if (data.isEmpty) {
+        print("⚠️ [Debug] DB에서 빈 리스트([])가 반환되었습니다. (데이터가 없거나 is_hidden=true)");
+        return [];
+      }
+
+      // 2. 데이터 매핑 (여기서 에러가 터질 확률 99%)
+      return data.asMap().entries.map((entry) {
+        try {
+          return StoreRanking.fromViewJson(entry.value, entry.key + 1);
+        } catch (e, stack) {
+          print("💥 [CRITICAL] 데이터 파싱 에러 발생!");
+          print("   - 순위: ${entry.key + 1}위");
+          print("   - 원인: $e");
+          print("   - 문제의 데이터: ${entry.value}");
+          // 에러가 나도 죽지 않고 리스트를 반환하기 위해 예외를 던지지 않고 무시하거나 처리해야 함
+          // 여기서는 원인 파악을 위해 rethrow 함
+          rethrow;
+        }
       }).toList();
+
     } catch (e) {
+      print("💀 [FATAL] fetchStoreRankings 전체 에러: $e");
       return [];
     }
   }
@@ -48,11 +80,13 @@ class ReviewService {
       final List<dynamic> data = await query.order('created_at', ascending: false).range(offset, offset + limit - 1);
       return data.map((json) => Review.fromJson(json)).toList();
     } catch (e) {
+      print("❌ fetchReviews 에러: $e");
       return [];
     }
   }
 
   // --- 생성 (Create) ---
+  // ✅ tags 파라미터 추가됨
   static Future<Review> createReview({
     required String storeName,
     String? storeAddress,
@@ -61,6 +95,7 @@ class ReviewService {
     List<String>? photoUrls,
     double? lat,
     double? lng,
+    List<String>? tags, // ✅ 태그 파라미터 추가
   }) async {
     try {
       final session = _supabase.auth.currentSession;
@@ -85,6 +120,7 @@ class ReviewService {
           'user_id': userId,
           'store_lat': lat,
           'store_lng': lng,
+          'tags': tags ?? [], // ✅ JSON 본문에 태그 포함
         }),
       );
 
@@ -92,19 +128,22 @@ class ReviewService {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         return Review.fromJson(data);
       } else {
-        throw Exception('리뷰 등록 실패');
+        throw Exception('리뷰 등록 실패: ${response.statusCode}');
       }
     } catch (e) {
+      print("❌ createReview 에러: $e");
       rethrow;
     }
   }
 
   // --- 수정 (Update) ---
+  // ✅ tags 파라미터 추가됨
   static Future<void> updateReview({
     required String reviewId,
     required String content,
     required double rating,
     required List<String> photoUrls,
+    List<String>? tags, // ✅ 태그 파라미터 추가
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -115,6 +154,7 @@ class ReviewService {
         'review_text': content,
         'user_rating': rating,
         'photo_urls': photoUrls,
+        'tags': tags ?? [], // ✅ 업데이트 시 태그 포함
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', reviewId).eq('user_id', userId); // 내 글인지 확인
 

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
 
 class SavedStoresScreen extends StatefulWidget {
@@ -15,15 +13,15 @@ class _SavedStoresScreenState extends State<SavedStoresScreen> {
   final _supabase = Supabase.instance.client;
 
   bool _isLoading = true;
-  List<Review> _saved = [];
+  List<Map<String, dynamic>> _items = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchSaved();
+    _fetch();
   }
 
-  Future<void> _fetchSaved() async {
+  Future<void> _fetch() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
       if (mounted) setState(() => _isLoading = false);
@@ -33,53 +31,47 @@ class _SavedStoresScreenState extends State<SavedStoresScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final savedRows = await _supabase
-          .from('review_saves')
-          .select('review_id, created_at')
+      final res = await _supabase
+          .from('store_saves_distinct_view')
+          .select('store_key, store_name, store_address, created_at, user_id')
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
-      final s = List<Map<String, dynamic>>.from(savedRows);
-      final ids = s.map((e) => (e['review_id'] ?? '').toString()).where((v) => v.isNotEmpty).toList();
-
-      if (ids.isEmpty) {
-        if (mounted) setState(() {
-          _saved = [];
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final reviewRes = await _supabase.from('reviews').select().inFilter('id', ids);
-      final reviewMap = <String, Map<String, dynamic>>{
-        for (final r in List<Map<String, dynamic>>.from(reviewRes))
-          (r['id'] ?? '').toString(): Map<String, dynamic>.from(r),
-      };
-
-      final list = <Review>[];
-      for (final id in ids) {
-        final json = reviewMap[id];
-        if (json != null) list.add(Review.fromJson(json));
-      }
-
-      if (mounted) setState(() {
-        _saved = list;
-        _isLoading = false;
+      if (!mounted) return;
+      setState(() {
+        _items = List<Map<String, dynamic>>.from(res);
       });
     } catch (e) {
       debugPrint('저장한 매장 로드 실패: $e');
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _goToMap(Review review) {
-    if (review.storeName.isNotEmpty) {
-      searchTrigger.value = SearchTarget(
-        query: review.storeName,
-        lat: review.storeLat,
-        lng: review.storeLng,
-      );
-      Navigator.pop(context);
+  void _goToMapWithStore(String storeName, String? address) {
+    if (storeName.isEmpty) return;
+
+    searchTrigger.value = SearchTarget(
+      query: storeName,
+    );
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _removeSaved(String storeKey) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      await _supabase
+          .from('store_saves')
+          .delete()
+          .eq('user_id', userId)
+          .eq('store_key', storeKey);
+
+      await _fetch();
+    } catch (e) {
+      debugPrint('저장 삭제 실패: $e');
     }
   }
 
@@ -88,46 +80,121 @@ class _SavedStoresScreenState extends State<SavedStoresScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
-        title: const Text("저장한 매장", style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black)),
+        title: const Text(
+          "저장한 매장",
+          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _saved.isEmpty
-          ? const Center(
-        child: Text(
-          "아직 저장한 매장이 없습니다.",
-          style: TextStyle(color: Color(0xFF6B6B6F)),
-        ),
-      )
           : RefreshIndicator(
-        onRefresh: _fetchSaved,
-        color: const Color(0xFF8A2BE2),
-        child: ListView.separated(
+        onRefresh: _fetch,
+        child: _items.isEmpty
+            ? ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-          itemCount: _saved.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final r = _saved[index];
-            return Container(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+              ),
+              child: Column(
+                children: const [
+                  Icon(Icons.bookmark_border_rounded,
+                      size: 48, color: Color(0xFFD1D1D6)),
+                  SizedBox(height: 16),
+                  Text(
+                    "저장한 매장이 없습니다.\n마음에 드는 매장을 저장해보세요!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF8E8E93)),
                   ),
                 ],
               ),
-              child: ListTile(
-                onTap: () => _goToMap(r),
-                title: Text(r.storeName, style: const TextStyle(fontWeight: FontWeight.w800)),
-                subtitle: Text(r.storeAddress ?? "", maxLines: 1, overflow: TextOverflow.ellipsis),
-                trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFAEAEB2)),
+            ),
+          ],
+        )
+            : ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+          itemCount: _items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final item = _items[index];
+            final storeKey = (item['store_key'] ?? '').toString();
+            final storeName = (item['store_name'] ?? '').toString();
+            final storeAddress =
+            (item['store_address'] ?? '').toString();
+
+            return InkWell(
+              onTap: () => _goToMapWithStore(
+                  storeName, storeAddress.isEmpty ? null : storeAddress),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF2F2F7),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.bookmark_rounded,
+                        color: Color(0xFF8A2BE2),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            storeName,
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (storeAddress.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              storeAddress,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF8E8E93)),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Color(0xFF8E8E93)),
+                      onPressed: storeKey.isEmpty
+                          ? null
+                          : () => _removeSaved(storeKey),
+                    ),
+                  ],
+                ),
               ),
             );
           },
