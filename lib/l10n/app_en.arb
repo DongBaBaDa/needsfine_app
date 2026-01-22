@@ -74,5 +74,15 @@
   "noName": "No Name",
   "noIntro": "No Intro",
   "loadError": "Load Failed",
-  "adminMenu": "Admin Menu"
+  "adminMenu": "Admin Menu",
+
+  "whatIsScore": "What is NF Score?",
+  "scoreDesc": "Score quantifying the vibe felt by users.",
+  "waitingSpot": "Queuing Spot",
+  "localSpot": "Local Gem",
+  "goodSpot": "Good Spot",
+  "polarizingSpot": "Mixed Reviews",
+  "whatIsReliability": "What is Reliability?",
+  "reliabilityDesc": "% of trust based on user reviews.",
+  "movingToMap": "Go to Map"
 }

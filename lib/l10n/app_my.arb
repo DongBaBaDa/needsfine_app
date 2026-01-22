@@ -74,5 +74,15 @@
   "noName": "အမည်မသိ",
   "noIntro": "မိတ်ဆက်မရှိ",
   "loadError": "ဖွင့်မရပါ",
-  "adminMenu": "Admin"
+  "adminMenu": "Admin",
+
+  "whatIsScore": "NF ရမှတ်ဆိုတာ",
+  "scoreDesc": "သုံးစွဲသူများ၏ သုံးသပ်ချက်ပေါ်မူတည်၍ တွက်ချက်ထားခြင်း",
+  "waitingSpot": "တန်းစီရသောဆိုင်",
+  "localSpot": "ဒေသခံအကြိုက်",
+  "goodSpot": "စားကောင်းသောဆိုင်",
+  "polarizingSpot": "အကြိုက်ကွဲနိုင်သည်",
+  "whatIsReliability": "ယုံကြည်မှုဆိုတာ",
+  "reliabilityDesc": "သုံးသပ်ချက်များကို ယုံကြည်နိုင်သည့် ရာခိုင်နှုန်း",
+  "movingToMap": "မြေပုံဖွင့်မည်"
 }

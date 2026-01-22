@@ -79,5 +79,15 @@
   "noName": "이름 없음",
   "noIntro": "소개글이 없습니다.",
   "loadError": "정보를 불러올 수 없습니다.",
-  "adminMenu": "관리자 메뉴"
+  "adminMenu": "관리자 메뉴",
+
+  "whatIsScore": "니즈파인 점수란?",
+  "scoreDesc": "사용자의 리뷰를 통해 다른 사용자가 느끼는 해당 매장의 느낌을 수치화한 점수",
+  "waitingSpot": "웨이팅 맛집",
+  "localSpot": "지역 맛집",
+  "goodSpot": "맛있는 식당",
+  "polarizingSpot": "호불호 있는 식당",
+  "whatIsReliability": "신뢰도란?",
+  "reliabilityDesc": "사용자의 리뷰를 다른 사용자가 신뢰할 수 있는 퍼센트",
+  "movingToMap": "지도로 이동합니다."
 }
