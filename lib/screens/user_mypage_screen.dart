@@ -16,7 +16,8 @@ import 'package:needsfine_app/screens/suggestion_write_screen.dart';
 import 'package:needsfine_app/screens/inquiry_write_screen.dart';
 import 'package:needsfine_app/screens/admin_dashboard_screen.dart';
 import 'package:needsfine_app/screens/my_lists_screen.dart';
-import 'package:needsfine_app/screens/banner_management_screen.dart'; // ✅ 배너 관리 화면 임포트
+import 'package:needsfine_app/screens/banner_management_screen.dart';
+import 'package:needsfine_app/screens/report_management_screen.dart'; // ✅ 신고 관리 화면 임포트 (파일이 없으면 생성 필요)
 
 // ✅ 알림 뱃지 위젯
 import 'package:needsfine_app/widgets/notification_badge.dart';
@@ -40,6 +41,11 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   bool _isAdmin = false;
   double _avgNeedsFineScore = 0.0;
   int _avgTrustLevel = 0;
+
+  // ✅ NeedsFine 디자인 컬러
+  final Color _backgroundColor = const Color(0xFFF2F2F7); // iOS 스타일 연회색 배경
+  final Color _cardColor = Colors.white;
+  final Color _primaryColor = const Color(0xFF8A2BE2);
 
   @override
   void initState() {
@@ -106,38 +112,54 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     }
   }
 
+  // ✅ [디자인 수정] 고객센터 모달 스타일 업그레이드
   void _showCustomerService(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 20),
-            Text(l10n.customerCenter, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            ListTile(
-                leading: const Icon(Icons.rate_review_outlined),
-                title: Text(l10n.sendSuggestion),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SuggestionWriteScreen()));
-                }
+      backgroundColor: Colors.transparent, // 배경 투명으로 해서 라운딩 처리
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.headset_mic_rounded, color: Color(0xFF8A2BE2), size: 28),
+                    const SizedBox(width: 10),
+                    Text(l10n.customerCenter, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _ModalButton(
+                  icon: Icons.rate_review_outlined,
+                  text: l10n.sendSuggestion,
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const SuggestionWriteScreen()));
+                  },
+                ),
+                const SizedBox(height: 12),
+                _ModalButton(
+                  icon: Icons.email_outlined,
+                  text: l10n.inquiry,
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const InquiryWriteScreen()));
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
             ),
-            ListTile(
-                leading: const Icon(Icons.email_outlined),
-                title: Text(l10n.inquiry),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const InquiryWriteScreen()));
-                }
-            ),
-            const SizedBox(height: 20),
-          ],
+          ),
         ),
       ),
     );
@@ -151,27 +173,43 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     if (_userProfile == null) return Scaffold(body: Center(child: Text(l10n.loadError)));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: Text(l10n.myFine, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: Text(l10n.myFine, style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black, fontSize: 20)),
         backgroundColor: Colors.white,
         elevation: 0,
+        centerTitle: false,
+        automaticallyImplyLeading: false,
+        titleSpacing: 24,
         actions: [
-          NotificationBadge(onTap: () => Navigator.pushNamed(context, '/notifications')),
-          IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Colors.black),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InfoEditScreen()))
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: NotificationBadge(onTap: () => Navigator.pushNamed(context, '/notifications')),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: IconButton(
+                icon: const Icon(Icons.settings_outlined, color: Colors.black, size: 26),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InfoEditScreen()))
+            ),
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _fetchUserData,
-        color: const Color(0xFF8A2BE2),
+        color: _primaryColor,
         child: ListView(
           padding: const EdgeInsets.only(bottom: 40),
           children: [
-            Container(color: Colors.white, padding: const EdgeInsets.only(bottom: 24), child: _buildProfileHeader(context, l10n)),
-            const SizedBox(height: 16),
+            // 1. 프로필 헤더 (배경 흰색)
+            Container(
+                color: Colors.white,
+                padding: const EdgeInsets.only(bottom: 28),
+                margin: const EdgeInsets.only(bottom: 16),
+                child: _buildProfileHeader(context, l10n)
+            ),
+
+            // 2. 메뉴 섹션 (카드형 디자인)
             _buildMenuSection(l10n),
           ],
         ),
@@ -188,23 +226,38 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
         children: [
-          const SizedBox(height: 20),
-          CircleAvatar(radius: 45, backgroundImage: profileImage, backgroundColor: Colors.grey[200]),
+          const SizedBox(height: 10),
+          Stack(
+            children: [
+              CircleAvatar(radius: 48, backgroundImage: profileImage, backgroundColor: Colors.grey[100]),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.grey[200]!)),
+                  child: const Icon(Icons.camera_alt, size: 16, color: Colors.grey),
+                ),
+              )
+            ],
+          ),
           const SizedBox(height: 16),
-          Text(_userProfile!.nickname, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.black)),
-          const SizedBox(height: 8),
+          Text(_userProfile!.nickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.black, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
           Text(_userProfile!.introduction, style: TextStyle(fontSize: 14, color: Colors.grey[600]), textAlign: TextAlign.center),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _StatBadge(
+                  icon: Icons.star_rounded,
                   label: "${l10n.needsFine} ${_avgNeedsFineScore.toStringAsFixed(1)}",
                   color: const Color(0xFF8A2BE2)
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               _StatBadge(
+                  icon: Icons.verified_user_rounded,
                   label: "${l10n.reliability} $_avgTrustLevel%",
                   color: Colors.blueAccent
               ),
@@ -212,15 +265,22 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
           const SizedBox(height: 24),
 
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _FollowStat(label: l10n.follower, count: _userProfile!.followerCount, onTap: () {}),
-              Container(height: 24, width: 1, color: Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 30)),
-              _FollowStat(label: l10n.following, count: _userProfile!.followingCount, onTap: () {}),
-            ],
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9F9FB),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _FollowStat(label: l10n.follower, count: _userProfile!.followerCount, onTap: () {}),
+                Container(height: 30, width: 1, color: Colors.grey[300]),
+                _FollowStat(label: l10n.following, count: _userProfile!.followingCount, onTap: () {}),
+              ],
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           Row(
             children: [
@@ -233,9 +293,10 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: BorderSide(color: Colors.grey[300]!),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    backgroundColor: Colors.white,
                   ),
-                  child: Text(l10n.editProfile, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
+                  child: Text(l10n.editProfile, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w700)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -248,10 +309,11 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8A2BE2),
+                    backgroundColor: _primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
+                    shadowColor: Colors.transparent,
                   ),
                   child: Text(l10n.myFeed, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
@@ -263,80 +325,249 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     );
   }
 
+  // ✅ [디자인 수정] 섹션별 카드 형태로 변경
   Widget _buildMenuSection(AppLocalizations l10n) {
-    return Container(
-      color: Colors.white,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
-          _MenuItem(
-              icon: Icons.bookmark_border_rounded,
-              title: l10n.reviewCollection,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReviewCollectionScreen()))
-          ),
-          _MenuItem(
-              icon: Icons.list_alt_rounded,
-              title: l10n.myOwnList,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListsScreen()))
-          ),
-          _MenuItem(
-              icon: Icons.restaurant_menu_rounded,
-              title: l10n.myTaste,
-              onTap: () async {
-                await Navigator.push(context, MaterialPageRoute(builder: (_) => const TasteSelectionScreen()));
-                _fetchUserData();
-              }
-          ),
-          const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFF2F2F7)),
-          _MenuItem(
-              icon: Icons.headset_mic_outlined,
-              title: l10n.customerCenter,
-              onTap: () => _showCustomerService(context)
-          ),
-          _MenuItem(
-              icon: Icons.notifications_none_rounded,
-              title: l10n.notice,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticeScreen()))
-          ),
-          // ✅ 관리자 메뉴 (배너 관리 추가)
-          if (_isAdmin) ...[
-            const Divider(height: 1, indent: 20, endIndent: 20, color: Color(0xFFF2F2F7)),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 0, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(l10n.adminMenu, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+          // 1. 나의 활동
+          _MenuSectionCard(
+            title: "나의 활동",
+            children: [
+              _MenuItem(
+                  icon: Icons.bookmark_rounded,
+                  iconColor: const Color(0xFFFF6B6B),
+                  title: l10n.reviewCollection,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReviewCollectionScreen()))
               ),
+              _MenuItem(
+                  icon: Icons.list_alt_rounded,
+                  iconColor: const Color(0xFF4ECDC4),
+                  title: l10n.myOwnList,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListsScreen()))
+              ),
+              _MenuItem(
+                  icon: Icons.restaurant_menu_rounded,
+                  iconColor: const Color(0xFFFFBE0B),
+                  title: l10n.myTaste,
+                  isLast: true,
+                  onTap: () async {
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const TasteSelectionScreen()));
+                    _fetchUserData();
+                  }
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // 2. 고객 지원
+          _MenuSectionCard(
+            title: "고객 지원",
+            children: [
+              _MenuItem(
+                  icon: Icons.headset_mic_rounded,
+                  iconColor: _primaryColor,
+                  title: l10n.customerCenter,
+                  onTap: () => _showCustomerService(context)
+              ),
+              _MenuItem(
+                  icon: Icons.campaign_rounded,
+                  iconColor: const Color(0xFF3D3D3D),
+                  title: l10n.notice,
+                  isLast: true,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticeScreen()))
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // ✅ 3. 관리자 메뉴 (관리자일 때만 표시)
+          if (_isAdmin)
+            _MenuSectionCard(
+              title: l10n.adminMenu,
+              borderColor: Colors.red.withOpacity(0.3),
+              children: [
+                _MenuItem(
+                    icon: Icons.dashboard_rounded,
+                    iconColor: Colors.blueGrey,
+                    title: "관리자 대시보드",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()))
+                ),
+                _MenuItem(
+                    icon: Icons.view_carousel_rounded, // 배너 아이콘
+                    iconColor: Colors.orange,
+                    title: "배너 관리",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BannerManagementScreen()))
+                ),
+                // ✅ [추가] 신고 관리 메뉴
+                _MenuItem(
+                    icon: Icons.gavel_rounded, // 신고/제재 아이콘
+                    iconColor: Colors.redAccent,
+                    title: "신고 관리",
+                    isLast: true,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportManagementScreen()))
+                ),
+              ],
             ),
-            _MenuItem(
-                icon: Icons.admin_panel_settings_outlined,
-                title: "관리자 대시보드",
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen())),
-                isDestructive: true
-            ),
-            _MenuItem(
-                icon: Icons.view_carousel_outlined, // 배너 아이콘
-                title: "배너 관리",
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BannerManagementScreen())),
-                isDestructive: true
-            ),
-          ]
         ],
       ),
     );
   }
 }
 
+// ✅ [추가] 모달 버튼 위젯
+class _ModalButton extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  const _ModalButton({required this.icon, required this.text, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9F9FB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFEEEEEE)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.black87, size: 22),
+            const SizedBox(width: 12),
+            Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
+            const Spacer(),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ✅ [수정] 카드형 섹션 위젯
+class _MenuSectionCard extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+  final Color? borderColor;
+
+  const _MenuSectionCard({required this.title, required this.children, this.borderColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 8, bottom: 8),
+          child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: borderColor != null ? Border.all(color: borderColor!) : null,
+          ),
+          child: Column(children: children),
+        ),
+      ],
+    );
+  }
+}
+
+// ✅ [수정] 메뉴 아이템 스타일 개선
+class _MenuItem extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final VoidCallback onTap;
+  final bool isLast;
+
+  const _MenuItem({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.onTap,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: isLast
+            ? const BorderRadius.vertical(bottom: Radius.circular(20))
+            : const BorderRadius.vertical(top: Radius.circular(20)), // 첫 번째 아이템 라운딩 처리는 컨테이너가 함
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: iconColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: iconColor, size: 20),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1C1C1E),
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFE5E5EA), size: 18),
+                ],
+              ),
+            ),
+            if (!isLast)
+              const Divider(height: 1, indent: 64, endIndent: 20, color: Color(0xFFF2F2F7)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StatBadge extends StatelessWidget {
+  final IconData icon;
   final String label;
   final Color color;
-  const _StatBadge({required this.label, required this.color});
+  const _StatBadge({required this.icon, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+        ],
+      ),
     );
   }
 }
@@ -354,41 +585,10 @@ class _FollowStat extends StatelessWidget {
       child: Column(
         children: [
           Text("$count", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.black)),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
         ],
       ),
-    );
-  }
-}
-
-class _MenuItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-  final bool isDestructive;
-
-  const _MenuItem({required this.icon, required this.title, required this.onTap, this.isDestructive = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final Color titleColor = isDestructive ? const Color(0xFFD32F2F) : const Color(0xFF1C1C1E);
-    final Color iconColor  = isDestructive ? const Color(0xFFD32F2F) : const Color(0xFF3A3A3C);
-
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-      minLeadingWidth: 28,
-      leading: Icon(icon, color: iconColor, size: 22),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: titleColor,
-        ),
-      ),
-      trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFAEAEB2), size: 22),
     );
   }
 }

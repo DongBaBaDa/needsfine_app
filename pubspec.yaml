@@ -76,11 +76,9 @@ flutter_native_splash:
 # Flutter 리소스 설정
 flutter:
   uses-material-design: true
-  generate: true  # ✅ [추가] 다국어 코드 자동 생성을 위해 필수!
+  generate: true
   assets:
-    - assets/images/
     - assets/icon.png
     - assets/transparent.png
-    - assets/kakao_logo.png
-    - assets/google_g_logo.png
-    - assets/naver_login.png
+    # 👇 이렇게 폴더 자체를 등록하면, 그 안의 모든 파일을 쓸 수 있습니다.
+    - assets/images/

@@ -1,3 +1,4 @@
+// lib/screens/review_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,7 +7,6 @@ import 'package:needsfine_app/services/review_service.dart';
 import 'package:needsfine_app/widgets/star_rating.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
 import 'package:needsfine_app/screens/write_review_screen.dart';
-// ✅ 유저 프로필 화면 이동을 위해 임포트
 import 'package:needsfine_app/screens/user_profile_screen.dart';
 
 class ReviewDetailScreen extends StatefulWidget {
@@ -25,12 +25,20 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   bool _isLoadingComments = true;
   List<Map<String, dynamic>> _comments = [];
   bool _isLiked = false;
-
-  // ✅ 저장 상태
   bool _isSaved = false;
+  bool _isReported = false;
 
   final Color _primaryColor = const Color(0xFFC87CFF);
   final Color _backgroundColor = const Color(0xFFFFFDF9);
+
+  // ✅ 신고 사유 리스트 정의
+  final List<String> _reportReasons = [
+    "비방 및 불건전한 내용 (욕설, 비방, 비하, 선정성, 음담패설)",
+    "부적절한 게시물 (도배, 허위사실 유포, 명예훼손, 저작권 침해)",
+    "개인정보 및 광고 (개인정보 노출, 광고/영업/홍보)",
+    "불법 행위 (불법 매크로, 사기, 관련 법령 위반, 대리 행위)",
+    "서비스 관련 (카테고리 오선택, 유효하지 않은 정보)",
+  ];
 
   @override
   void initState() {
@@ -38,7 +46,8 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     _checkOwnership();
     _fetchComments();
     _checkLikeStatus();
-    _checkSaveStatus(); // ✅ 저장 상태 확인
+    _checkSaveStatus();
+    _checkReportStatus();
   }
 
   @override
@@ -89,7 +98,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     if (mounted) setState(() => _isLiked = res != null);
   }
 
-  // ✅ 저장 상태 확인
   Future<void> _checkSaveStatus() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -108,7 +116,24 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // ✅ 저장 토글
+  Future<void> _checkReportStatus() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final res = await _supabase
+          .from('reports')
+          .select('id')
+          .eq('reported_content_id', widget.review.id)
+          .eq('reporter_id', userId)
+          .maybeSingle();
+
+      if (mounted) setState(() => _isReported = res != null);
+    } catch (e) {
+      // Ignore
+    }
+  }
+
   Future<void> _toggleSave() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
@@ -124,41 +149,104 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     try {
       if (next) {
         await _supabase.from('review_saves').upsert(
-          {
-            'user_id': userId,
-            'review_id': widget.review.id,
-          },
+          {'user_id': userId, 'review_id': widget.review.id},
           onConflict: 'user_id,review_id',
         );
       } else {
-        await _supabase
-            .from('review_saves')
-            .delete()
-            .eq('user_id', userId)
-            .eq('review_id', widget.review.id);
+        await _supabase.from('review_saves').delete().eq('user_id', userId).eq('review_id', widget.review.id);
       }
     } catch (e) {
       if (mounted) setState(() => _isSaved = !next);
-      debugPrint('저장 토글 실패: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("저장 처리 중 오류가 발생했습니다.")));
       }
     }
   }
 
-  // ✅ 좋아요 토글
   Future<void> _toggleLike() async {
     try {
-      // UI 즉시 반영 (Optimistic)
       setState(() => _isLiked = !_isLiked);
-
-      // 서버 요청
       await ReviewService.toggleLike(widget.review.id);
     } catch (e) {
-      // 실패시 롤백
       if (mounted) {
         setState(() => _isLiked = !_isLiked);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("오류가 발생했습니다.")));
+      }
+    }
+  }
+
+  // ✅ 신고 버튼 클릭 시 호출 (모달 띄우기)
+  void _onReportPressed() {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
+      return;
+    }
+
+    if (_isReported) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("이미 신고한 리뷰입니다.")));
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 24, 20, 10),
+                child: Text("신고 사유 선택", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text("신고 사유에 해당하는 항목을 선택해주세요.", style: TextStyle(fontSize: 13, color: Colors.grey)),
+              ),
+              const SizedBox(height: 10),
+              // ✅ 사유 리스트 렌더링
+              ..._reportReasons.map((reason) => ListTile(
+                title: Text(reason, style: const TextStyle(fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(context); // 모달 닫기
+                  _submitReport(reason);  // 신고 전송
+                },
+              )),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ✅ 실제 신고 전송 로직
+  Future<void> _submitReport(String reason) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    setState(() => _isReported = true);
+
+    try {
+      await _supabase.from('reports').insert({
+        'reporter_id': userId,
+        'reported_content_id': widget.review.id,
+        'content_type': 'review',
+        'reason': reason, // 선택한 사유 저장
+        'status': 'pending',
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("신고가 접수되었습니다. 24시간 내에 검토됩니다.")));
+      }
+    } catch (e) {
+      debugPrint("신고 전송 실패: $e");
+      if (mounted) setState(() => _isReported = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("신고 전송 실패: $e")));
       }
     }
   }
@@ -188,7 +276,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // ✅ 리뷰 삭제: 서버에서 지워질 때까지 기다렸다가 pop
   Future<void> _onDeletePressed() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -207,7 +294,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
         await ReviewService.deleteReview(widget.review.id);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("리뷰가 삭제되었습니다.")));
-          // true를 반환해야 목록 화면(RankingScreen)에서 새로고침함
           Navigator.pop(context, true);
         }
       } catch (e) {
@@ -216,20 +302,16 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // ✅ 리뷰 수정: 수정 완료 후 돌아오면 갱신
   void _onEditPressed() async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => WriteReviewScreen(
-          reviewToEdit: widget.review,
-        ),
+        builder: (context) => WriteReviewScreen(reviewToEdit: widget.review),
       ),
     );
 
-    // 수정 화면에서 true를 들고 돌아왔다면 (수정 성공)
     if (result == true && mounted) {
-      Navigator.pop(context, true); // 상세화면을 닫고 목록을 새로고침
+      Navigator.pop(context, true);
     }
   }
 
@@ -255,16 +337,8 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
         iconTheme: const IconThemeData(color: Colors.black),
         actions: _isOwner
             ? [
-          IconButton(
-            icon: const Icon(Icons.edit, size: 20, color: Colors.grey),
-            onPressed: _onEditPressed,
-            tooltip: '수정',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-            onPressed: _onDeletePressed,
-            tooltip: '삭제',
-          ),
+          IconButton(icon: const Icon(Icons.edit, size: 20, color: Colors.grey), onPressed: _onEditPressed, tooltip: '수정'),
+          IconButton(icon: const Icon(Icons.delete, size: 20, color: Colors.red), onPressed: _onDeletePressed, tooltip: '삭제'),
         ]
             : null,
       ),
@@ -292,51 +366,86 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                     Wrap(spacing: 8.0, runSpacing: 8.0, children: widget.review.tags.map((tag) => _buildTag(tag)).toList()),
                   const SizedBox(height: 32),
 
-                  // ✅ 도움이 됐어요 + 저장하기 (나란히)
+                  // ✅ 버튼들
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      OutlinedButton.icon(
-                        onPressed: _toggleLike,
-                        icon: Icon(
-                          _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                          size: 18,
-                          color: _isLiked ? Colors.white : _primaryColor,
-                        ),
-                        label: Text(
-                          "도움이 됐어요",
-                          style: TextStyle(
+                      // 1. 도움이 됐어요
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _toggleLike,
+                          icon: Icon(
+                            _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                            size: 16,
                             color: _isLiked ? Colors.white : _primaryColor,
-                            fontWeight: FontWeight.bold,
                           ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: _isLiked ? _primaryColor : Colors.white,
-                          side: BorderSide(color: _primaryColor),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          label: Text(
+                            "도움",
+                            style: TextStyle(
+                              color: _isLiked ? Colors.white : _primaryColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: _isLiked ? _primaryColor : Colors.white,
+                            side: BorderSide(color: _primaryColor),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      OutlinedButton.icon(
-                        onPressed: _toggleSave,
-                        icon: Icon(
-                          _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                          size: 18,
-                          color: _isSaved ? Colors.white : _primaryColor,
-                        ),
-                        label: Text(
-                          _isSaved ? "저장됨" : "저장하기",
-                          style: TextStyle(
+                      const SizedBox(width: 8),
+
+                      // 2. 저장하기
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _toggleSave,
+                          icon: Icon(
+                            _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                            size: 16,
                             color: _isSaved ? Colors.white : _primaryColor,
-                            fontWeight: FontWeight.bold,
+                          ),
+                          label: Text(
+                            _isSaved ? "저장" : "저장",
+                            style: TextStyle(
+                              color: _isSaved ? Colors.white : _primaryColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: _isSaved ? _primaryColor : Colors.white,
+                            side: BorderSide(color: _primaryColor),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                           ),
                         ),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: _isSaved ? _primaryColor : Colors.white,
-                          side: BorderSide(color: _primaryColor),
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // 3. 신고하기
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _onReportPressed, // ✅ 사유 선택창 호출
+                          icon: Icon(
+                            Icons.campaign,
+                            size: 16,
+                            color: _isReported ? Colors.white : Colors.red,
+                          ),
+                          label: Text(
+                            _isReported ? "신고됨" : "신고",
+                            style: TextStyle(
+                              color: _isReported ? Colors.white : Colors.red,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: _isReported ? Colors.red : Colors.white,
+                            side: const BorderSide(color: Colors.red),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          ),
                         ),
                       ),
                     ],
@@ -363,7 +472,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                         profile?['nickname'] ?? '익명',
                         comment['content'] ?? '',
                         profile?['profile_image_url'],
-                        comment['user_id'], // ✅ [수정] user_id 전달
+                        comment['user_id'],
                       );
                     },
                   ),
@@ -418,16 +527,10 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   Widget _buildUserInfo() {
     return Row(
       children: [
-        // ✅ 프로필 클릭 시 피드로 이동
         InkWell(
           onTap: () {
             if (widget.review.userId != null) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => UserProfileScreen(userId: widget.review.userId!),
-                ),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: widget.review.userId!)));
             }
           },
           borderRadius: BorderRadius.circular(20),
@@ -517,14 +620,12 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     );
   }
 
-  // ✅ [수정] userId를 받아서 프로필 클릭 시 이동 기능 추가
   Widget _buildCommentItem(String user, String text, String? profileUrl, String? userId) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 프로필 사진 클릭
           InkWell(
             onTap: () {
               if (userId != null) {
@@ -549,7 +650,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 닉네임 클릭
                   InkWell(
                     onTap: () {
                       if (userId != null) {

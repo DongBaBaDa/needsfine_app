@@ -33,6 +33,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   bool _isLoading = true;
   bool _isFollowing = false;
 
+  // ✅ 차단 상태 변수
+  bool _iBlockedThem = false; // 내가 이 사람을 차단했나?
+  bool _theyBlockedMe = false; // 이 사람이 나를 차단했나?
+
   Map<String, int> _categoryStats = {};
   Map<int, int> _scoreDistribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
 
@@ -42,12 +46,55 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _fetchUserData();
+    _checkBlockStatusAndFetchData();
   }
 
-  Future<void> _fetchUserData() async {
+  // ✅ 차단 관계를 가장 먼저 확인하고 데이터를 로드하는 함수
+  Future<void> _checkBlockStatusAndFetchData() async {
+    setState(() => _isLoading = true);
     final myId = _supabase.auth.currentUser?.id;
 
+    // 1. 차단 관계 확인 (비로그인 상태면 패스)
+    if (myId != null && myId != widget.userId) {
+      try {
+        // A. 내가 상대를 차단했는지 확인
+        final myBlock = await _supabase
+            .from('blocks')
+            .select()
+            .eq('blocker_id', myId)
+            .eq('blocked_id', widget.userId)
+            .maybeSingle();
+
+        // B. 상대가 나를 차단했는지 확인
+        final theirBlock = await _supabase
+            .from('blocks')
+            .select()
+            .eq('blocker_id', widget.userId)
+            .eq('blocked_id', myId)
+            .maybeSingle();
+
+        if (mounted) {
+          setState(() {
+            _iBlockedThem = myBlock != null;
+            _theyBlockedMe = theirBlock != null;
+          });
+        }
+
+        // 차단 관계가 있다면 더 이상 데이터를 로드하지 않음
+        if (_iBlockedThem || _theyBlockedMe) {
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        }
+      } catch (e) {
+        debugPrint("차단 확인 실패: $e");
+      }
+    }
+
+    // 2. 차단 관계가 없을 때만 데이터 로드
+    await _fetchUserData(myId);
+  }
+
+  Future<void> _fetchUserData(String? myId) async {
     try {
       // 1. 프로필 정보
       final profileData = await _supabase.from('profiles').select().eq('id', widget.userId).single();
@@ -158,10 +205,120 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
     }
   }
 
+  // ✅ 차단하기 기능
+  Future<void> _blockUser() async {
+    final myId = _supabase.auth.currentUser?.id;
+    if (myId == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("차단하기"),
+        content: Text("${_userProfile?.nickname ?? '이 사용자'}를 차단하시겠습니까?\n차단하면 서로의 게시물을 볼 수 없습니다."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("취소")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("차단", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _supabase.from('blocks').insert({
+        'blocker_id': myId,
+        'blocked_id': widget.userId,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("사용자를 차단했습니다.")));
+        // 차단 후 즉시 화면 갱신 (차단 화면으로 전환)
+        _checkBlockStatusAndFetchData();
+      }
+    } catch (e) {
+      debugPrint("차단 실패: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("차단 처리 중 오류가 발생했습니다.")));
+      }
+    }
+  }
+
+  // ✅ 차단 해제 기능
+  Future<void> _unblockUser() async {
+    final myId = _supabase.auth.currentUser?.id;
+    if (myId == null) return;
+
+    try {
+      await _supabase.from('blocks').delete()
+          .eq('blocker_id', myId)
+          .eq('blocked_id', widget.userId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("차단이 해제되었습니다.")));
+        // 해제 후 데이터 다시 로드
+        _checkBlockStatusAndFetchData();
+      }
+    } catch (e) {
+      debugPrint("차단 해제 실패: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
+    // ✅ 1. 내가 차단한 경우
+    if (_iBlockedThem) {
+      return Scaffold(
+        appBar: AppBar(backgroundColor: Colors.white, elevation: 0, iconTheme: const IconThemeData(color: Colors.black)),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.block, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text("차단한 사용자입니다.", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text("차단을 해제해야 프로필을 볼 수 있습니다.", style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _unblockUser,
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                child: const Text("차단 해제", style: TextStyle(color: Colors.white)),
+              )
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ✅ 2. 상대방이 나를 차단한 경우
+    if (_theyBlockedMe) {
+      return Scaffold(
+        appBar: AppBar(backgroundColor: Colors.white, elevation: 0, iconTheme: const IconThemeData(color: Colors.black)),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.person_off_rounded, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text("차단 당한 사용자입니다.", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Text("이 사용자의 프로필을 볼 수 없습니다.", style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ✅ 3. 정상 프로필 화면 (기존 로직)
     if (_userProfile == null) return const Scaffold(body: Center(child: Text("유저 정보를 찾을 수 없습니다.")));
+
+    final myId = _supabase.auth.currentUser?.id;
+    final isMe = myId == widget.userId;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
@@ -170,6 +327,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
+        actions: [
+          if (!isMe)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'block') _blockUser();
+              },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                const PopupMenuItem<String>(
+                  value: 'block',
+                  child: Text('차단하기', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
+        ],
       ),
       body: CustomScrollView(
         slivers: [
@@ -226,13 +397,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                     Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: _filteredReviews[index])));
                   },
                   onTapStore: () {},
-                  onTapProfile: () {}, // 내 피드나 타인 피드 내에서는 클릭 방지
+                  onTapProfile: () {},
                 );
               },
               childCount: _filteredReviews.length,
             ),
           ),
-          // ✅ [수정] 스크롤 여백을 100으로 늘림 (기존 40)
           const SliverSizedBox(height: 100),
         ],
       ),
@@ -283,7 +453,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                 children: _userLists.map((list) {
                   return GestureDetector(
                     onTap: () {
-                      // 개별 리스트 상세로 바로 이동
                       Navigator.push(
                         context,
                         MaterialPageRoute(
