@@ -8,6 +8,8 @@ import 'package:needsfine_app/widgets/star_rating.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
 import 'package:needsfine_app/screens/write_review_screen.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart';
+// ✅ 비속어 필터 임포트
+import 'package:needsfine_app/core/profanity_filter.dart';
 
 class ReviewDetailScreen extends StatefulWidget {
   final Review review;
@@ -254,6 +256,17 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   Future<void> _submitComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
+
+    // ✅ [비속어 필터 적용]
+    if (ProfanityFilter.hasProfanity(text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("바른 말을 사용해주세요. 비속어가 감지되었습니다."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {

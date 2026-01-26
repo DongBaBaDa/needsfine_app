@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cached_network_image/cached_network_image.dart'; // ✅ 프로필 이미지 표시용
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 import 'package:needsfine_app/screens/email_login_screen.dart';
 import 'package:needsfine_app/screens/password_change_screen.dart';
 import 'package:needsfine_app/screens/terms_screen.dart';
@@ -21,7 +22,12 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
   String _phone = '';
   String _email = '';
   String _gender = '미설정';
+  String _birthDate = '미설정';
   bool _isNotificationOn = true;
+
+  // DB에 이미 저장되어 있는지 여부
+  bool _isGenderSet = false;
+  bool _isBirthDateSet = false;
 
   @override
   void initState() {
@@ -35,22 +41,42 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
     if (user != null) {
       _email = user.email ?? '';
 
+      // 메타데이터 확인 (소셜 로그인 등)
       final metaGender = user.userMetadata?['gender'];
       if (metaGender != null) {
         _gender = metaGender.toString();
+        _isGenderSet = true;
       }
 
       try {
+        // DB에서 데이터 가져오기
         final data = await _supabase
             .from('profiles')
-            .select('phone, gender')
+            .select('phone, gender, birth_date')
             .eq('id', user.id)
             .maybeSingle();
 
         if (data != null) {
           _phone = data['phone'] ?? '';
+
+          // 성별 데이터 확인
           if (data['gender'] != null && data['gender'] != '') {
             _gender = data['gender'];
+            _isGenderSet = true;
+          }
+
+          // 생년월일 데이터 확인
+          if (data['birth_date'] != null && data['birth_date'] != '') {
+            try {
+              DateTime parsedDate = DateTime.parse(data['birth_date']);
+              _birthDate = DateFormat('yyyy년 MM월 dd일').format(parsedDate);
+              _isBirthDateSet = true;
+            } catch (e) {
+              _birthDate = data['birth_date'];
+            }
+          } else {
+            _birthDate = "미설정";
+            _isBirthDateSet = false;
           }
         }
       } catch (e) {
@@ -96,6 +122,94 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text("회원 탈퇴 처리가 완료되었습니다.")));
       _logout();
+    }
+  }
+
+  // 성별 설정
+  Future<void> _updateGender() async {
+    if (_isGenderSet) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("성별은 한 번만 설정할 수 있습니다.")),
+      );
+      return;
+    }
+
+    String? selected = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text("성별 선택"),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, "남성"),
+            child: const Text("남성"),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, "여성"),
+            child: const Text("여성"),
+          ),
+        ],
+      ),
+    );
+
+    if (selected != null) {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      try {
+        await _supabase.from('profiles').update({'gender': selected}).eq('id', user.id);
+        setState(() {
+          _gender = selected;
+          _isGenderSet = true;
+        });
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("성별이 저장되었습니다.")));
+        }
+      } catch (e) {
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("저장 실패: $e")));
+      }
+    }
+  }
+
+  // 생년월일 설정
+  Future<void> _updateBirthDate() async {
+    if (_isBirthDateSet) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("생년월일은 한 번만 설정할 수 있습니다.")),
+      );
+      return;
+    }
+
+    final DateTime now = DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(2000, 1, 1),
+      firstDate: DateTime(1900),
+      lastDate: now,
+      helpText: "생년월일 선택 (한 번만 설정 가능)",
+    );
+
+    if (picked != null) {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      try {
+        final int age = now.year - picked.year + 1;
+
+        await _supabase.from('profiles').update({
+          'birth_date': picked.toIso8601String(),
+          'age': age,
+        }).eq('id', user.id);
+
+        setState(() {
+          _birthDate = DateFormat('yyyy년 MM월 dd일').format(picked);
+          _isBirthDateSet = true;
+        });
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("생년월일이 저장되었습니다.")));
+        }
+      } catch (e) {
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("저장 실패: $e")));
+      }
     }
   }
 
@@ -180,17 +294,16 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
     );
   }
 
-  // ✅ [수정] 차단한 사용자 관리 (리스트 로드 및 해제 기능)
   void _showBlockedUsers() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      isScrollControlled: true, // 전체 화면 활용 가능하게
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return const BlockedUsersView(); // ✅ 별도 위젯으로 분리하여 상태 관리
+        return const BlockedUsersView();
       },
     );
   }
@@ -231,11 +344,24 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
               showArrow: false,
             ),
             _buildDivider(),
+            // 성별
             _buildSettingsItem(
               icon: Icons.wc,
               label: l10n.gender,
-              value: _gender == '미설정' ? l10n.unspecified : _gender,
-              showArrow: false,
+              value: _gender == '미설정' ? "설정하기 (클릭)" : _gender,
+              isSet: _isGenderSet,
+              onTap: _updateGender,
+              showArrow: !_isGenderSet,
+            ),
+            _buildDivider(),
+            // 생년월일
+            _buildSettingsItem(
+              icon: Icons.calendar_today,
+              label: "생년월일",
+              value: _birthDate == '미설정' ? "설정하기 (클릭)" : _birthDate,
+              isSet: _isBirthDateSet,
+              onTap: _updateBirthDate,
+              showArrow: !_isBirthDateSet,
             ),
           ]),
 
@@ -268,7 +394,6 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
                       const PasswordChangeScreen())),
             ),
             _buildDivider(),
-            // ✅ 차단 사용자 관리 메뉴
             _buildSettingsItem(
               icon: Icons.block,
               label: "차단한 사용자 관리",
@@ -318,15 +443,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
               value: "",
               onTap: _showCommunityGuidelines,
             ),
-            _buildDivider(),
-            _buildSettingsItem(
-              icon: Icons.support_agent,
-              label: l10n.inquiry,
-              value: "",
-              onTap: () {
-                // 문의 화면 이동 로직 (생략 시 기본 팝업 등)
-              },
-            ),
+            // ❌ [삭제됨] 1:1 문의 버튼 제거
           ]),
 
           const SizedBox(height: 40),
@@ -397,7 +514,12 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
         required String label,
         required String value,
         VoidCallback? onTap,
-        bool showArrow = true}) {
+        bool showArrow = true,
+        bool isSet = false}) {
+
+    final valueColor = isSet ? Colors.grey : const Color(0xFF8A2BE2);
+    final valueWeight = isSet ? FontWeight.normal : FontWeight.bold;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -412,7 +534,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
             const SizedBox(width: 16),
             Expanded(
                 child: Text(value,
-                    style: const TextStyle(fontSize: 15, color: Colors.grey),
+                    style: TextStyle(fontSize: 15, color: valueColor, fontWeight: valueWeight),
                     textAlign: TextAlign.right,
                     overflow: TextOverflow.ellipsis)),
             if (showArrow) ...[
@@ -430,7 +552,6 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
       height: 1, indent: 50, endIndent: 0, color: Color(0xFFEEEEEE));
 }
 
-// ✅ [추가] 차단된 사용자 리스트 위젯 (Stateful)
 class BlockedUsersView extends StatefulWidget {
   const BlockedUsersView({super.key});
 
@@ -441,7 +562,7 @@ class BlockedUsersView extends StatefulWidget {
 class _BlockedUsersViewState extends State<BlockedUsersView> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
-  List<Map<String, dynamic>> _blockedUsers = []; // 차단된 유저 프로필 목록
+  List<Map<String, dynamic>> _blockedUsers = [];
 
   @override
   void initState() {
@@ -455,7 +576,6 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
 
     setState(() => _isLoading = true);
     try {
-      // 1. blocks 테이블에서 내가 차단한 ID 목록 가져오기
       final blocksData = await _supabase
           .from('blocks')
           .select('blocked_id')
@@ -465,8 +585,6 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
       final List<String> blockedIds = rawList.map((e) => e['blocked_id'].toString()).toList();
 
       if (blockedIds.isNotEmpty) {
-        // 2. profiles 테이블에서 해당 ID들의 정보(닉네임, 사진) 가져오기
-        // .in_() 대신 .filter()를 사용하여 버전 호환성 확보
         final profilesData = await _supabase
             .from('profiles')
             .select('id, nickname, profile_image_url')
@@ -498,7 +616,6 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
           .eq('blocker_id', myId)
           .eq('blocked_id', blockedId);
 
-      // 리스트에서 제거하여 UI 갱신
       setState(() {
         _blockedUsers.removeWhere((user) => user['id'] == blockedId);
       });
@@ -521,7 +638,7 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.7, // 높이 70%
+      height: MediaQuery.of(context).size.height * 0.7,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

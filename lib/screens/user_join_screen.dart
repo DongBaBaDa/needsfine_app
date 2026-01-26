@@ -5,8 +5,8 @@ import 'package:needsfine_app/data/korean_regions.dart';
 // 폴더 구조가 맞다면 에러가 사라집니다.
 import 'steps/step_email.dart';
 import 'steps/step_password.dart';
-import 'steps/step_birth.dart';
-import 'steps/step_gender.dart';
+// import 'steps/step_birth.dart'; // ❌ 삭제됨
+// import 'steps/step_gender.dart'; // ❌ 삭제됨
 import 'steps/step_region.dart';
 import 'steps/step_nickname.dart';
 import 'steps/step_success.dart';
@@ -35,8 +35,9 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
   List<String> _sidoList = [];
   List<String> _sigunguList = [];
 
-  DateTime _selectedDate = DateTime(2000, 1, 1);
-  String? _selectedGender;
+  // ❌ [삭제] 성별/생년월일 변수 제거됨
+  // DateTime? _selectedDate;
+  // String? _selectedGender;
 
   bool _isLoading = false;
   bool _isAuthCodeSent = false;
@@ -168,20 +169,19 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
 
     setState(() => _isLoading = true);
     try {
+      // 비밀번호 업데이트 (임시 비번 -> 실제 비번)
       await _supabase.auth.updateUser(
           UserAttributes(password: _passwordController.text.trim())
       );
 
-      final age = DateTime.now().year - _selectedDate.year + 1;
       final userId = _supabase.auth.currentUser!.id;
 
+      // ✅ [수정] 성별, 생년월일, 나이 업데이트 로직 제거 (InfoEditScreen에서 수행)
       await _supabase.from('profiles').update({
         'nickname': _nicknameController.text.trim(),
-        'age': age,
-        'gender': _selectedGender,
         'city': _selectedSido,
         'district': _selectedSigungu,
-        'birth_date': _selectedDate.toIso8601String(),
+        // gender, birth_date, age는 null 상태로 유지됨
       }).eq('id', userId);
 
       _nextPage(); // 성공 화면으로
@@ -235,27 +235,18 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
               isAuthCodeSent: _isAuthCodeSent,
               isEmailVerified: _isEmailVerified,
               isLoading: _isLoading,
-              onSendTap: _sendAuthCode,      // 수정됨: onSendAuthCode -> onSendTap
+              onSendTap: _sendAuthCode,
               onVerifyTap: _verifyAuthCode,
               onNext: _nextPage,
             ),
             StepPassword(
               passwordController: _passwordController,
-              confirmController: _confirmPasswordController, // 수정됨: confirmPasswordController -> confirmController
+              confirmController: _confirmPasswordController,
               pwMessage: _passwordValidationMessage,
               confirmMessage: _confirmPasswordMessage,
               onNext: _nextPage,
             ),
-            StepBirth(
-              selectedDate: _selectedDate,
-              onDateChanged: (date) => setState(() => _selectedDate = date),
-              onNext: _nextPage, // 수정됨: 누락된 onNext 추가
-            ),
-            StepGender(
-              selectedGender: _selectedGender,
-              onGenderChanged: (val) => setState(() => _selectedGender = val), // 수정됨: onGenderSelected -> onGenderChanged
-              onNext: _nextPage,
-            ),
+            // ❌ [삭제] StepBirth, StepGender 제거됨
             StepRegion(
               sidoList: _sidoList,
               sigunguList: _sigunguList,

@@ -1,0 +1,64 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:crypto/crypto.dart';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+
+class AppleLoginService {
+  final SupabaseClient supabase = Supabase.instance.client;
+
+  /// Apple 로그인 메인 함수
+  /// iOS(Native)와 Android(OAuth) 분기 처리
+  Future<AuthResponse> signInWithApple() async {
+    // iOS의 경우 Native UI 사용 (권장)
+    if (Platform.isIOS) {
+      return _signInWithAppleIOS();
+    }
+    // Android의 경우 웹 기반 OAuth 사용
+    else {
+      return _signInWithAppleAndroid();
+    }
+  }
+
+  /// [iOS] Native Sign in with Apple
+  /// Nonce를 생성하여 보안을 강화하고 Apple 서버로부터 Identity Token을 받습니다.
+  Future<AuthResponse> _signInWithAppleIOS() async {
+    // 1. Nonce 생성 (보안을 위한 난수)
+    final rawNonce = supabase.auth.generateRawNonce();
+    final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+    // 2. iOS Native Apple 로그인 요청
+    final credential = await SignInWithApple.getAppleIDCredential(
+      scopes: [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+      nonce: hashedNonce, // Supabase에 검증할 해시된 Nonce 전달
+    );
+
+    // 3. 발급받은 ID Token을 Supabase로 전달하여 로그인 처리
+    if (credential.identityToken == null) {
+      throw const AuthException('Apple Identity Token not found.');
+    }
+
+    // *중요*: 이름 정보는 최초 로그인 시에만 Apple이 줍니다.
+    // Supabase Auth에 메타데이터로 저장하거나 별도 DB에 업데이트해야 합니다.
+    return supabase.auth.signInWithIdToken(
+      provider: OAuthProvider.apple,
+      idToken: credential.identityToken!,
+      nonce: rawNonce, // 해시되지 않은 원본 Nonce 전달
+      accessToken: credential.authorizationCode, // (선택) Revoke 등에 필요할 수 있음
+    );
+  }
+
+  /// [Android] Web OAuth Sign in with Apple
+  /// Supabase Dashboard에서 설정한 Redirect URL을 통해 웹뷰로 로그인합니다.
+  Future<AuthResponse> _signInWithAppleAndroid() async {
+    // Android는 딥링크 설정이 필요합니다 (Supabase Dashboard > Auth > URL Configuration)
+    return supabase.auth.signInWithOAuth(
+      OAuthProvider.apple,
+      redirectTo: 'my-app-scheme://login-callback', // 설정한 딥링크 스키마
+    );
+  }
+}

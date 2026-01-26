@@ -1,6 +1,9 @@
+// lib/screens/inquiry_write_screen.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
+// ✅ 비속어 필터 임포트
+import 'package:needsfine_app/core/profanity_filter.dart';
 
 class InquiryWriteScreen extends StatefulWidget {
   const InquiryWriteScreen({super.key});
@@ -28,6 +31,17 @@ class _InquiryWriteScreenState extends State<InquiryWriteScreen> {
   Future<void> _submitInquiry() async {
     if (_contentController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("내용을 입력해주세요.")));
+      return;
+    }
+
+    // ✅ [비속어 필터 적용]
+    if (ProfanityFilter.hasProfanity(_contentController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("문의 내용에 부적절한 단어가 포함되어 있습니다."),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 

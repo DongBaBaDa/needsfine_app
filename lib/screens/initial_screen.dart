@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+// import 'package:crypto/crypto.dart'; // [심사 대비] 주석 처리
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+// import 'package:sign_in_with_apple/sign_in_with_apple.dart'; // [심사 대비] 주석 처리
 import 'package:needsfine_app/screens/signup/user_join_screen.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
 import 'package:needsfine_app/screens/email_login_screen.dart';
@@ -44,24 +48,81 @@ class _InitialScreenState extends State<InitialScreen> {
           MaterialPageRoute(builder: (context) => const MainShell()),
               (route) => false,
         );
+      } else {
+        // 프로필 미완성 시 처리 (필요시 구현)
       }
     } catch (e) {
       debugPrint("프로필 확인 중 에러: $e");
     }
   }
 
-  // --- 소셜 로그인 함수들 (임시) ---
+  // ------------------------------------------------------------------
+  // 🔒 [심사 대비] 소셜 로그인 로직 전체 주석 처리
+  // 나중에 기능을 완벽히 구현한 뒤 주석을 해제하세요.
+  // ------------------------------------------------------------------
+  /*
+  Future<void> _signInWithApple() async {
+    setState(() => _isLoading = true);
+    try {
+      if (Platform.isIOS) {
+        // 🍎 1. iOS: 네이티브 로그인 (Nonce 사용)
+        final rawNonce = _supabase.auth.generateRawNonce();
+        final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+        final credential = await SignInWithApple.getAppleIDCredential(
+          scopes: [
+            AppleIDAuthorizationScopes.email,
+            AppleIDAuthorizationScopes.fullName,
+          ],
+          nonce: hashedNonce,
+        );
+
+        if (credential.identityToken == null) {
+          throw const AuthException('Apple Identity Token이 없습니다.');
+        }
+
+        // Supabase 인증
+        final AuthResponse res = await _supabase.auth.signInWithIdToken(
+          provider: OAuthProvider.apple,
+          idToken: credential.identityToken!,
+          nonce: rawNonce,
+        );
+
+        if (res.user != null) {
+          if (mounted) _navigateIfProfileCompleted(res.user!.id);
+        }
+
+      } else {
+        // 🤖 2. Android: 웹 OAuth 방식 (Supabase 리다이렉트)
+        await _supabase.auth.signInWithOAuth(
+          OAuthProvider.apple,
+          redirectTo: 'my-app-scheme://login-callback',
+        );
+      }
+    } on AuthException catch (e) {
+      _showError('인증 오류: ${e.message}');
+    } catch (e) {
+      _showError('로그인 실패: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _signInWithNaver() async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('네이버 로그인 준비 중')));
+    _showError('네이버 로그인 준비 중입니다.');
   }
   Future<void> _signInWithKakao() async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('카카오 로그인 준비 중')));
+    _showError('카카오 로그인 준비 중입니다.');
   }
   Future<void> _signInWithGoogle() async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('구글 로그인 준비 중')));
+    _showError('구글 로그인 준비 중입니다.');
   }
-  Future<void> _signInWithApple() async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('애플 로그인 준비 중')));
+  */
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.black87),
+    );
   }
 
   @override
@@ -77,13 +138,11 @@ class _InitialScreenState extends State<InitialScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // 로고 이미지
+                // 로고
                 Image.asset(
                   'assets/images/icon.png',
                   height: 100,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(Icons.error, size: 100, color: Colors.grey);
-                  },
+                  errorBuilder: (ctx, err, stack) => const Icon(Icons.error, size: 100, color: Colors.grey),
                 ),
                 const SizedBox(height: 16),
 
@@ -98,76 +157,83 @@ class _InitialScreenState extends State<InitialScreen> {
                         color: Colors.grey,
                         letterSpacing: 1.2)),
 
-                const SizedBox(height: 80),
+                const SizedBox(height: 120), // 중앙 공백 확보
 
-                const Row(
-                  children: [
-                    Expanded(child: Divider(color: Color(0xFFEEEEEE))),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text("SNS 계정으로 시작하기",
-                          style: TextStyle(color: Colors.grey, fontSize: 13)),
+                // ------------------------------------------------
+                // 🔒 [심사 대비] 소셜 로그인 UI 숨김 (주석 처리)
+                // ------------------------------------------------
+                /*
+                      const Row(
+                        children: [
+                          Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: Text("SNS 계정으로 시작하기",
+                                style: TextStyle(color: Colors.grey, fontSize: 13)),
+                          ),
+                          Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+                        ],
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildSocialButton(
+                              'assets/images/naver_login.png',
+                              _signInWithNaver
+                          ),
+                          const SizedBox(width: 20),
+                          _buildSocialButton(
+                              'assets/images/kakao_logo.png',
+                              _signInWithKakao
+                          ),
+                          const SizedBox(width: 20),
+                          _buildSocialButton(
+                            'assets/images/google_g_logo.png',
+                            _signInWithGoogle,
+                          ),
+                          const SizedBox(width: 20),
+                          _buildSocialButton(
+                            'assets/images/apple_login.png',
+                            _signInWithApple,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 60),
+                      */
+                // ------------------------------------------------
+
+                // ✅ 이메일 로그인을 메인 버튼으로 변경 (심사 통과용 UI 개선)
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const EmailLoginScreen()),
+                      ).then((_) => _checkLoginStatus());
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kNeedsFinePurple,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
                     ),
-                    Expanded(child: Divider(color: Color(0xFFEEEEEE))),
-                  ],
+                    child: const Text('이메일로 로그인',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold)),
+                  ),
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 16),
 
-                // ✅ 4. 소셜 로그인 버튼들 (모두 동일한 함수 사용)
-                // 주의: google_g_logo.png와 apple_login.png도
-                // 네이버/카카오처럼 "완성된 버튼 이미지"로 교체해야 자연스럽습니다.
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildSocialButton(
-                        'assets/images/naver_login.png',
-                        _signInWithNaver
-                    ),
-                    const SizedBox(width: 20),
-
-                    _buildSocialButton(
-                        'assets/images/kakao_logo.png',
-                        _signInWithKakao
-                    ),
-                    const SizedBox(width: 20),
-
-                    _buildSocialButton(
-                      'assets/images/google_g_logo.png', // 완성된 버튼 이미지 필요
-                      _signInWithGoogle,
-                    ),
-                    const SizedBox(width: 20),
-
-                    _buildSocialButton(
-                      'assets/images/apple_login.png', // 완성된 버튼 이미지 필요
-                      _signInWithApple,
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 60),
-
-                // 이메일 로그인 / 회원가입
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('이메일로 가입하셨나요?', style: TextStyle(color: Colors.grey)),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const EmailLoginScreen()),
-                        ).then((_) => _checkLoginStatus());
-                      },
-                      child: const Text('로그인하기',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: kNeedsFinePurple)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                GestureDetector(
-                  onTap: () {
+                TextButton(
+                  onPressed: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const UserJoinScreen()),
@@ -176,7 +242,7 @@ class _InitialScreenState extends State<InitialScreen> {
                   child: const Text('이메일로 회원가입하기',
                       style: TextStyle(
                           color: Colors.grey,
-                          fontSize: 13,
+                          fontSize: 14,
                           decoration: TextDecoration.underline)),
                 ),
               ],
@@ -187,8 +253,8 @@ class _InitialScreenState extends State<InitialScreen> {
     );
   }
 
-  // ✅ 통일된 소셜 버튼 빌더 함수
-  // 모든 이미지를 버튼 크기에 맞춰 꽉 채웁니다 (BoxFit.cover).
+// 소셜 버튼 위젯도 일단 주석 처리 (사용하지 않음 경고 방지)
+/*
   Widget _buildSocialButton(String assetName, VoidCallback onTap) {
     return GestureDetector(
       onTap: _isLoading ? null : onTap,
@@ -205,7 +271,6 @@ class _InitialScreenState extends State<InitialScreen> {
             ),
           ],
         ),
-        // ClipOval로 이미지를 원형으로 자르고, cover로 꽉 채움
         child: ClipOval(
           child: Image.asset(
             assetName,
@@ -217,4 +282,5 @@ class _InitialScreenState extends State<InitialScreen> {
       ),
     );
   }
+  */
 }

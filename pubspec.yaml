@@ -12,6 +12,10 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  # ✅ [Added for Apple Login] - 위치 수정됨
+  sign_in_with_apple: ^6.1.0
+  crypto: ^3.0.3
+
   # --- [External Packages] ---
 
   # Image & Cache
@@ -80,5 +84,5 @@ flutter:
   assets:
     - assets/icon.png
     - assets/transparent.png
-    # 👇 이렇게 폴더 자체를 등록하면, 그 안의 모든 파일을 쓸 수 있습니다.
+    # 👇 폴더 자체를 등록 (이미지 경로 문제 해결)
     - assets/images/

@@ -15,8 +15,10 @@ import 'package:uuid/uuid.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
-
 import 'package:needsfine_app/core/search_trigger.dart';
+
+// ✅ 비속어 필터 임포트
+import 'package:needsfine_app/core/profanity_filter.dart';
 
 class WriteReviewScreen extends StatefulWidget {
   final String? initialStoreName;
@@ -207,6 +209,17 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       return;
     }
 
+    // ✅ [비속어 필터 적용]
+    if (ProfanityFilter.hasProfanity(_reviewTextController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("부적절한 단어가 포함되어 있어 등록할 수 없습니다."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -235,7 +248,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           content: _reviewTextController.text.trim(),
           rating: _rating,
           photoUrls: finalPhotoUrls,
-          tags: tags, // ✅ 태그 전달
+          tags: tags,
         );
       } else {
         AppData().addReview(
@@ -246,7 +259,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           lat: _selectedLat ?? 0.0,
           lng: _selectedLng ?? 0.0,
           photoUrls: finalPhotoUrls,
-          tags: tags, // ✅ 태그 전달
+          tags: tags,
         );
 
         await ReviewService.createReview(
@@ -257,7 +270,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           photoUrls: finalPhotoUrls,
           lat: _selectedLat,
           lng: _selectedLng,
-          tags: tags, // ✅ 태그 전달
+          tags: tags,
         );
       }
 
