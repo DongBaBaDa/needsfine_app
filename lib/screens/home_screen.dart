@@ -35,11 +35,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   List<String> _bannerList = [];
 
   int _currentBannerIndex = 0;
-  int _selectedCategoryIndex = 0; // 0:종류, 1:테마, 2:지역
+  // int _selectedCategoryIndex = 0; // 기존 탭 인덱스는 UI 변경으로 인해 사용하지 않지만 변수 유지
   final PageController _bannerController = PageController();
   Timer? _bannerTimer;
 
-  // ✅ [NEW] 지역 선택 상태
+  // ✅ 지역 선택 상태 (기존 변수 유지)
   String? _selectedProvince;
 
   // 디자인 토큰
@@ -123,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       if (mounted) {
         setState(() {
-          _bannerList = loadedBanners; // 배너 리스트 갱신
+          _bannerList = loadedBanners;
           _top100 = top100;
           _storeImageMap..clear()..addAll(imageMap);
         });
@@ -170,11 +170,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryPlaceholderScreen(title: title)));
   }
 
-  void _searchByRegion(String regionName) {
-    searchTrigger.value = SearchTarget(query: regionName);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$regionName(으)로 검색합니다.")));
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -208,26 +203,36 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             _buildSearchBar(),
             const SizedBox(height: 16),
 
-            _buildAdBanner(), // ✅ 0/0 처리 적용
+            _buildAdBanner(), // 0/0 처리 적용
             const SizedBox(height: 24),
 
-            _buildCategoryTabs(),
-            const SizedBox(height: 16),
-
-            AnimatedCrossFade(
-              firstChild: _buildCategoryGrid(l10n),
-
-              // ✅ [수정] 테마별/지역별 선택 시 '개발 중' 문구 표시
-              // 실제 기능(_buildThemeList, _buildLocationList)은 숨겨둠
-              secondChild: _buildPlaceholder(l10n),
-
-              crossFadeState: _selectedCategoryIndex == 0
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              duration: const Duration(milliseconds: 300),
+            // ✅ 1. 캡슐 모양의 빠른 태그 필터 (매거진 스타일)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: const Text(
+                "지금 인기있는 키워드 🔥",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+              ),
             ),
+            const SizedBox(height: 12),
+            _buildQuickTags(),
 
             const SizedBox(height: 32),
+
+            // ✅ 2. 테마 큐레이션 카드 (매거진 스타일)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: const Text(
+                "오늘의 추천 테마 🍽️",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildThemeCards(),
+
+            const SizedBox(height: 32),
+
+            // 주간 랭킹 섹션 유지
             _sectionTitle(
               l10n.weeklyRanking,
               trailing: TextButton(
@@ -242,6 +247,165 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             _buildWeeklyHorizontal(l10n),
           ],
         ),
+      ),
+    );
+  }
+
+  // ✅ [NEW] 캡슐 모양의 빠른 태그 필터 위젯
+  Widget _buildQuickTags() {
+    final tags = [
+      "#가성비갑", "#뷰맛집", "#혼밥환영", "#데이트코스",
+      "#디저트천국", "#해장추천", "#로컬맛집", "#인스타감성"
+    ];
+
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: tags.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          return GestureDetector(
+            onTap: () => _submitSearch(tags[index]),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20), // 둥근 모서리
+                border: Border.all(color: _brand.withOpacity(0.1)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Text(
+                tags[index],
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ✅ [NEW] 가로 스크롤 가능한 테마 추천 카드 위젯
+  Widget _buildThemeCards() {
+    final themes = [
+      {
+        "title": "실패 없는 소개팅",
+        "subtitle": "로맨틱한 분위기",
+        "icon": Icons.favorite_rounded,
+        "color": const Color(0xFFFFF0F5), // Lavender Blush
+        "iconColor": const Color(0xFFFF69B4),
+        "search": "데이트"
+      },
+      {
+        "title": "직장인 점심",
+        "subtitle": "빠르고 맛있는",
+        "icon": Icons.timer_rounded,
+        "color": const Color(0xFFF0F8FF), // Alice Blue
+        "iconColor": const Color(0xFF4682B4),
+        "search": "점심"
+      },
+      {
+        "title": "나 홀로 미식회",
+        "subtitle": "편안한 혼밥",
+        "icon": Icons.person_rounded,
+        "color": const Color(0xFFF5F5DC), // Beige
+        "iconColor": const Color(0xFFDAA520),
+        "search": "혼밥"
+      },
+      {
+        "title": "회식의 정석",
+        "subtitle": "넓은 좌석 완비",
+        "icon": Icons.groups_rounded,
+        "color": const Color(0xFFE6E6FA), // Lavender
+        "iconColor": const Color(0xFF9370DB),
+        "search": "회식"
+      },
+    ];
+
+    return SizedBox(
+      height: 140, // 카드 높이 설정
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: themes.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (context, index) {
+          final item = themes[index];
+          return GestureDetector(
+            onTap: () => _submitSearch(item['search'] as String),
+            child: Container(
+              width: 130,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: item['color'] as Color,
+                borderRadius: BorderRadius.circular(20), // 둥근 모서리
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      item['icon'] as IconData,
+                      color: item['iconColor'] as Color,
+                      size: 24,
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['subtitle'] as String,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item['title'] as String,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -290,7 +454,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   }
 
   Widget _buildAdBanner() {
-    // ✅ 배너가 없을 때 (0개) 처리
     bool isEmpty = _bannerList.isEmpty;
     int totalCount = isEmpty ? 0 : _bannerList.length;
     int displayIndex = isEmpty ? 0 : (_currentBannerIndex + 1);
@@ -306,7 +469,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20), // 둥근 모서리 통일
                 ),
                 child: Center(
                   child: Column(
@@ -328,13 +491,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 },
                 itemBuilder: (context, index) {
                   return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 0),
                     decoration: BoxDecoration(
                       color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20), // 둥근 모서리 통일
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
                       child: Image.network(
                         _bannerList[index],
                         fit: BoxFit.cover,
@@ -346,7 +508,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 },
               ),
 
-            // ✅ 인디케이터 (0/0)
             Positioned(
               bottom: 12,
               right: 12,
@@ -365,200 +526,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildCategoryTabs() {
-    final tabs = ["종류별", "테마별", "지역별"];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: List.generate(tabs.length, (index) {
-          final isSelected = _selectedCategoryIndex == index;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedCategoryIndex = index;
-                  if (index != 2) _selectedProvince = null;
-                });
-              },
-              child: Container(
-                margin: EdgeInsets.only(right: index == tabs.length - 1 ? 0 : 8),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected ? _brand : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: isSelected
-                      ? [BoxShadow(color: _brand.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
-                      : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  tabs[index],
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.black87,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildCategoryGrid(AppLocalizations l10n) {
-    final categories = [
-      (l10n.koreanFood, Icons.restaurant_menu),
-      (l10n.japaneseFood, Icons.set_meal),
-      (l10n.chineseFood, Icons.ramen_dining),
-      (l10n.westernFood, Icons.local_pizza),
-      (l10n.cafe, Icons.local_cafe),
-      ('술집', Icons.local_bar),
-      (l10n.dessert, Icons.icecream),
-      (l10n.fastFood, Icons.fastfood),
-      (l10n.snackFood, Icons.soup_kitchen),
-      ('기타', Icons.more_horiz),
-    ];
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: categories.map((c) {
-          return Padding(
-            padding: const EdgeInsets.only(right: 14),
-            child: _CategoryChip(
-              label: c.$1,
-              icon: c.$2,
-              onTap: () => _goToCategory(c.$1),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  // ✅ [NEW] 개발 중 표시 위젯
-  Widget _buildPlaceholder(AppLocalizations l10n) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      alignment: Alignment.center,
-      child: Column(
-        children: [
-          Icon(Icons.construction_rounded, size: 40, color: Colors.grey[300]),
-          const SizedBox(height: 12),
-          Text(
-            l10n.developingMessage, // "현재 개발 중인 기능입니다."
-            style: TextStyle(color: Colors.grey[500], fontSize: 14, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ✅ [숨김 처리] 테마 리스트 (나중에 복구 시 secondChild에 사용)
-  Widget _buildThemeList() {
-    final themes = ["데이트 맛집", "가족 외식", "혼밥 추천", "회식 장소", "뷰 맛집"];
-    return SizedBox(
-      height: 50,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        scrollDirection: Axis.horizontal,
-        itemCount: themes.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          return ActionChip(
-            label: Text(themes[index]),
-            backgroundColor: Colors.white,
-            onPressed: () => _submitSearch(themes[index]),
-            side: BorderSide(color: Colors.grey.shade300),
-          );
-        },
-      ),
-    );
-  }
-
-  // ✅ [숨김 처리] 지역 리스트 (나중에 복구 시 secondChild에 사용)
-  Widget _buildLocationList() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: 50,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            itemCount: koreanRegions.keys.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final province = koreanRegions.keys.elementAt(index);
-              final isSelected = _selectedProvince == province;
-              return ChoiceChip(
-                label: Text(province),
-                selected: isSelected,
-                selectedColor: _brand.withOpacity(0.2),
-                labelStyle: TextStyle(
-                  color: isSelected ? _brand : Colors.black87,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-                onSelected: (selected) {
-                  setState(() {
-                    _selectedProvince = selected ? province : null;
-                  });
-                },
-                backgroundColor: Colors.white,
-                side: BorderSide(color: isSelected ? _brand : Colors.grey.shade300),
-              );
-            },
-          ),
-        ),
-
-        if (_selectedProvince != null) ...[
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.subdirectory_arrow_right, size: 16, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Text("$_selectedProvince 상세 지역", style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: koreanRegions[_selectedProvince]!.map((city) {
-                    return InkWell(
-                      onTap: () => _searchByRegion("$_selectedProvince $city"),
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(city, style: const TextStyle(fontSize: 13, color: Colors.black87)),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
-        ]
-      ],
     );
   }
 
@@ -590,60 +557,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             l10n: l10n,
           );
         },
-      ),
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
-  static const Color _brand = Color(0xFF8A2BE2);
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _CategoryChip({required this.label, required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        width: 84,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.black.withOpacity(0.06)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 14,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: _brand.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _brand.withOpacity(0.18)),
-              ),
-              child: Icon(icon, color: Colors.black87, size: 22),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black87),
-            ),
-          ],
-        ),
       ),
     );
   }

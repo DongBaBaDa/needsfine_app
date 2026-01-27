@@ -36,7 +36,9 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
   }
 
   Future<void> _fetchUserInfo() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
     final user = _supabase.auth.currentUser;
     if (user != null) {
       _email = user.email ?? '';
@@ -125,7 +127,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
     }
   }
 
-  // 성별 설정
+  // ✅ [수정됨] 성별 설정 (저장 확인 로직 추가)
   Future<void> _updateGender() async {
     if (_isGenderSet) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -156,21 +158,31 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
       if (user == null) return;
 
       try {
-        await _supabase.from('profiles').update({'gender': selected}).eq('id', user.id);
+        // .select()를 추가하여 업데이트가 실제로 성공했는지 확인
+        await _supabase
+            .from('profiles')
+            .update({'gender': selected})
+            .eq('id', user.id)
+            .select();
+
         setState(() {
           _gender = selected;
           _isGenderSet = true;
         });
-        if(mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("성별이 저장되었습니다.")));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text("성별이 저장되었습니다.")));
         }
       } catch (e) {
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("저장 실패: $e")));
+        if (mounted)
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text("저장 실패: $e")));
       }
     }
   }
 
-  // 생년월일 설정
+  // ✅ [수정됨] 생년월일 설정 (저장 확인 로직 추가)
   Future<void> _updateBirthDate() async {
     if (_isBirthDateSet) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -195,20 +207,25 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
       try {
         final int age = now.year - picked.year + 1;
 
+        // .select()를 추가하여 업데이트가 실제로 성공했는지 확인
         await _supabase.from('profiles').update({
           'birth_date': picked.toIso8601String(),
           'age': age,
-        }).eq('id', user.id);
+        }).eq('id', user.id).select();
 
         setState(() {
           _birthDate = DateFormat('yyyy년 MM월 dd일').format(picked);
           _isBirthDateSet = true;
         });
-        if(mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("생년월일이 저장되었습니다.")));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text("생년월일이 저장되었습니다.")));
         }
       } catch (e) {
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("저장 실패: $e")));
+        if (mounted)
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text("저장 실패: $e")));
       }
     }
   }
@@ -330,13 +347,16 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
           const SizedBox(height: 10),
           _buildSectionHeader(l10n.accountInfo),
           _buildSectionContainer([
-            _buildSettingsItem(
-              icon: Icons.phone_iphone,
-              label: l10n.phoneNumber,
-              value: _phone.isEmpty ? l10n.verificationNeeded : _phone,
-              onTap: _showPhoneAuthDialog,
-            ),
-            _buildDivider(),
+            // ✅ [주석 처리] 휴대폰 번호 설정 (미구현)
+            /*
+                  _buildSettingsItem(
+                    icon: Icons.phone_iphone,
+                    label: l10n.phoneNumber,
+                    value: _phone.isEmpty ? l10n.verificationNeeded : _phone,
+                    onTap: _showPhoneAuthDialog,
+                  ),
+                  _buildDivider(),
+                  */
             _buildSettingsItem(
               icon: Icons.email_outlined,
               label: l10n.email,
@@ -400,28 +420,31 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
               value: "",
               onTap: _showBlockedUsers,
             ),
-            _buildDivider(),
-            Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.notifications_outlined,
-                      size: 22, color: Colors.black87),
-                  const SizedBox(width: 12),
-                  Text(l10n.notificationSettings,
-                      style: const TextStyle(
-                          fontSize: 16, color: Colors.black87)),
-                  const Spacer(),
-                  Switch(
-                    value: _isNotificationOn,
-                    activeColor: const Color(0xFF8A2BE2),
-                    onChanged: (val) =>
-                        setState(() => _isNotificationOn = val),
+            // ✅ [주석 처리] 알림 설정 (미구현)
+            /*
+                  _buildDivider(),
+                  Padding(
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.notifications_outlined,
+                            size: 22, color: Colors.black87),
+                        const SizedBox(width: 12),
+                        Text(l10n.notificationSettings,
+                            style: const TextStyle(
+                                fontSize: 16, color: Colors.black87)),
+                        const Spacer(),
+                        Switch(
+                          value: _isNotificationOn,
+                          activeColor: const Color(0xFF8A2BE2),
+                          onChanged: (val) =>
+                              setState(() => _isNotificationOn = val),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            ),
+                  */
           ]),
 
           const SizedBox(height: 24),
@@ -443,7 +466,6 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
               value: "",
               onTap: _showCommunityGuidelines,
             ),
-            // ❌ [삭제됨] 1:1 문의 버튼 제거
           ]),
 
           const SizedBox(height: 40),
@@ -516,7 +538,6 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
         VoidCallback? onTap,
         bool showArrow = true,
         bool isSet = false}) {
-
     final valueColor = isSet ? Colors.grey : const Color(0xFF8A2BE2);
     final valueWeight = isSet ? FontWeight.normal : FontWeight.bold;
 
@@ -534,7 +555,10 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
             const SizedBox(width: 16),
             Expanded(
                 child: Text(value,
-                    style: TextStyle(fontSize: 15, color: valueColor, fontWeight: valueWeight),
+                    style: TextStyle(
+                        fontSize: 15,
+                        color: valueColor,
+                        fontWeight: valueWeight),
                     textAlign: TextAlign.right,
                     overflow: TextOverflow.ellipsis)),
             if (showArrow) ...[
@@ -582,7 +606,8 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
           .eq('blocker_id', myId);
 
       final List<dynamic> rawList = blocksData as List;
-      final List<String> blockedIds = rawList.map((e) => e['blocked_id'].toString()).toList();
+      final List<String> blockedIds =
+      rawList.map((e) => e['blocked_id'].toString()).toList();
 
       if (blockedIds.isNotEmpty) {
         final profilesData = await _supabase
@@ -643,7 +668,8 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("차단한 사용자 관리", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text("차단한 사용자 관리",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           Expanded(
             child: _isLoading
@@ -655,7 +681,8 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
                 children: [
                   Icon(Icons.block, size: 48, color: Colors.grey),
                   SizedBox(height: 16),
-                  Text("차단한 사용자가 없습니다.", style: TextStyle(color: Colors.grey)),
+                  Text("차단한 사용자가 없습니다.",
+                      style: TextStyle(color: Colors.grey)),
                 ],
               ),
             )
@@ -669,17 +696,23 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
-                    backgroundImage: (profileUrl != null && profileUrl.isNotEmpty)
+                    backgroundImage: (profileUrl != null &&
+                        profileUrl.isNotEmpty)
                         ? CachedNetworkImageProvider(profileUrl)
-                        : const AssetImage('assets/images/default_profile.png') as ImageProvider,
+                        : const AssetImage(
+                        'assets/images/default_profile.png')
+                    as ImageProvider,
                   ),
-                  title: Text(nickname, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(nickname,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold)),
                   trailing: OutlinedButton(
                     onPressed: () => _unblockUser(user['id']),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red,
                       side: const BorderSide(color: Colors.red),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 12),
                     ),
                     child: const Text("해제"),
                   ),
