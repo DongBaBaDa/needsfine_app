@@ -30,10 +30,10 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   bool _isSaved = false;
   bool _isReported = false;
 
-  final Color _primaryColor = const Color(0xFFC87CFF);
-  final Color _backgroundColor = const Color(0xFFFFFDF9);
+  // 디자인 토큰
+  static const Color _brand = Color(0xFF8A2BE2);
+  static const Color _bg = Color(0xFFF2F2F7);
 
-  // ✅ 신고 사유 리스트 정의
   final List<String> _reportReasons = [
     "비방 및 불건전한 내용 (욕설, 비방, 비하, 선정성, 음담패설)",
     "부적절한 게시물 (도배, 허위사실 유포, 명예훼손, 저작권 침해)",
@@ -177,7 +177,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
-  // ✅ 신고 버튼 클릭 시 호출 (모달 띄우기)
   void _onReportPressed() {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
@@ -209,12 +208,11 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                 child: Text("신고 사유에 해당하는 항목을 선택해주세요.", style: TextStyle(fontSize: 13, color: Colors.grey)),
               ),
               const SizedBox(height: 10),
-              // ✅ 사유 리스트 렌더링
               ..._reportReasons.map((reason) => ListTile(
                 title: Text(reason, style: const TextStyle(fontSize: 14)),
                 onTap: () {
-                  Navigator.pop(context); // 모달 닫기
-                  _submitReport(reason);  // 신고 전송
+                  Navigator.pop(context);
+                  _submitReport(reason);
                 },
               )),
               const SizedBox(height: 20),
@@ -225,7 +223,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     );
   }
 
-  // ✅ 실제 신고 전송 로직
   Future<void> _submitReport(String reason) async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -237,7 +234,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
         'reporter_id': userId,
         'reported_content_id': widget.review.id,
         'content_type': 'review',
-        'reason': reason, // 선택한 사유 저장
+        'reason': reason,
         'status': 'pending',
       });
 
@@ -257,7 +254,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
 
-    // ✅ [비속어 필터 적용]
     if (ProfanityFilter.hasProfanity(text)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -342,16 +338,18 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      backgroundColor: Colors.white, // ✅ 전체 배경을 흰색으로 통일하여 분절감 제거
       appBar: AppBar(
-        title: const Text('리뷰 상세', style: TextStyle(color: Colors.black, fontSize: 16)),
-        backgroundColor: _backgroundColor,
+        backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: _isOwner
             ? [
-          IconButton(icon: const Icon(Icons.edit, size: 20, color: Colors.grey), onPressed: _onEditPressed, tooltip: '수정'),
-          IconButton(icon: const Icon(Icons.delete, size: 20, color: Colors.red), onPressed: _onDeletePressed, tooltip: '삭제'),
+          IconButton(icon: const Icon(Icons.edit_rounded, size: 22, color: Colors.grey), onPressed: _onEditPressed),
+          IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 22, color: Colors.red), onPressed: _onDeletePressed),
         ]
             : null,
       ),
@@ -359,137 +357,136 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
         children: [
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
+              physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildHeader(),
-                  const SizedBox(height: 24),
-                  _buildUserInfo(),
-                  const SizedBox(height: 12),
-                  _buildBadges(),
-                  const SizedBox(height: 32),
-                  Text(
-                    widget.review.reviewText,
-                    style: const TextStyle(fontSize: 16, height: 1.6, color: Colors.black87),
-                  ),
-                  const SizedBox(height: 32),
-                  if (widget.review.photoUrls.isNotEmpty) _buildPhotos(),
-                  if (widget.review.tags.isNotEmpty)
-                    Wrap(spacing: 8.0, runSpacing: 8.0, children: widget.review.tags.map((tag) => _buildTag(tag)).toList()),
-                  const SizedBox(height: 32),
-
-                  // ✅ 버튼들
-                  Row(
-                    children: [
-                      // 1. 도움이 됐어요
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _toggleLike,
-                          icon: Icon(
-                            _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                            size: 16,
-                            color: _isLiked ? Colors.white : _primaryColor,
-                          ),
-                          label: Text(
-                            "도움",
-                            style: TextStyle(
-                              color: _isLiked ? Colors.white : _primaryColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: _isLiked ? _primaryColor : Colors.white,
-                            side: BorderSide(color: _primaryColor),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // 2. 저장하기
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _toggleSave,
-                          icon: Icon(
-                            _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                            size: 16,
-                            color: _isSaved ? Colors.white : _primaryColor,
-                          ),
-                          label: Text(
-                            _isSaved ? "저장" : "저장",
-                            style: TextStyle(
-                              color: _isSaved ? Colors.white : _primaryColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: _isSaved ? _primaryColor : Colors.white,
-                            side: BorderSide(color: _primaryColor),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // 3. 신고하기
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _onReportPressed, // ✅ 사유 선택창 호출
-                          icon: Icon(
-                            Icons.campaign,
-                            size: 16,
-                            color: _isReported ? Colors.white : Colors.red,
-                          ),
-                          label: Text(
-                            _isReported ? "신고됨" : "신고",
-                            style: TextStyle(
-                              color: _isReported ? Colors.white : Colors.red,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: _isReported ? Colors.red : Colors.white,
-                            side: const BorderSide(color: Colors.red),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                          ),
-                        ),
-                      ),
-                    ],
+                  // 1. 매장 정보 헤더 (박스 없이 시원하게 배치)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildStoreHeader(),
                   ),
 
-                  const Divider(height: 64, thickness: 1, color: Color(0xFFEEEEEE)),
-                  Text("댓글 ${_comments.length}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  _isLoadingComments
-                      ? const Center(child: CircularProgressIndicator())
-                      : _comments.isEmpty
-                      ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Center(child: Text("첫 번째 댓글을 남겨보세요!", style: TextStyle(color: Colors.grey))),
-                  )
-                      : ListView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-                    shrinkWrap: true,
-                    itemCount: _comments.length,
-                    itemBuilder: (context, index) {
-                      final comment = _comments[index];
-                      final profile = comment['profiles'];
-                      return _buildCommentItem(
-                        profile?['nickname'] ?? '익명',
-                        comment['content'] ?? '',
-                        profile?['profile_image_url'],
-                        comment['user_id'],
-                      );
-                    },
+                  // 2. 구분선 (부드러운 분리)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+                    child: Divider(height: 1, thickness: 1, color: Colors.grey[200]),
                   ),
-                  const SizedBox(height: 60),
+
+                  // 3. 유저 정보 & 별점
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildUserInfo(),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // 4. 리뷰 내용 (텍스트 + 사진)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 니즈파인 배지
+                        _buildBadges(),
+                        const SizedBox(height: 20),
+
+                        // 본문 텍스트
+                        Text(
+                          widget.review.reviewText,
+                          style: const TextStyle(fontSize: 16, height: 1.6, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // 사진
+                        if (widget.review.photoUrls.isNotEmpty) _buildPhotos(),
+
+                        // 태그
+                        if (widget.review.tags.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          Wrap(
+                            spacing: 8.0,
+                            runSpacing: 8.0,
+                            children: widget.review.tags.map((tag) => _buildTag(tag)).toList(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // 5. 액션 버튼 (좋아요/저장/신고) - 구분선 위
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildActionButton(
+                          label: "도움돼요",
+                          isActive: _isLiked,
+                          icon: _isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined,
+                          activeColor: _brand,
+                          onTap: _toggleLike,
+                        ),
+                        _buildActionButton(
+                          label: "저장하기",
+                          isActive: _isSaved,
+                          icon: _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                          activeColor: _brand,
+                          onTap: _toggleSave,
+                        ),
+                        _buildActionButton(
+                          label: "신고",
+                          isActive: _isReported,
+                          icon: Icons.campaign_rounded,
+                          activeColor: Colors.red,
+                          onTap: _onReportPressed,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  // 6. 두꺼운 구분선 (섹션 분리)
+                  Container(height: 8, color: _bg),
+
+                  // 7. 댓글 섹션
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("댓글 ${_comments.length}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 16),
+                        _isLoadingComments
+                            ? const Center(child: CircularProgressIndicator(color: _brand))
+                            : _comments.isEmpty
+                            ? Container(
+                          padding: const EdgeInsets.symmetric(vertical: 30),
+                          child: const Center(child: Text("첫 댓글을 남겨보세요! 👋", style: TextStyle(color: Colors.grey))),
+                        )
+                            : ListView.separated(
+                          physics: const NeverScrollableScrollPhysics(),
+                          shrinkWrap: true,
+                          itemCount: _comments.length,
+                          separatorBuilder: (_, __) => const Divider(height: 24, thickness: 1, color: Color(0xFFEEEEEE)),
+                          itemBuilder: (context, index) {
+                            final comment = _comments[index];
+                            final profile = comment['profiles'];
+                            return _buildCommentItem(
+                              profile?['nickname'] ?? '익명',
+                              comment['content'] ?? '',
+                              profile?['profile_image_url'],
+                              comment['user_id'],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -500,14 +497,14 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     );
   }
 
-  Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: InkWell(
-            onTap: _navigateToMap,
+  // ✅ [수정] 박스 제거하고 타이틀 형태로 변경
+  Widget _buildStoreHeader() {
+    return GestureDetector(
+      onTap: _navigateToMap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -516,27 +513,38 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                     Flexible(
                       child: Text(
                         widget.review.storeName,
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'NotoSansKR'),
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.black, height: 1.2),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.chevron_right, size: 20, color: Colors.grey[400]),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.black54),
                   ],
                 ),
+                const SizedBox(height: 8),
                 if (widget.review.storeAddress != null)
-                  Text(widget.review.storeAddress!, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_rounded, size: 14, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          widget.review.storeAddress!,
+                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
-        ),
-        Text(
-          '${widget.review.createdAt.year}.${widget.review.createdAt.month}.${widget.review.createdAt.day}',
-          style: TextStyle(fontSize: 12, color: Colors.grey[400]),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
+  // ✅ [수정] 별점 표기 변경
   Widget _buildUserInfo() {
     return Row(
       children: [
@@ -546,53 +554,69 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
               Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: widget.review.userId!)));
             }
           },
-          borderRadius: BorderRadius.circular(20),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: Colors.grey[200],
-                backgroundImage: (widget.review.userProfileUrl != null && widget.review.userProfileUrl!.isNotEmpty)
-                    ? CachedNetworkImageProvider(widget.review.userProfileUrl!)
-                    : null,
-                child: (widget.review.userProfileUrl == null || widget.review.userProfileUrl!.isEmpty)
-                    ? const Icon(Icons.person, color: Colors.grey, size: 20)
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Text(widget.review.nickname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ],
+          child: CircleAvatar(
+            radius: 20,
+            backgroundColor: Colors.grey[100],
+            backgroundImage: (widget.review.userProfileUrl != null && widget.review.userProfileUrl!.isNotEmpty)
+                ? CachedNetworkImageProvider(widget.review.userProfileUrl!)
+                : null,
+            child: (widget.review.userProfileUrl == null || widget.review.userProfileUrl!.isEmpty)
+                ? const Icon(Icons.person, color: Colors.grey, size: 20)
+                : null,
           ),
         ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.review.nickname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 2),
+            Text(
+              '${widget.review.createdAt.year}.${widget.review.createdAt.month}.${widget.review.createdAt.day}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+          ],
+        ),
         const Spacer(),
-        StarRating(rating: widget.review.userRating, size: 20),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Text("사용자 별점", style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)), // ✅ 라벨 추가
+            const SizedBox(height: 2),
+            StarRating(rating: widget.review.userRating, size: 18),
+          ],
+        ),
       ],
     );
   }
 
+  // ✅ [수정] 니즈파인 한글 표기 적용
   Widget _buildBadges() {
-    return Row(children: [
-      _buildBadgeTag('니즈파인', widget.review.needsfineScore.toStringAsFixed(1), true),
-      const SizedBox(width: 8),
-      _buildBadgeTag('신뢰도', '${widget.review.trustLevel}%', false),
-    ]);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _buildBadgeTag('니즈파인', widget.review.needsfineScore.toStringAsFixed(1), _brand),
+        _buildBadgeTag('신뢰도', '${widget.review.trustLevel}%', Colors.blueGrey),
+      ],
+    );
   }
 
-  Widget _buildBadgeTag(String label, String value, bool isPrimary) {
+  Widget _buildBadgeTag(String label, String value, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isPrimary ? _primaryColor : Colors.white,
-        border: isPrimary ? null : Border.all(color: Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(12),
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.2)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: TextStyle(color: isPrimary ? Colors.white : Colors.grey[600], fontSize: 12)),
-          const SizedBox(width: 4),
-          Text(value, style: TextStyle(color: isPrimary ? Colors.white : Colors.black87, fontSize: 13, fontWeight: FontWeight.bold)),
-        ],
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(text: "$label ", style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+            TextSpan(text: value, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800)),
+          ],
+        ),
       ),
     );
   }
@@ -600,94 +624,113 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   Widget _buildTag(String tag) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: const Color(0xFFF0E9FF), borderRadius: BorderRadius.circular(20)),
-      child: Text(tag, style: TextStyle(color: Colors.grey[800], fontSize: 13)),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text("#$tag", style: TextStyle(color: Colors.grey[700], fontSize: 13, fontWeight: FontWeight.w500)),
     );
   }
 
   Widget _buildPhotos() {
-    return Column(
-      children: [
-        SizedBox(
-          height: 200,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: widget.review.photoUrls.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: CachedNetworkImage(
-                  imageUrl: widget.review.photoUrls[index],
-                  fit: BoxFit.cover,
-                  width: 200,
-                  placeholder: (context, url) => Container(color: Colors.grey[200]),
-                  errorWidget: (context, url, error) => const Icon(Icons.error),
-                ),
-              );
-            },
-          ),
+    return SizedBox(
+      height: 220,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: widget.review.photoUrls.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: CachedNetworkImage(
+              imageUrl: widget.review.photoUrls[index],
+              fit: BoxFit.cover,
+              width: 220,
+              placeholder: (context, url) => Container(color: Colors.grey[100]),
+              errorWidget: (context, url, error) => Container(color: Colors.grey[100], child: const Icon(Icons.error, color: Colors.grey)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required String label,
+    required bool isActive,
+    required IconData icon,
+    required Color activeColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(
+          children: [
+            Icon(icon, size: 24, color: isActive ? activeColor : Colors.grey[400]),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? activeColor : Colors.grey[500],
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 32),
-      ],
+      ),
     );
   }
 
   Widget _buildCommentItem(String user, String text, String? profileUrl, String? userId) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              if (userId != null) {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)));
-              }
-            },
-            child: CircleAvatar(
-              radius: 14,
-              backgroundColor: Colors.grey[200],
-              backgroundImage: profileUrl != null ? NetworkImage(profileUrl) : null,
-              child: profileUrl == null ? const Icon(Icons.person, size: 16, color: Colors.grey) : null,
-            ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () {
+            if (userId != null) {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)));
+            }
+          },
+          child: CircleAvatar(
+            radius: 16,
+            backgroundColor: Colors.grey[100],
+            backgroundImage: profileUrl != null ? NetworkImage(profileUrl) : null,
+            child: profileUrl == null ? const Icon(Icons.person, size: 18, color: Colors.grey) : null,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(12),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                onTap: () {
+                  if (userId != null) {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)));
+                  }
+                },
+                child: Text(user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  InkWell(
-                    onTap: () {
-                      if (userId != null) {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)));
-                      }
-                    },
-                    child: Text(user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87)),
-                ],
-              ),
-            ),
-          )
-        ],
-      ),
+              const SizedBox(height: 4),
+              Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4)),
+            ],
+          ),
+        )
+      ],
     );
   }
 
   Widget _buildCommentInput() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, -2))],
+        border: Border(top: BorderSide(color: Colors.grey[200]!)),
       ),
       child: SafeArea(
         child: Row(
@@ -695,20 +738,21 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
             Expanded(
               child: TextField(
                 controller: _commentController,
+                style: const TextStyle(fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: "댓글을 입력하세요...",
-                  hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+                  hintText: "따뜻한 댓글을 남겨주세요...",
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                   filled: true,
-                  fillColor: Colors.grey[100],
+                  fillColor: _bg,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
             IconButton(
               onPressed: _submitComment,
-              icon: Icon(Icons.send, color: _primaryColor),
+              icon: const Icon(Icons.send_rounded, color: _brand),
             ),
           ],
         ),

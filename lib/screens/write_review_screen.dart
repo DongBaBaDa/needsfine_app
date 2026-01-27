@@ -1,4 +1,3 @@
-// lib/screens/write_review_screen.dart
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -9,15 +8,12 @@ import 'package:needsfine_app/services/naver_search_service.dart';
 import 'package:needsfine_app/services/naver_map_service.dart';
 import 'package:needsfine_app/models/app_data.dart';
 import 'package:needsfine_app/models/ranking_models.dart' as model;
-import 'package:needsfine_app/widgets/feedback_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
-
-// ✅ 비속어 필터 임포트
 import 'package:needsfine_app/core/profanity_filter.dart';
 
 class WriteReviewScreen extends StatefulWidget {
@@ -66,6 +62,16 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   final List<String> _priceOptions = ["1만원 이하", "1~3만원", "3~5만원", "5만원 이상"];
   String _selectedPrice = "";
 
+  // ✅ 실시간 분석 상태
+  double _predictedScore = 0.0;
+  int _predictedTrust = 0;
+  String _softSuggestion = "가장 기억에 남는 맛은 무엇이었나요?"; // 기본 문구
+  bool _showAnalysis = false;
+
+  // 디자인 토큰
+  static const Color _brand = Color(0xFF8A2BE2);
+  static const Color _bg = Color(0xFFF2F2F7);
+
   @override
   void initState() {
     super.initState();
@@ -89,11 +95,12 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       _selectedLat = r.storeLat;
       _selectedLng = r.storeLng;
 
-      // 기존 태그 복원
       for (var tag in r.tags) {
         if (_purposeOptions.contains(tag)) _selectedPurpose = tag;
         if (_priceOptions.contains(tag)) _selectedPrice = tag;
       }
+
+      _analyzeRealTime();
 
     } else if (widget.initialStoreName != null && widget.initialAddress != null) {
       _selectedPlace = NaverPlace(
@@ -114,14 +121,36 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     super.dispose();
   }
 
-  Map<String, dynamic> get _calculatedScore {
-    if (_reviewTextController.text.trim().isEmpty || _rating == 0) return {};
+  // ✅ [NEW] 실시간 점수 계산 및 부드러운 제안 로직
+  void _analyzeRealTime() {
+    final text = _reviewTextController.text.trim();
+
+    // 1. 계산 로직 호출 (이미지 유무 포함)
     bool hasImages = _newImages.isNotEmpty || _existingImageUrls.isNotEmpty;
-    return ScoreCalculator.calculateNeedsFineScore(
-      _reviewTextController.text,
-      _rating,
-      hasImages,
-    );
+
+    // 점수가 0점이면 아직 평가 전이므로 기본값 처리
+    double inputRating = _rating == 0 ? 3.0 : _rating;
+
+    final result = ScoreCalculator.calculateNeedsFineScore(text, inputRating, hasImages);
+
+    setState(() {
+      _predictedScore = (result['needsfine_score'] as num?)?.toDouble() ?? 0.0;
+      _predictedTrust = (result['trust_level'] as num?)?.toInt() ?? 0;
+      _showAnalysis = text.length > 5; // 5자 이상일 때부터 분석판 보여줌
+
+      // 2. 부드러운 제안 (Soft Suggestion) 생성
+      if (text.length < 20) {
+        _softSuggestion = "첫 문장이 가장 중요해요! 어떤 곳이었나요? 😊";
+      } else if (!hasImages) {
+        _softSuggestion = "사진을 함께 올리면 신뢰도가 확 올라가요! 📸";
+      } else if (_predictedTrust < 50) {
+        _softSuggestion = "맛이나 분위기를 조금 더 구체적으로 묘사해보는 건 어떨까요? ✨";
+      } else if (_predictedTrust < 70) {
+        _softSuggestion = "매장 서비스나 주차 정보 같은 꿀팁도 도움이 돼요! 🚗";
+      } else {
+        _softSuggestion = "완벽해요! 이 리뷰는 많은 분들에게 도움이 될 거예요 💖";
+      }
+    });
   }
 
   void _showStoreSearchSheet() {
@@ -130,41 +159,55 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: Colors.transparent, // 투명 배경 후 내용물에 스타일 적용
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-          child: SizedBox(
-            height: 600,
-            child: _StoreSearchContent(
-              searchService: _naverSearchService,
-              onPlaceSelected: (place) async {
-                double? lat, lng;
-                try {
-                  final addr = place.roadAddress.isNotEmpty ? place.roadAddress : place.address;
-                  if (addr.isNotEmpty) {
-                    final response = await _geocodingService.searchAddress(addr);
-                    if (response.addresses.isNotEmpty) {
-                      lat = double.tryParse(response.addresses.first.y);
-                      lng = double.tryParse(response.addresses.first.x);
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF9F9F9), // 약간 밝은 회색 배경
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // 핸들바
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              Expanded(
+                child: _StoreSearchContent(
+                  searchService: _naverSearchService,
+                  onPlaceSelected: (place) async {
+                    double? lat, lng;
+                    try {
+                      final addr = place.roadAddress.isNotEmpty ? place.roadAddress : place.address;
+                      if (addr.isNotEmpty) {
+                        final response = await _geocodingService.searchAddress(addr);
+                        if (response.addresses.isNotEmpty) {
+                          lat = double.tryParse(response.addresses.first.y);
+                          lng = double.tryParse(response.addresses.first.x);
+                        }
+                      }
+                    } catch(e) {
+                      debugPrint("좌표 변환 실패: $e");
                     }
-                  }
-                } catch(e) {
-                  debugPrint("좌표 변환 실패: $e");
-                }
 
-                if (mounted) {
-                  setState(() {
-                    _selectedPlace = place;
-                    _selectedLat = lat;
-                    _selectedLng = lng;
-                    _isInitialData = false;
-                  });
-                }
-                Navigator.pop(context);
-              },
-            ),
+                    if (mounted) {
+                      setState(() {
+                        _selectedPlace = place;
+                        _selectedLat = lat;
+                        _selectedLng = lng;
+                        _isInitialData = false;
+                      });
+                    }
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -181,7 +224,10 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
     if (image != null) {
       File? compressedFile = await _compressImage(File(image.path));
-      if (compressedFile != null) setState(() => _newImages.add(compressedFile));
+      if (compressedFile != null) {
+        setState(() => _newImages.add(compressedFile));
+        _analyzeRealTime(); // 이미지 추가 시 재분석
+      }
     }
   }
 
@@ -209,13 +255,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       return;
     }
 
-    // ✅ [비속어 필터 적용]
     if (ProfanityFilter.hasProfanity(_reviewTextController.text)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("부적절한 단어가 포함되어 있어 등록할 수 없습니다."),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text("부적절한 단어가 포함되어 있어 등록할 수 없습니다."), backgroundColor: Colors.red),
       );
       return;
     }
@@ -236,8 +278,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       }
 
       final finalPhotoUrls = [..._existingImageUrls, ...uploadedPhotoUrls];
-
-      // ✅ 태그 리스트 생성
       List<String> tags = [];
       if (_selectedPurpose.isNotEmpty) tags.add(_selectedPurpose);
       if (_selectedPrice.isNotEmpty) tags.add(_selectedPrice);
@@ -251,17 +291,6 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           tags: tags,
         );
       } else {
-        AppData().addReview(
-          storeName: _selectedPlace!.cleanTitle,
-          content: _reviewTextController.text.trim(),
-          rating: _rating,
-          address: _selectedPlace!.roadAddress.isNotEmpty ? _selectedPlace!.roadAddress : _selectedPlace!.address,
-          lat: _selectedLat ?? 0.0,
-          lng: _selectedLng ?? 0.0,
-          photoUrls: finalPhotoUrls,
-          tags: tags,
-        );
-
         await ReviewService.createReview(
           storeName: _selectedPlace!.cleanTitle,
           storeAddress: _selectedPlace!.roadAddress.isNotEmpty ? _selectedPlace!.roadAddress : _selectedPlace!.address,
@@ -302,242 +331,377 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFFF0E9FF),
+      backgroundColor: _bg,
       appBar: AppBar(
-        title: Text(_isEditMode ? '리뷰 수정' : '리뷰 작성'),
-        backgroundColor: const Color(0xFF9C7CFF),
+        backgroundColor: _bg,
+        surfaceTintColor: _bg,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          _isEditMode ? '리뷰 수정' : '리뷰 작성',
+          style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black),
+        ),
+        iconTheme: const IconThemeData(color: Colors.black),
         actions: [
-          NotificationBadge(iconColor: Colors.white, onTap: () => Navigator.pushNamed(context, '/notifications')),
+          NotificationBadge(onTap: () => Navigator.pushNamed(context, '/notifications')),
+          const SizedBox(width: 16),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        physics: const BouncingScrollPhysics(),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('방문하신 곳이 맞나요?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-
+              // 1. 가게 선택
               if (_selectedPlace == null)
                 GestureDetector(
                   onTap: _showStoreSearchSheet,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF9C7CFF).withOpacity(0.5))),
-                    child: Row(
-                      children: const [Icon(Icons.search, color: Color(0xFF9C7CFF)), SizedBox(width: 10), Text('가게 이름 검색하기', style: TextStyle(color: Colors.grey, fontSize: 16))],
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.search_rounded, size: 32, color: _brand),
+                        const SizedBox(height: 12),
+                        const Text("방문한 맛집을 찾아주세요", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        const SizedBox(height: 4),
+                        Text("정확한 장소 선택이 신뢰도의 시작입니다", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                      ],
                     ),
                   ),
                 )
               else
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF9C7CFF), width: 1.5)),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
+                    ],
+                  ),
                   child: Row(
                     children: [
-                      Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFFF0E9FF), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.store, color: Color(0xFF9C7CFF))),
-                      const SizedBox(width: 12),
+                      Container(
+                        width: 48, height: 48,
+                        decoration: BoxDecoration(color: _brand.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                        child: const Icon(Icons.store_rounded, color: _brand),
+                      ),
+                      const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(_selectedPlace!.cleanTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text(_selectedPlace!.cleanTitle, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
                             const SizedBox(height: 4),
-                            Text(_selectedPlace!.roadAddress.isNotEmpty ? _selectedPlace!.roadAddress : _selectedPlace!.address, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text(
+                              _selectedPlace!.roadAddress.isNotEmpty ? _selectedPlace!.roadAddress : _selectedPlace!.address,
+                              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ],
                         ),
                       ),
                       if (!_isInitialData)
-                        IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => setState(() { _selectedPlace = null; _selectedLat = null; _selectedLng = null; }))
+                        IconButton(
+                          icon: Icon(Icons.close_rounded, color: Colors.grey[400]),
+                          onPressed: () => setState(() { _selectedPlace = null; _selectedLat = null; _selectedLng = null; }),
+                        )
                     ],
                   ),
                 ),
 
-              const SizedBox(height: 24),
-              const Text('리뷰를 작성해주세요', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
+              const SizedBox(height: 32),
 
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF9C7CFF).withOpacity(0.3)),
-                  boxShadow: [
-                    BoxShadow(color: const Color(0xFF9C7CFF).withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+              // 2. 별점 선택
+              Center(
+                child: Column(
+                  children: [
+                    const Text("전반적인 경험은 어떠셨나요?", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (index) {
+                        final starNum = index + 1;
+                        return GestureDetector(
+                          onTapDown: (details) {
+                            final dx = details.localPosition.dx;
+                            final width = 48.0;
+                            if (dx < width / 2) setState(() => _rating = starNum - 0.5); else setState(() => _rating = starNum.toDouble());
+                            _analyzeRealTime(); // 별점 변경 시 재분석
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              _rating >= starNum ? Icons.star_rounded : (_rating == starNum - 0.5 ? Icons.star_half_rounded : Icons.star_outline_rounded),
+                              size: 48,
+                              color: _rating >= starNum - 0.5 ? const Color(0xFFFFD700) : Colors.grey[300],
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    if (_rating > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          '${_rating.toStringAsFixed(1)}점',
+                          style: const TextStyle(fontSize: 18, color: Colors.black87, fontWeight: FontWeight.w800),
+                        ),
+                      ),
                   ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+
+              const SizedBox(height: 32),
+
+              // 3. 분위기/가격 칩
+              const Text("어떤 분위기였나요?", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
                   children: [
-                    Row(
-                      children: const [
-                        Icon(Icons.tips_and_updates, color: Color(0xFF9C7CFF), size: 20),
-                        SizedBox(width: 8),
-                        Text('리뷰 작성 꿀팁!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
+                    ..._purposeOptions.map((purpose) => _buildChip(purpose, _selectedPurpose == purpose, (val) {
+                      setState(() => _selectedPurpose = val ? purpose : "");
+                    })),
+                    Container(width: 1, height: 24, color: Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 12)),
+                    ..._priceOptions.map((price) => _buildChip(price, _selectedPrice == price, (val) {
+                      setState(() => _selectedPrice = val ? price : "");
+                    })),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // 4. 리뷰 입력 및 분석 대시보드
+              Column(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    const Text('• 🍽️ 어떤 메뉴가 가장 맛있었나요?', style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.5)),
-                    const Text('• ✨ 매장 분위기는 어땠나요? (데이트/회식/혼밥 등)', style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.5)),
-                    const Text('• 😊 직원분들은 친절하셨나요?', style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.5)),
-                    const Text('• 🚗 주차나 웨이팅 정보도 큰 도움이 돼요!', style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.5)),
-                    const SizedBox(height: 12),
-                    const Text('* 솔직하고 자세한 리뷰는 다른 사용자들에게 큰 도움이 됩니다.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: TextFormField(
+                            controller: _reviewTextController,
+                            maxLines: 8,
+                            maxLength: 500,
+                            style: const TextStyle(fontSize: 15, height: 1.6),
+                            decoration: InputDecoration(
+                              hintText: '메뉴의 맛, 매장의 분위기, 직원 서비스 등\n솔직한 경험을 공유해주세요.',
+                              hintStyle: TextStyle(color: Colors.grey[400]),
+                              border: InputBorder.none,
+                              counterText: "",
+                            ),
+                            onChanged: (_) => _analyzeRealTime(),
+                            validator: (value) => (value == null || value.trim().isEmpty) ? '내용을 입력해주세요' : null,
+                          ),
+                        ),
+
+                        // ✅ [NEW] 실시간 분석 카드 (입력창 하단에 붙음)
+                        if (_showAnalysis)
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: _brand.withOpacity(0.05),
+                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                              border: Border(top: BorderSide(color: _brand.withOpacity(0.1))),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    _buildScoreMetric("예상 점수", _predictedScore.toStringAsFixed(1), true),
+                                    Container(width: 1, height: 30, color: Colors.grey[300]),
+                                    _buildScoreMetric("신뢰도", "$_predictedTrust%", false),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: _brand.withOpacity(0.2)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.lightbulb_rounded, color: _brand, size: 20),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          _softSuggestion,
+                                          style: const TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // 5. 사진 첨부
+              SizedBox(
+                height: 100,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        width: 100,
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.grey[300]!, width: 1),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.camera_alt_rounded, color: Colors.grey),
+                            const SizedBox(height: 4),
+                            Text("${_newImages.length + _existingImageUrls.length}/5", style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    ..._existingImageUrls.asMap().entries.map((entry) => _buildPhotoItem(entry.value, true, entry.key)),
+                    ..._newImages.asMap().entries.map((entry) => _buildPhotoItem(entry.value, false, entry.key)),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
 
-              const Text("방문 목적", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _purposeOptions.map((purpose) {
-                    final isSelected = _selectedPurpose == purpose;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: ChoiceChip(
-                        label: Text(purpose),
-                        selected: isSelected,
-                        selectedColor: const Color(0xFF9C7CFF),
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedPurpose = selected ? purpose : "";
-                          });
-                        },
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              const Text("1인당 가격대", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _priceOptions.map((price) {
-                    final isSelected = _selectedPrice == price;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: ChoiceChip(
-                        label: Text(price),
-                        selected: isSelected,
-                        selectedColor: const Color(0xFF9C7CFF),
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedPrice = selected ? price : "";
-                          });
-                        },
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _reviewTextController,
-                maxLines: 6,
-                maxLength: 200,
-                decoration: InputDecoration(
-                  hintText: '경험을 자유롭게 공유해주세요 (최대 200자)',
-                  filled: true, fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: const Color(0xFF9C7CFF).withOpacity(0.3))),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF9C7CFF), width: 2)),
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (value) => (value == null || value.trim().isEmpty) ? '리뷰 내용을 입력해주세요' : null,
-              ),
-
-              const SizedBox(height: 24),
-              const Text('별점을 선택해주세요', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-
-              Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(5, (index) {
-                    final starNum = index + 1;
-                    return GestureDetector(
-                      onTapDown: (details) {
-                        final dx = details.localPosition.dx;
-                        final width = 40.0;
-                        if (dx < width / 2) setState(() => _rating = starNum - 0.5); else setState(() => _rating = starNum.toDouble());
-                      },
-                      child: Icon(_rating >= starNum ? Icons.star : (_rating == starNum - 0.5 ? Icons.star_half : Icons.star_border), size: 40, color: _rating >= starNum - 0.5 ? const Color(0xFF9C7CFF) : Colors.grey[300]),
-                    );
-                  }),
-                ),
-              ),
-              if (_rating > 0) Padding(padding: const EdgeInsets.only(top: 12.0), child: Center(child: Text('선택한 별점: ${_rating.toStringAsFixed(1)}점', style: const TextStyle(fontSize: 18, color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)))),
-              const SizedBox(height: 24),
-
-              ElevatedButton.icon(
-                  onPressed: _pickImage,
-                  icon: const Icon(Icons.camera_alt),
-                  label: Text('사진 첨부 (${_newImages.length + _existingImageUrls.length}/5)'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF9C7CFF), minimumSize: const Size(double.infinity, 48))
-              ),
-
-              if (_existingImageUrls.isNotEmpty || _newImages.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12.0),
-                  child: Wrap(
-                    spacing: 8, runSpacing: 8,
-                    children: [
-                      ..._existingImageUrls.asMap().entries.map((entry) {
-                        return Stack(children: [
-                          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(entry.value, width: 80, height: 80, fit: BoxFit.cover)),
-                          Positioned(top: 4, right: 4, child: GestureDetector(onTap: () => setState(() => _existingImageUrls.removeAt(entry.key)), child: Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 16)))),
-                        ]);
-                      }),
-                      ..._newImages.asMap().entries.map((entry) {
-                        return Stack(children: [
-                          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(entry.value, width: 80, height: 80, fit: BoxFit.cover)),
-                          Positioned(top: 4, right: 4, child: GestureDetector(onTap: () => setState(() => _newImages.removeAt(entry.key)), child: Container(padding: const EdgeInsets.all(4), decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 16)))),
-                        ]);
-                      }),
-                    ],
-                  ),
-                ),
-
-              const SizedBox(height: 24),
-              if (_calculatedScore.isNotEmpty) ...[
-                const Text('📊 실시간 분석', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                FeedbackIndicator(calculatedScore: _calculatedScore),
-                const SizedBox(height: 24)
-              ],
+              const SizedBox(height: 40),
 
               ElevatedButton(
                   onPressed: _isSubmitting ? null : _submitReview,
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9C7CFF), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _brand,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    minimumSize: const Size(double.infinity, 56),
+                    textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
                   child: _isSubmitting
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
                       : Text(_isEditMode ? '수정 완료' : '리뷰 등록하기')
               ),
-              const SizedBox(height: 100),
+              const SizedBox(height: 40),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _buildScoreMetric(String label, String value, bool isScore) {
+    return Column(
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            color: isScore ? _brand : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhotoItem(dynamic imageSource, bool isNetwork, int index) {
+    return Stack(
+      children: [
+        Container(
+          width: 100,
+          margin: const EdgeInsets.only(right: 12),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: isNetwork
+                ? Image.network(imageSource, fit: BoxFit.cover, height: 100)
+                : Image.file(imageSource, fit: BoxFit.cover, height: 100),
+          ),
+        ),
+        Positioned(
+          top: 4, right: 16,
+          child: GestureDetector(
+            onTap: () {
+              setState(() => isNetwork ? _existingImageUrls.removeAt(index) : _newImages.removeAt(index));
+              _analyzeRealTime(); // 사진 삭제 시 재분석
+            },
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+              child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChip(String label, bool isSelected, Function(bool) onSelected) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: FilterChip(
+        label: Text(label),
+        selected: isSelected,
+        showCheckmark: false,
+        onSelected: onSelected,
+        backgroundColor: Colors.white,
+        selectedColor: _brand,
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.white : Colors.black87,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          fontSize: 13,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.shade300),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      ),
+    );
+  }
 }
 
+// ✅ [NEW] 세련된 가게 검색 결과 UI
 class _StoreSearchContent extends StatefulWidget {
   final Function(NaverPlace) onPlaceSelected;
   final NaverSearchService searchService;
@@ -593,54 +757,97 @@ class _StoreSearchContentState extends State<_StoreSearchContent> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const SizedBox(height: 40),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6)],
-            ),
-            child: TextField(
-              controller: _controller,
-              autofocus: true,
-              onChanged: _onSearchChanged,
-              decoration: const InputDecoration(
-                hintText: '가게 이름 입력 (예: 스타벅스)',
-                prefixIcon: Icon(Icons.search, color: Color(0xFF9C7CFF)),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("어디를 다녀오셨나요?", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  onChanged: _onSearchChanged,
+                  decoration: const InputDecoration(
+                    hintText: '가게 이름 검색 (예: 스타벅스)',
+                    hintStyle: TextStyle(color: Colors.grey),
+                    prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF8A2BE2)),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 20),
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF8A2BE2)))
               : _results.isEmpty
               ? Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: const [
-                Icon(Icons.store_mall_directory, size: 48, color: Colors.grey),
+                Icon(Icons.store_mall_directory_rounded, size: 64, color: Colors.grey),
                 SizedBox(height: 16),
-                Text("검색 결과가 여기에 표시됩니다.", style: TextStyle(color: Colors.grey)),
+                Text("검색 결과가 없습니다.", style: TextStyle(color: Colors.grey, fontSize: 16)),
               ],
             ),
           )
               : ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             itemCount: _results.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final place = _results[index];
-              return ListTile(
-                title: Text(place.cleanTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(place.roadAddress.isNotEmpty ? place.roadAddress : place.address),
-                trailing: Text(place.category.split('>').last, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              return GestureDetector(
                 onTap: () => widget.onPlaceSelected(place),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF2F2F7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.place_rounded, color: Color(0xFF8A2BE2), size: 24),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(place.cleanTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 4),
+                            Text(
+                              place.roadAddress.isNotEmpty ? place.roadAddress : place.address,
+                              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(place.category.split('>').last, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                    ],
+                  ),
+                ),
               );
             },
           ),
