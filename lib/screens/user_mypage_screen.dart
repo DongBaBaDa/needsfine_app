@@ -17,12 +17,10 @@ import 'package:needsfine_app/screens/inquiry_write_screen.dart';
 import 'package:needsfine_app/screens/admin_dashboard_screen.dart';
 import 'package:needsfine_app/screens/my_lists_screen.dart';
 import 'package:needsfine_app/screens/banner_management_screen.dart';
-import 'package:needsfine_app/screens/report_management_screen.dart'; // ✅ 신고 관리 화면 임포트 (파일이 없으면 생성 필요)
+import 'package:needsfine_app/screens/report_management_screen.dart';
+import 'package:needsfine_app/screens/follow_list_screen.dart'; // ✅ 팔로우 리스트 추가
 
-// ✅ 알림 뱃지 위젯
 import 'package:needsfine_app/widgets/notification_badge.dart';
-
-// ✅ 다국어 패키지 임포트
 import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class UserMyPageScreen extends StatefulWidget {
@@ -42,8 +40,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   double _avgNeedsFineScore = 0.0;
   int _avgTrustLevel = 0;
 
-  // ✅ NeedsFine 디자인 컬러
-  final Color _backgroundColor = const Color(0xFFF2F2F7); // iOS 스타일 연회색 배경
+  final Color _backgroundColor = const Color(0xFFF2F2F7);
   final Color _cardColor = Colors.white;
   final Color _primaryColor = const Color(0xFF8A2BE2);
 
@@ -112,13 +109,12 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     }
   }
 
-  // ✅ [디자인 수정] 고객센터 모달 스타일 업그레이드
   void _showCustomerService(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent, // 배경 투명으로 해서 라운딩 처리
+      backgroundColor: Colors.transparent,
       builder: (context) => Container(
         decoration: const BoxDecoration(
           color: Colors.white,
@@ -201,15 +197,12 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 40),
           children: [
-            // 1. 프로필 헤더 (배경 흰색)
             Container(
                 color: Colors.white,
                 padding: const EdgeInsets.only(bottom: 28),
                 margin: const EdgeInsets.only(bottom: 16),
                 child: _buildProfileHeader(context, l10n)
             ),
-
-            // 2. 메뉴 섹션 (카드형 디자인)
             _buildMenuSection(l10n),
           ],
         ),
@@ -265,6 +258,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
           const SizedBox(height: 24),
 
+          // ✅ 팔로워/팔로잉 숫자 및 이동 로직
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
@@ -274,9 +268,31 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _FollowStat(label: l10n.follower, count: _userProfile!.followerCount, onTap: () {}),
+                _FollowStat(
+                    label: l10n.follower,
+                    count: _userProfile!.followerCount,
+                    // ✅ [수정] 내 아이디로 팔로워 리스트 이동
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => FollowListScreen(
+                        userId: _supabase.auth.currentUser!.id,
+                        nickname: _userProfile!.nickname,
+                        initialTabIndex: 0,
+                      )));
+                    }
+                ),
                 Container(height: 30, width: 1, color: Colors.grey[300]),
-                _FollowStat(label: l10n.following, count: _userProfile!.followingCount, onTap: () {}),
+                _FollowStat(
+                    label: l10n.following,
+                    count: _userProfile!.followingCount,
+                    // ✅ [수정] 내 아이디로 팔로잉 리스트 이동
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => FollowListScreen(
+                        userId: _supabase.auth.currentUser!.id,
+                        nickname: _userProfile!.nickname,
+                        initialTabIndex: 1,
+                      )));
+                    }
+                ),
               ],
             ),
           ),
@@ -325,13 +341,11 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     );
   }
 
-  // ✅ [디자인 수정] 섹션별 카드 형태로 변경
   Widget _buildMenuSection(AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
-          // 1. 나의 활동
           _MenuSectionCard(
             title: "나의 활동",
             children: [
@@ -361,7 +375,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
           const SizedBox(height: 20),
 
-          // 2. 고객 지원
           _MenuSectionCard(
             title: "고객 지원",
             children: [
@@ -382,7 +395,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           ),
           const SizedBox(height: 20),
 
-          // ✅ 3. 관리자 메뉴 (관리자일 때만 표시)
           if (_isAdmin)
             _MenuSectionCard(
               title: l10n.adminMenu,
@@ -395,14 +407,13 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()))
                 ),
                 _MenuItem(
-                    icon: Icons.view_carousel_rounded, // 배너 아이콘
+                    icon: Icons.view_carousel_rounded,
                     iconColor: Colors.orange,
                     title: "배너 관리",
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BannerManagementScreen()))
                 ),
-                // ✅ [추가] 신고 관리 메뉴
                 _MenuItem(
-                    icon: Icons.gavel_rounded, // 신고/제재 아이콘
+                    icon: Icons.gavel_rounded,
                     iconColor: Colors.redAccent,
                     title: "신고 관리",
                     isLast: true,
@@ -416,7 +427,6 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   }
 }
 
-// ✅ [추가] 모달 버튼 위젯
 class _ModalButton extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -450,7 +460,6 @@ class _ModalButton extends StatelessWidget {
   }
 }
 
-// ✅ [수정] 카드형 섹션 위젯
 class _MenuSectionCard extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -487,7 +496,6 @@ class _MenuSectionCard extends StatelessWidget {
   }
 }
 
-// ✅ [수정] 메뉴 아이템 스타일 개선
 class _MenuItem extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
@@ -511,7 +519,7 @@ class _MenuItem extends StatelessWidget {
         onTap: onTap,
         borderRadius: isLast
             ? const BorderRadius.vertical(bottom: Radius.circular(20))
-            : const BorderRadius.vertical(top: Radius.circular(20)), // 첫 번째 아이템 라운딩 처리는 컨테이너가 함
+            : const BorderRadius.vertical(top: Radius.circular(20)),
         child: Column(
           children: [
             Padding(

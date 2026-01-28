@@ -5,16 +5,18 @@ import 'package:needsfine_app/models/user_model.dart';
 import 'package:needsfine_app/screens/follow_list_screen.dart';
 import 'dart:io';
 
-// ✅ Review 모델 임포트 필수
+// ✅ Review 모델 임포트
 import 'package:needsfine_app/models/ranking_models.dart';
 
 class MyFeedScreen extends StatelessWidget {
+  // ✅ [수정] 팔로우 리스트 조회를 위해 userId 필드 추가
+  final String userId;
   final UserProfile userProfile;
-  // ✅ List<dynamic> -> List<Review>로 명확하게 타입 지정
   final List<Review> reviews;
 
   const MyFeedScreen({
     super.key,
+    required this.userId, // ✅ 필수 인자로 추가
     required this.userProfile,
     required this.reviews,
   });
@@ -22,26 +24,30 @@ class MyFeedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text("프로필"),
+        title: const Text("프로필", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_horiz),
+            icon: const Icon(Icons.more_horiz, color: Colors.black),
             onPressed: () => _showMoreOptions(context),
           ),
         ],
       ),
       body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildProfileHeader(context),
-            const Divider(thickness: 8, color: kNeedsFinePurpleLight),
+            const Divider(thickness: 8, color: Color(0xFFF2F2F7)), // 구분선 색상 조정
             _buildReviewSection(context),
           ],
         ),
@@ -49,7 +55,7 @@ class MyFeedScreen extends StatelessWidget {
     );
   }
 
-  // 1. 내 정보가 반영된 프로필 헤더
+  // 1. 프로필 헤더
   Widget _buildProfileHeader(BuildContext context) {
     ImageProvider profileImage;
     if (userProfile.imageFile != null) {
@@ -68,81 +74,127 @@ class MyFeedScreen extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 40,
-                backgroundColor: kNeedsFinePurpleLight,
+                backgroundColor: Colors.grey[200],
                 backgroundImage: profileImage,
               ),
               const SizedBox(width: 20),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(userProfile.nickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => _navigateToFollowList(context, 0),
-                        child: Text("팔로워 ${userProfile.followerCount}", style: const TextStyle(color: Colors.grey)),
-                      ),
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: () => _navigateToFollowList(context, 1),
-                        child: Text("팔로잉 ${userProfile.followingCount}", style: const TextStyle(color: Colors.grey)),
-                      ),
-                    ],
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userProfile.nickname,
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.black),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    // ✅ [수정] 터치 영역 확장을 위해 Row 전체에 이벤트 적용하거나 패딩 추가
+                    Row(
+                      children: [
+                        InkWell(
+                          onTap: () => _navigateToFollowList(context, 0),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                            child: RichText(
+                              text: TextSpan(
+                                style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                children: [
+                                  const TextSpan(text: "팔로워 "),
+                                  TextSpan(
+                                      text: "${userProfile.followerCount}",
+                                      style: const TextStyle(fontWeight: FontWeight.bold)
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        InkWell(
+                          onTap: () => _navigateToFollowList(context, 1),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                            child: RichText(
+                              text: TextSpan(
+                                style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                children: [
+                                  const TextSpan(text: "팔로잉 "),
+                                  TextSpan(
+                                      text: "${userProfile.followingCount}",
+                                      style: const TextStyle(fontWeight: FontWeight.bold)
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               )
             ],
           ),
           const SizedBox(height: 24),
 
-          // ✅ 실제 데이터가 있다면 연동 (현재는 하드코딩된 값 유지 혹은 계산된 값 전달 필요)
-          _buildInfoRow("평균 별점", "5.0", isStar: true),
-          const SizedBox(height: 14),
-          _buildInfoRow("신뢰도", "${userProfile.reliability}%", isReliability: true),
+          // ✅ [수정] 더미 데이터(평균 별점) 삭제함. 실제 데이터인 신뢰도만 표시.
+          Row(
+            children: [
+              // 신뢰도 (실제 데이터)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8A2BE2).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.verified_user_rounded, color: Color(0xFF8A2BE2), size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                        "신뢰도 ${userProfile.reliability}%",
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF8A2BE2))
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
 
           const SizedBox(height: 24),
+
+          // 팔로우/편집 버튼 (상황에 맞게 기능 연결 필요)
           ElevatedButton(
-            onPressed: () {},
+            onPressed: () {
+              // 본인 프로필이면 편집, 타인이면 팔로우 로직 (여기선 UI만 유지)
+            },
             style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
-              backgroundColor: kNeedsFinePurple,
+              minimumSize: const Size(double.infinity, 48),
+              backgroundColor: const Color(0xFF8A2BE2),
+              elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text("+ 팔로우", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+            child: const Text("프로필 편집", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
           ),
         ],
       ),
     );
   }
 
+  // ✅ [수정] userId를 정상적으로 전달하여 이동하도록 수정
   void _navigateToFollowList(BuildContext context, int tabIndex) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => FollowListScreen(
-          userId: "current_user_id", // 실제 ID 연동 필요 시 userProfile에 id 필드 추가 권장
+          userId: userId, // ✅ 상위에서 받아온 진짜 ID 사용
           nickname: userProfile.nickname,
           initialTabIndex: tabIndex,
         ),
       ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value, {bool isStar = false, bool isReliability = false}) {
-    return Row(
-      children: [
-        SizedBox(width: 80, child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 15))),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        if (isStar) ...[
-          const SizedBox(width: 6),
-          ...List.generate(5, (index) => const Icon(Icons.star, color: Colors.orange, size: 18)),
-        ],
-        if (isReliability) ...[
-          const SizedBox(width: 6),
-          const Icon(Icons.verified_user, color: kNeedsFinePurple, size: 18),
-        ]
-      ],
     );
   }
 
@@ -155,7 +207,7 @@ class MyFeedScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text("${userProfile.nickname} 님의 리뷰 ${reviews.length}개",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black)),
           ),
           const SizedBox(height: 20),
 
@@ -171,116 +223,138 @@ class MyFeedScreen extends StatelessWidget {
     );
   }
 
-  // ✅ [수정 핵심] dynamic -> Review 객체 사용으로 변경
   Widget _buildReviewCard(BuildContext context, Review review) {
-    // 날짜 포맷팅 (간단하게 구현)
-    final dateStr = "${review.createdAt.year}.${review.createdAt.month}.${review.createdAt.day}";
+    final dateStr = "${review.createdAt.year}.${review.createdAt.month.toString().padLeft(2,'0')}.${review.createdAt.day.toString().padLeft(2,'0')}";
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(color: kNeedsFinePurpleLight, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.restaurant, color: kNeedsFinePurple, size: 22),
-          ),
-          // ✅ review['key'] 대신 review.property 사용
-          title: Text(review.storeName, style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(review.storeAddress ?? "주소 정보 없음"),
-          onTap: () {},
-        ),
-
-        // 사진이 있는 경우 표시 (없으면 Placeholder 숨김 혹은 처리)
-        if (review.photoUrls.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: review.photoUrls.length > 4 ? 4 : review.photoUrls.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 4,
-                  crossAxisSpacing: 4,
+        InkWell(
+          onTap: () {
+            // 리뷰 상세 페이지로 이동하고 싶다면 여기에 연결
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. 가게 정보 헤더
+                Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFF2F2F7),
+                          borderRadius: BorderRadius.circular(12)
+                      ),
+                      child: const Icon(Icons.store_rounded, color: Colors.grey, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(review.storeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 2),
+                          Text(review.storeAddress ?? "주소 정보 없음", style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                itemBuilder: (context, index) {
-                  return Image.network(
-                    review.photoUrls[index],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
-                  );
-                },
-              ),
-            ),
-          )
-        else
-        // 사진 없으면 숨기거나 높이 0
-          const SizedBox.shrink(),
 
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.star, color: Colors.orange, size: 18),
-                  // ✅ 점수 데이터 연결
-                  Text(" ${review.userRating.toStringAsFixed(1)}  ·  ", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey),
-                  Text(" $dateStr ", style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                const SizedBox(height: 16),
+
+                // 2. 사진 (있을 경우)
+                if (review.photoUrls.isNotEmpty) ...[
+                  SizedBox(
+                    height: 100,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: review.photoUrls.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            review.photoUrls[index],
+                            width: 100, height: 100,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                                width: 100, height: 100, color: Colors.grey[200], child: const Icon(Icons.error)
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 ],
-              ),
-              const SizedBox(height: 12),
-              // ✅ 리뷰 내용 연결
-              Text(
-                review.reviewText,
-                style: const TextStyle(height: 1.5, fontSize: 15),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 24),
-            ],
+
+                // 3. 별점 및 날짜
+                Row(
+                  children: [
+                    const Icon(Icons.star_rounded, color: Color(0xFFFFB800), size: 18),
+                    const SizedBox(width: 4),
+                    Text(review.userRating.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(width: 8),
+                    Container(width: 1, height: 10, color: Colors.grey[300]),
+                    const SizedBox(width: 8),
+                    Text(dateStr, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // 4. 리뷰 내용
+                Text(
+                  review.reviewText,
+                  style: const TextStyle(height: 1.6, fontSize: 15, color: Colors.black87),
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ),
-        const Divider(height: 1, color: Color(0xFFEEEEEE)),
+        const Divider(height: 1, thickness: 1, color: Color(0xFFF2F2F7)),
       ],
     );
   }
 
-  Widget _buildPlaceholder() => Container(color: kNeedsFinePurpleLight, child: const Icon(Icons.image, color: Colors.white));
-
   void _showMoreOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(userProfile.nickname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                const SizedBox(height: 16),
-                _modalAction(context, "내 리뷰 숨기기", Colors.black87, Icons.visibility_off_outlined),
-                _modalAction(context, "내 피드 공유", kNeedsFinePurple, Icons.share_outlined),
-              ],
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(userProfile.nickname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 20),
+                  ListTile(
+                    leading: const Icon(Icons.visibility_off_outlined, color: Colors.black87),
+                    title: const Text("내 리뷰 숨기기", style: TextStyle(fontWeight: FontWeight.w600)),
+                    onTap: () => Navigator.pop(context),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.share_outlined, color: Color(0xFF8A2BE2)),
+                    title: const Text("내 피드 공유", style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF8A2BE2))),
+                    onTap: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _modalAction(BuildContext context, String title, Color color, IconData icon) {
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-      onTap: () => Navigator.pop(context),
     );
   }
 }

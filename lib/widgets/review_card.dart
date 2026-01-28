@@ -50,21 +50,13 @@ class ReviewCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
               children: [
-                GestureDetector(
-                  onTap: onTapStore,
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.store, color: Colors.grey),
-                  ),
-                ),
+                // ❌ [삭제됨] 매장 사진 박스 제거
+
+                // 텍스트 영역 (Expanded)
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    // ✅ [수정] 왼쪽 사진이 없으므로 왼쪽 여백을 없애고 오른쪽 여백만 유지
+                    padding: const EdgeInsets.only(right: 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

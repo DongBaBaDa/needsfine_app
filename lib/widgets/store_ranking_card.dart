@@ -6,7 +6,7 @@ import 'package:needsfine_app/l10n/app_localizations.dart'; // 다국어 패키�
 class StoreRankingCard extends StatelessWidget {
   final StoreRanking ranking;
   final String sortOption;
-  final String? imageUrl; // ✅ 이미지가 있는 경우를 위해 추가 (선택 사항)
+  final String? imageUrl;
 
   const StoreRankingCard({
     super.key,
@@ -19,20 +19,25 @@ class StoreRankingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    // 1. 순위별 메달 색상 설정
+    // 1. 순위별 색상 및 스타일 설정 (세련된 메탈릭 컬러)
     Color rankColor;
+    double rankSize;
     if (ranking.rank == 1) {
-      rankColor = const Color(0xFFFFD700); // Gold
+      rankColor = const Color(0xFFFFB800); // Vivid Gold
+      rankSize = 24.0;
     } else if (ranking.rank == 2) {
-      rankColor = const Color(0xFFC0C0C0); // Silver
+      rankColor = const Color(0xFFA0A0A0); // Deep Silver
+      rankSize = 22.0;
     } else if (ranking.rank == 3) {
-      rankColor = const Color(0xFFCD7F32); // Bronze
+      rankColor = const Color(0xFFA05F2D); // Deep Bronze
+      rankSize = 22.0;
     } else {
-      rankColor = Colors.grey[300]!;
+      rankColor = Colors.grey[400]!; // Light Grey
+      rankSize = 18.0;
     }
 
     return Container(
-      // ✅ 카드 디자인: 흰색 배경 + 둥근 모서리 + 그림자
+      // 카드 디자인: 흰색 배경 + 둥근 모서리 + 그림자
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       decoration: BoxDecoration(
@@ -40,58 +45,41 @@ class StoreRankingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.08),
+            color: Colors.grey.withOpacity(0.06),
             spreadRadius: 2,
             blurRadius: 10,
-            offset: const Offset(0, 2),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 1. [좌측] 순위
-          Container(
-            width: 24,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: rankColor,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              '${ranking.rank}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-
-          // 2. [좌측] 매장 아이콘 (이미지가 있으면 표시, 없으면 아이콘)
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F5F5),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: (imageUrl != null && imageUrl!.isNotEmpty)
-                ? ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.network(imageUrl!, fit: BoxFit.cover),
-            )
-                : const Icon(
-              Icons.store_outlined,
-              color: Colors.grey,
-              size: 28,
+          // 1. [좌측] 순위 (타이포그래피 스타일, 아이콘 제거됨)
+          SizedBox(
+            width: 32, // 숫자 너비 고정 (정렬 맞춤)
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // ❌ 아이콘 제거됨 (숫자만 깔끔하게 표시)
+                Text(
+                  '${ranking.rank}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: rankColor,
+                    fontWeight: FontWeight.w900, // 가장 두꺼운 폰트
+                    fontStyle: FontStyle.italic, // 기울임꼴로 속도감 부여
+                    fontSize: rankSize,
+                    height: 1.0,
+                    letterSpacing: -1.0,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
 
-          // 3. [중앙] 매장 정보
+          // 2. [중앙] 매장 정보 (Expanded)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,7 +89,7 @@ class StoreRankingCard extends StatelessWidget {
                 Text(
                   ranking.storeName,
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 16, // 16포인트 유지
                     fontWeight: FontWeight.w800,
                     color: Colors.black,
                   ),
@@ -109,7 +97,7 @@ class StoreRankingCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
 
-                // ✅ 주소 표시 (DB 정보 반영)
+                // 주소 표시
                 if (ranking.address != null && ranking.address!.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
@@ -129,8 +117,8 @@ class StoreRankingCard extends StatelessWidget {
                 // 별점 및 리뷰 수
                 Row(
                   children: [
-                    const Icon(Icons.star, size: 14, color: Colors.amber),
-                    const SizedBox(width: 2),
+                    const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+                    const SizedBox(width: 3),
                     Text(
                       ranking.avgUserRating.toStringAsFixed(1),
                       style: const TextStyle(
@@ -138,7 +126,7 @@ class StoreRankingCard extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: Colors.black87),
                     ),
-                    const SizedBox(width: 2),
+                    const SizedBox(width: 4),
                     Text(
                       '(${ranking.reviewCount})',
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -149,7 +137,7 @@ class StoreRankingCard extends StatelessWidget {
             ),
           ),
 
-          // 4. [우측] 니즈파인 점수 & 신뢰도
+          // 3. [우측] 니즈파인 점수 & 신뢰도
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisAlignment: MainAxisAlignment.center,
@@ -166,19 +154,27 @@ class StoreRankingCard extends StatelessWidget {
               Text(
                 ranking.avgScore.toStringAsFixed(1),
                 style: const TextStyle(
-                  fontSize: 28,
+                  fontSize: 26, // 숫자 강조
                   fontWeight: FontWeight.w900,
                   color: Color(0xFF9C7CFF),
                   height: 1.0,
+                  letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                '${l10n.reliability} ${ranking.avgTrust.toInt()}%',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF666666),
-                  fontWeight: FontWeight.w500,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${l10n.reliability} ${ranking.avgTrust.toInt()}%',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF666666),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
