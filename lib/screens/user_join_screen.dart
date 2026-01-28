@@ -35,10 +35,6 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
   List<String> _sidoList = [];
   List<String> _sigunguList = [];
 
-  // ❌ [삭제] 성별/생년월일 변수 제거됨
-  // DateTime? _selectedDate;
-  // String? _selectedGender;
-
   bool _isLoading = false;
   bool _isAuthCodeSent = false;
   bool _isEmailVerified = false;
@@ -110,13 +106,15 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     });
   }
 
-  // 인증번호 발송
+  // ✅ [수정] 인증번호 발송 로직 -> 테스트용으로 바로 다음 페이지 이동으로 변경
   Future<void> _sendAuthCode() async {
     if (_emailController.text.isEmpty || !_emailController.text.contains('@')) {
       _showSnackBar('올바른 이메일을 입력해주세요.', isError: true);
       return;
     }
 
+    // --- ⬇️ 테스트를 위해 주석 처리 시작 ⬇️ ---
+    /*
     setState(() => _isLoading = true);
     try {
       await _supabase.auth.signUp(
@@ -132,10 +130,17 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+    */
+    // --- ⬆️ 테스트를 위해 주석 처리 끝 ⬆️ ---
+
+    // ✅ [테스트용] 인증 과정 생략하고 바로 다음 페이지(비밀번호 입력)로 이동
+    _nextPage();
   }
 
-  // 인증번호 확인
+  // ✅ [수정] 인증번호 확인 로직 -> 테스트용이라 사용 안 함 (주석 처리)
   Future<void> _verifyAuthCode() async {
+    // --- ⬇️ 테스트를 위해 주석 처리 시작 ⬇️ ---
+    /*
     if (_authCodeController.text.length != 6) {
       _showSnackBar('인증번호 6자리를 입력해주세요.', isError: true);
       return;
@@ -158,6 +163,11 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+    */
+    // --- ⬆️ 테스트를 위해 주석 처리 끝 ⬆️ ---
+
+    // 혹시라도 호출되면 바로 다음으로 넘기기
+    _nextPage();
   }
 
   // 회원가입 완료
@@ -169,24 +179,36 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // 비밀번호 업데이트 (임시 비번 -> 실제 비번)
-      await _supabase.auth.updateUser(
-          UserAttributes(password: _passwordController.text.trim())
-      );
+      // ✅ [테스트용 수정] 실제 인증을 안 했으므로 currentUser가 없을 수 있음.
+      // 로그인된 유저가 있으면 업데이트, 없으면 테스트 로그만 남기고 성공 처리.
 
-      final userId = _supabase.auth.currentUser!.id;
+      final currentUser = _supabase.auth.currentUser;
 
-      // ✅ [수정] 성별, 생년월일, 나이 업데이트 로직 제거 (InfoEditScreen에서 수행)
-      await _supabase.from('profiles').update({
-        'nickname': _nicknameController.text.trim(),
-        'city': _selectedSido,
-        'district': _selectedSigungu,
-        // gender, birth_date, age는 null 상태로 유지됨
-      }).eq('id', userId);
+      if (currentUser != null) {
+        // 1. 실제 가입 프로세스 (인증을 건너뛰면 이 부분 에러 날 수 있음)
+        await _supabase.auth.updateUser(
+            UserAttributes(password: _passwordController.text.trim())
+        );
 
-      _nextPage(); // 성공 화면으로
+        await _supabase.from('profiles').update({
+          'nickname': _nicknameController.text.trim(),
+          'city': _selectedSido,
+          'district': _selectedSigungu,
+        }).eq('id', currentUser.id);
+      } else {
+        // 2. 테스트 모드 (로그인 정보 없음)
+        debugPrint('⚠️ [TEST MODE] 인증 없이 진행되어 DB 저장을 건너뜁니다.');
+        debugPrint('입력된 정보 - 이메일: ${_emailController.text}, 비번: ${_passwordController.text}, 닉네임: ${_nicknameController.text}');
+
+        // 가짜 딜레이
+        await Future.delayed(const Duration(seconds: 1));
+      }
+
+      _nextPage(); // 성공 화면으로 이동
     } catch (e) {
-      if (mounted) _showSnackBar('가입 처리 실패: $e', isError: true);
+      if (mounted) _showSnackBar('가입 처리 실패(테스트 중 무시 가능): $e', isError: true);
+      // 에러가 나도 테스트 중이면 성공 화면으로 일단 보낼 수도 있음
+      // _nextPage();
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -235,7 +257,9 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
               isAuthCodeSent: _isAuthCodeSent,
               isEmailVerified: _isEmailVerified,
               isLoading: _isLoading,
+              // ✅ [수정] "인증번호 전송" 버튼을 누르면 -> 바로 다음 페이지(_sendAuthCode 내부에서 처리)
               onSendTap: _sendAuthCode,
+              // ✅ [수정] "인증확인" 버튼은 사실상 안 쓰이거나 숨겨야 함
               onVerifyTap: _verifyAuthCode,
               onNext: _nextPage,
             ),
@@ -246,7 +270,6 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
               confirmMessage: _confirmPasswordMessage,
               onNext: _nextPage,
             ),
-            // ❌ [삭제] StepBirth, StepGender 제거됨
             StepRegion(
               sidoList: _sidoList,
               sigunguList: _sigunguList,
