@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+// 🔴 [필수] HomeScreen 파일 경로에 맞춰 주석 해제하세요.
+// import 'package:needsfine_app/screens/home_screen.dart';
 
 class StepSuccess extends StatelessWidget {
-  // 부모에서 완료 처리 등을 위해 콜백이 필요하다면 받을 수 있지만,
-  // 현재 코드에서는 내부에서 popUntil을 쓰므로 파라미터가 없어도 됩니다.
   final VoidCallback? onClose;
 
-  const StepSuccess({super.key, this.onClose});
+  const StepSuccess({
+    super.key,
+    this.onClose,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -13,10 +16,9 @@ class StepSuccess extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // [MODIFIED] 아이콘 대신 로고 이미지 사용
           Image.asset(
             'assets/icon.png',
-            width: 100, // 크기는 적절히 조절하세요
+            width: 100,
             height: 100,
           ),
           const SizedBox(height: 24),
@@ -31,10 +33,22 @@ class StepSuccess extends StatelessWidget {
               height: 52,
               child: ElevatedButton(
                 onPressed: () {
-                  // 앱의 첫 화면(initial_screen)까지 돌아갑니다.
-                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  // ✅ [수정] HomeScreen으로 이동하며 이전 스택 모두 제거
+                  // 만약 HomeScreen 클래스 이름이 다르다면 수정해주세요.
+                  // Navigator.of(context).pushAndRemoveUntil(
+                  //   MaterialPageRoute(builder: (_) => const HomeScreen()),
+                  //   (route) => false,
+                  // );
+
+                  // ⚠️ HomeScreen import가 안 되어 있어 에러가 날 수 있으니
+                  // 임시로 '/home' 라우트로 이동하는 코드로 두겠습니다.
+                  // main.dart에 '/home' 라우트가 등록되어 있다면 이대로 작동합니다.
+                  Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF9C7CFF)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8A2BE2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
                 child: const Text('시작하기', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
