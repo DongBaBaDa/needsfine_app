@@ -6,9 +6,8 @@ import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/services/review_service.dart';
 import 'package:needsfine_app/screens/weekly_ranking_screen.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
-import 'package:needsfine_app/data/korean_regions.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
-import 'package:needsfine_app/screens/review_detail_screen.dart'; // ✅ 실제 파일 import
+import 'package:needsfine_app/screens/review_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,22 +27,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   // 데이터 상태 변수
   List<StoreRanking> _top100 = [];
   final Map<String, String> _storeImageMap = {};
-  List<Map<String, dynamic>> _bestReviews = []; // 🔥 베스트 리뷰 데이터
+  List<Map<String, dynamic>> _bestReviews = [];
 
   List<String> _bannerList = [];
   int _currentBannerIndex = 0;
   final PageController _bannerController = PageController();
   Timer? _bannerTimer;
-
-  String? _selectedProvince;
-
-  // 에러 방지용 변수 (화면엔 안 나오지만 빌드 에러 방지)
-  final Map<String, List<String>> _tagCategories = {
-    '혼자서 👤': ['혼밥', '힐링', '가성비', '브런치', '포장가능', '조용한', '간편한'],
-    '둘이서 👩‍❤️‍👨': ['데이트', '기념일', '분위기맛집', '뷰맛집', '이색요리', '와인', '코스요리'],
-    '여럿이 👨‍👩‍👧‍👦': ['회식', '가족모임', '친구모임', '주차가능', '룸있음', '대화하기좋은', '넓은좌석'],
-  };
-  String _currentTagTab = '혼자서 👤';
 
   // 디자인 토큰
   static const Color _brand = Color(0xFF8A2BE2);
@@ -125,15 +114,19 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       // 공식 이미지 + 리뷰 이미지 하이브리드 로딩
       final imageMap = await _fetchStoreImagesWithReviews(names);
 
-      // 3. 🔥 베스트 리뷰 로드 (사진 있고, 점수 높은 순 5개)
+      // 3. 베스트 리뷰 로드
       final bestReviewsData = await _supabase
           .from('reviews')
-          .select()
-          .not('photo_urls', 'is', null) // 사진이 있는 것만
-          .order('needsfine_score', ascending: false) // 점수 높은 순
+          .select('''
+            *, 
+            profiles(nickname, profile_image_url),
+            review_votes(count), 
+            comments(count)
+          ''')
+          .not('photo_urls', 'is', null)
+          .order('needsfine_score', ascending: false)
           .limit(5);
 
-      // [테스트용 강제 주입]
       List<Map<String, dynamic>> finalBestReviews = List<Map<String, dynamic>>.from(bestReviewsData);
 
       if (finalBestReviews.isEmpty) {
@@ -141,41 +134,16 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           {
             'id': 'dummy1',
             'store_name': '스시 오마카세 청담',
-            'review_text': '쉐프님의 접객이 정말 훌륭했습니다. 특히 우니가 신선해서 입에서 녹네요. 가격대는 좀 있지만 특별한 날 오기에 부족함이 없습니다.',
+            'review_text': '쉐프님의 접객이 정말 훌륭했습니다.',
             'needsfine_score': 4.8,
             'user_rating': 5.0,
             'photo_urls': [],
             'tags': ['데이트', '기념일'],
             'created_at': DateTime.now().toIso8601String(),
             'user_id': 'dummy_user',
-            'likes_count': 124,
-            'comment_count': 18,
-          },
-          {
-            'id': 'dummy2',
-            'store_name': '연남동 파스타',
-            'review_text': '분위기가 너무 좋아서 데이트 코스로 딱이에요! 재방문 의사 100%입니다.',
-            'needsfine_score': 4.5,
-            'user_rating': 4.5,
-            'photo_urls': [],
-            'tags': ['파스타', '분위기'],
-            'created_at': DateTime.now().toIso8601String(),
-            'user_id': 'dummy_user',
-            'likes_count': 89,
-            'comment_count': 5,
-          },
-          {
-            'id': 'dummy3',
-            'store_name': '성수 베이글',
-            'review_text': '주말에는 웨이팅이 좀 있지만 기다릴 가치가 있습니다. 런던 베이글보다 맛있어요.',
-            'needsfine_score': 4.2,
-            'user_rating': 4.0,
-            'photo_urls': [],
-            'tags': ['베이글', '맛집'],
-            'created_at': DateTime.now().toIso8601String(),
-            'user_id': 'dummy_user',
-            'likes_count': 230,
-            'comment_count': 42,
+            'review_votes': [{'count': 124}],
+            'comments': [{'count': 18}],
+            'profiles': {'nickname': '미식가라이언', 'profile_image_url': null}
           },
         ];
       }
@@ -195,7 +163,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
-  // 가게 이미지 + 리뷰 이미지 통합 로드
   Future<Map<String, String>> _fetchStoreImagesWithReviews(List<String> storeNames) async {
     if (storeNames.isEmpty) return {};
     final map = <String, String>{};
@@ -232,7 +199,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           for (final row in reviewRes) {
             final name = (row['store_name'] ?? '').toString();
             if (map.containsKey(name)) continue;
-
             final List photos = row['photo_urls'] ?? [];
             if (photos.isNotEmpty) {
               map[name] = photos[0].toString();
@@ -242,7 +208,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       }
       return map;
     } catch (e) {
-      debugPrint("이미지 로드 중 오류: $e");
       return {};
     }
   }
@@ -258,27 +223,20 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     Navigator.push(context, MaterialPageRoute(builder: (_) => WeeklyRankingScreen(rankings: _top100, storeImageMap: _storeImageMap)));
   }
 
-  void _searchByRegion(String regionName) {
-    searchTrigger.value = SearchTarget(query: regionName);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$regionName(으)로 검색합니다.")));
-  }
-
-  // ✅ [수정] Map 데이터를 Review 모델로 변환하여 이동
-  void _goToReviewDetail(Map<String, dynamic> reviewMap) {
+  void _goToReviewDetail(Map<String, dynamic> reviewMap) async {
     try {
-      // Map을 Review 모델로 변환 (fromJson 사용)
       final reviewObj = Review.fromJson(reviewMap);
 
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
-          // ✅ 수정 포인트: 이제 여기서 review: 파라미터를 사용합니다.
-          // (ReviewDetailScreen.dart를 수정하셔야 이 코드가 정상 작동합니다)
           builder: (_) => ReviewDetailScreen(review: reviewObj),
         ),
       );
+
+      _loadHomeData();
+
     } catch (e) {
-      debugPrint("리뷰 변환 오류: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("리뷰 정보를 불러오는데 실패했습니다.")),
       );
@@ -317,11 +275,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           children: [
             _buildSearchBar(),
             const SizedBox(height: 16),
-
             _buildAdBanner(),
             const SizedBox(height: 24),
 
-            // ✅ 2. 실시간 베스트 리뷰 섹션
             if (_bestReviews.isNotEmpty) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -334,11 +290,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 ),
               ),
               const SizedBox(height: 12),
-              _buildBestReviews(), // 클릭 기능 및 좋아요/댓글 UI 추가됨
+              _buildBestReviews(),
               const SizedBox(height: 32),
             ],
 
-            // 5. 주간 랭킹
             _sectionTitle(
               l10n.weeklyRanking,
               trailing: TextButton(
@@ -356,8 +311,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       ),
     );
   }
-
-  // --- 위젯 빌더 메서드들 ---
 
   Widget _sectionTitle(String title, {Widget? trailing}) {
     return Padding(
@@ -416,14 +369,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             if (isEmpty)
               Container(
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Center(
+                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(20)),
+                child: const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
+                    children: [
                       Icon(Icons.image_not_supported_outlined, size: 48, color: Colors.grey),
                       SizedBox(height: 8),
                       Text("등록된 이미지가 없습니다.", style: TextStyle(color: Colors.grey)),
@@ -435,15 +385,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               PageView.builder(
                 controller: _bannerController,
                 itemCount: _bannerList.length,
-                onPageChanged: (index) {
-                  setState(() => _currentBannerIndex = index);
-                },
+                onPageChanged: (index) => setState(() => _currentBannerIndex = index),
                 itemBuilder: (context, index) {
                   return Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(20)),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: Image.network(
@@ -477,7 +422,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  // ✅ [수정됨] GestureDetector 추가 (클릭 이동)
   Widget _buildBestReviews() {
     return SizedBox(
       height: 240,
@@ -494,13 +438,22 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           final double score = (review['needsfine_score'] as num?)?.toDouble() ?? 0.0;
           final String storeName = review['store_name'] ?? '알 수 없는 가게';
           final String content = review['review_text'] ?? '';
+          final double trustScore = (review['trust_score'] as num?)?.toDouble() ?? 98.0;
 
-          // 좋아요, 댓글 수 가져오기 (없으면 0)
-          final int likes = review['likes_count'] ?? 0;
-          final int comments = review['comment_count'] ?? 0;
+          int getCount(dynamic key) {
+            final val = review[key];
+            if (val is List && val.isNotEmpty) {
+              return (val[0]['count'] as num?)?.toInt() ?? 0;
+            }
+            if (val is int) return val;
+            return 0;
+          }
+
+          final int likes = getCount('review_votes');
+          final int comments = getCount('comments');
 
           return GestureDetector(
-            onTap: () => _goToReviewDetail(review), // 클릭 시 상세 화면 이동
+            onTap: () => _goToReviewDetail(review),
             child: Container(
               width: 280,
               decoration: BoxDecoration(
@@ -515,7 +468,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // 1. 배경 이미지
                     if (mainImage.isNotEmpty)
                       Image.network(
                         mainImage,
@@ -523,7 +475,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                         errorBuilder: (c, e, s) => Container(color: Colors.grey[800]),
                       )
                     else
-                    // 이미지가 없을 때 대체 디자인
                       Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -532,42 +483,22 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                             colors: [const Color(0xFF2C2C3E), const Color(0xFF1F1F2E)],
                           ),
                         ),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.restaurant_menu_rounded, size: 48, color: Colors.white.withOpacity(0.3)),
-                              const SizedBox(height: 8),
-                              Text(
-                                "이미지 준비중",
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.5),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ),
-
-                    // 2. 그라데이션 오버레이 (밝기 수정: 0.6)
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.black.withOpacity(0.1), // 상단은 투명하게
+                            Colors.black.withOpacity(0.1),
                             Colors.transparent,
-                            Colors.black.withOpacity(0.7), // 하단 텍스트 부분은 적당히 어둡게
+                            Colors.black.withOpacity(0.7),
                           ],
-                          stops: const [0.0, 0.4, 1.0], // 텍스트 영역 가독성 확보
+                          stops: const [0.0, 0.4, 1.0],
                         ),
                       ),
                     ),
-
-                    // 3. 뱃지
+                    // (왼쪽) 1위 BEST
                     Positioned(
                       top: 16,
                       left: 16,
@@ -580,43 +511,58 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                             BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4),
                           ],
                         ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.verified_rounded, color: Colors.white, size: 14),
-                            const SizedBox(width: 4),
-                            const Text(
-                              "BEST",
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                            ),
-                          ],
+                        child: Text(
+                          "${index + 1}위 BEST",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                     ),
-
-                    // 4. 점수 뱃지
+                    // (오른쪽) 니즈파인 점수 + 신뢰도
                     Positioned(
                       top: 16,
                       right: 16,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.star_rounded, color: Color(0xFFFFD700), size: 16),
-                            const SizedBox(width: 2),
-                            Text(
-                              score.toStringAsFixed(1),
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                      child: Row(
+                        children: [
+                          // 1. 니즈파인 점수
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3E5F5).withOpacity(0.95), // 연한 니즈파인색
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          ],
-                        ),
+                            child: Text(
+                              "니즈파인 ${score.toStringAsFixed(1)}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 11,
+                                color: _brand,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // 2. 신뢰도
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE3F2FD).withOpacity(0.95), // 연한 파란색
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              "신뢰도 ${trustScore.toStringAsFixed(0)}%",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 11,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-
-                    // 5. 내용 및 좋아요/댓글
                     Positioned(
                       left: 16,
                       right: 16,
@@ -624,44 +570,19 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            storeName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          Text(storeName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                           const SizedBox(height: 6),
-                          Text(
-                            content,
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
-                              fontSize: 13,
-                              height: 1.4,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          Text(content, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13, height: 1.4), maxLines: 2, overflow: TextOverflow.ellipsis),
                           const SizedBox(height: 12),
-                          // ✅ 좋아요 및 댓글 수 표시
                           Row(
                             children: [
-                              Icon(Icons.favorite_rounded, size: 14, color: Colors.white.withOpacity(0.9)),
+                              Icon(Icons.thumb_up_rounded, size: 14, color: Colors.white.withOpacity(0.9)),
                               const SizedBox(width: 4),
-                              Text(
-                                "$likes",
-                                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600),
-                              ),
+                              Text("$likes", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
                               const SizedBox(width: 12),
                               Icon(Icons.chat_bubble_rounded, size: 14, color: Colors.white.withOpacity(0.9)),
                               const SizedBox(width: 4),
-                              Text(
-                                "$comments",
-                                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600),
-                              ),
+                              Text("$comments", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ],
@@ -676,13 +597,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       ),
     );
   }
-
-  // ✅ 주석 처리된 위젯들 (호출은 하되 빈 컨테이너 반환)
-  Widget _buildQuickTags() => Container();
-  Widget _buildThemeCards() => Container();
-  Widget _buildCategoryTabs() => Container();
-  Widget _buildSubTags() => Container();
-  Widget _buildLocationList() => Container();
 
   Widget _buildWeeklyHorizontal(AppLocalizations l10n) {
     if (_top100.isEmpty) {
@@ -762,25 +676,15 @@ class _WeeklyRankCard extends StatelessWidget {
                     if (imageUrl.isNotEmpty)
                       Image.network(imageUrl, fit: BoxFit.cover, width: double.infinity)
                     else
-                    // ✅ [디자인 유지] 이미지 없을 때: 브랜드 컬러 배경 + 아이콘
                       Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3E5F5), // 연한 보라색 배경
-                        ),
+                        decoration: BoxDecoration(color: const Color(0xFFF3E5F5)),
                         child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.store_rounded, size: 48, color: _brand.withOpacity(0.5)),
                               const SizedBox(height: 8),
-                              Text(
-                                "이미지 준비중",
-                                style: TextStyle(
-                                  color: _brand.withOpacity(0.7),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                              Text("이미지 준비중", style: TextStyle(color: _brand.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -795,10 +699,7 @@ class _WeeklyRankCard extends StatelessWidget {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withOpacity(0.0),
-                              Colors.black.withOpacity(0.35),
-                            ],
+                            colors: [Colors.black.withOpacity(0.0), Colors.black.withOpacity(0.35)],
                           ),
                         ),
                       ),
@@ -825,15 +726,7 @@ class _WeeklyRankCard extends StatelessWidget {
                       bottom: 12,
                       child: Text(
                         ranking.storeName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                          color: Colors.white,
-                          height: 1.1,
-                          shadows: [
-                            Shadow(offset: Offset(0, 1), blurRadius: 2, color: Colors.black26),
-                          ],
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white, height: 1.1, shadows: [Shadow(offset: Offset(0, 1), blurRadius: 2, color: Colors.black26)]),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -842,43 +735,48 @@ class _WeeklyRankCard extends StatelessWidget {
                 ),
               ),
             ),
+            // ✅ [수정] 둘 다 Expanded로 감싸서 1:1 비율 적용
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _brand.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: _brand.withOpacity(0.16)),
-                    ),
-                    child: Text(
-                      '${l10n.needsFine} ${ranking.avgScore.toStringAsFixed(1)}',
-                      style: const TextStyle(
-                        color: _brand,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
+                  // 1. 니즈파인 점수 (Expanded 추가)
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.04),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.black.withOpacity(0.06)),
+                        color: _brand.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        "니즈파인 ${ranking.avgScore.toStringAsFixed(1)}",
+                        style: const TextStyle(
+                          color: _brand,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // 2. 신뢰도 (Expanded 유지)
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        '${l10n.reliability} ${ranking.avgTrust.toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
+                        '신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%',
+                        style: const TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

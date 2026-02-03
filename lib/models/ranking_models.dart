@@ -17,14 +17,13 @@ class Review {
   final int likeCount;
   final int commentCount;
 
-  // ✅ [복구] 누락되었던 이메일 필드
-  final String? userEmail;
+  // ✅ [추가] 저장(스크랩) 수 필드 추가
+  final int saveCount;
 
-  // 추가 필드 (댓글 및 날짜)
+  final String? userEmail;
   final String? myCommentText;
   final DateTime? myCommentCreatedAt;
 
-  // 계산된 속성 (late final)
   late final double needsfineScore;
   late final int trustLevel;
   late final bool isCritical;
@@ -46,33 +45,23 @@ class Review {
     required this.createdAt,
     required this.likeCount,
     this.commentCount = 0,
-
-    // ✅ [수정] userEmail 파라미터 복구
+    this.saveCount = 0, // ✅ 기본값
     this.userEmail,
-
     this.myCommentText,
     this.myCommentCreatedAt,
-
-    // 외부 주입 파라미터 (nullable)
     double? needsfineScore,
     int? trustLevel,
     bool? isCritical,
     bool? isHidden,
-
-    // ✅ [추가] 호환용 tags 파라미터 (store_reviews_screen 등에서 tags: 로 넘길 때 컴파일되도록)
     List<String>? tags,
-
-    // 기존 파라미터 유지
     List<String>? dbTags,
   }) {
-    // 1. 텍스트 분석 결과 계산
     final scoreData = ScoreCalculator.calculateNeedsFineScore(
         reviewText,
         userRating,
         photoUrls.isNotEmpty
     );
 
-    // 2. 값 할당 (입력값 우선 -> 없으면 계산값)
     final dynamic calcNeedsfine = scoreData['needsfine_score'];
     final dynamic calcTrust = scoreData['trust_level'];
     final dynamic calcCritical = scoreData['is_critical'];
@@ -83,18 +72,11 @@ class Review {
     this.trustLevel = trustLevel ??
         ((calcTrust is num) ? calcTrust.toInt() : 0);
 
-    // ✅ [핵심 수정] Null일 수 있는 값을 (as bool)로 캐스팅하지 않도록 방지
     this.isCritical = isCritical ?? (calcCritical == true);
-
     this.isHidden = isHidden ?? (this.trustLevel < 20);
 
-    // 3. 태그 병합
     final calculatedTags = List<String>.from(scoreData['tags'] ?? []);
-
-    // ✅ dbTags 우선, 없으면 tags(호환용) 사용
     final savedTags = dbTags ?? tags ?? [];
-
-    // DB 태그 우선 + 중복 제거
     this.tags = {...savedTags, ...calculatedTags}.toList();
   }
 
@@ -110,7 +92,7 @@ class Review {
 
     String displayNickname = '익명 사용자';
     String? profileUrl;
-    String? email; // 이메일 추출
+    String? email;
 
     if (profileData != null) {
       if (profileData['nickname'] != null) {
@@ -126,10 +108,19 @@ class Review {
       displayNickname = _generateDeterministicNickname(uid ?? json['id'].toString());
     }
 
-    // JSON에서 태그 리스트 파싱
     List<String> parsedTags = [];
     if (json['tags'] != null) {
       parsedTags = List<String>.from(json['tags']);
+    }
+
+    // ✅ [핵심] Supabase Relation Count 파싱 헬퍼 함수
+    int parseCount(dynamic data) {
+      if (data is int) return data; // 만약 물리적인 컬럼이라면
+      if (data is List && data.isNotEmpty) {
+        // Relation Count인 경우: [{count: 3}] 형태
+        return (data[0]['count'] as num?)?.toInt() ?? 0;
+      }
+      return 0;
     }
 
     return Review(
@@ -142,21 +133,21 @@ class Review {
       userId: uid ?? '',
       nickname: displayNickname,
       userProfileUrl: profileUrl,
-
-      // ✅ 이메일 전달
       userEmail: email,
-
       storeLat: (json['store_lat'] as num?)?.toDouble() ?? 0.0,
       storeLng: (json['store_lng'] as num?)?.toDouble() ?? 0.0,
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now(),
-      likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
-      commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
+
+      // ✅ [수정] Relation Count 파싱 적용
+      likeCount: parseCount(json['review_votes']),
+      commentCount: parseCount(json['comments']),
+      saveCount: parseCount(json['review_saves']),
+
       myCommentText: json['comment_content']?.toString(),
       myCommentCreatedAt: json['comment_created_at'] != null
           ? DateTime.parse(json['comment_created_at'].toString())
           : null,
 
-      // DB 값을 생성자로 전달
       needsfineScore: (json['needsfine_score'] as num?)?.toDouble(),
       trustLevel: (json['trust_level'] as num?)?.toInt(),
       isCritical: json['is_critical'] == true,
@@ -200,9 +191,7 @@ class StoreRanking {
     this.lng,
   });
 
-  // ✅ [수정] 방탄 파싱 로직 적용 (타입 에러 방지)
   factory StoreRanking.fromViewJson(Map<String, dynamic> json, int rank) {
-    // 안전한 변환 헬퍼 함수
     double toDouble(dynamic val) {
       if (val == null) return 0.0;
       if (val is int) return val.toDouble();
@@ -221,7 +210,7 @@ class StoreRanking {
     return StoreRanking(
       storeName: json['store_name']?.toString() ?? '',
       avgScore: toDouble(json['avg_score']),
-      avgUserRating: toDouble(json['avg_user_rating']), // DB 컬럼명 확인
+      avgUserRating: toDouble(json['avg_user_rating']),
       reviewCount: toInt(json['review_count']),
       avgTrust: toDouble(json['avg_trust']),
       rank: rank,

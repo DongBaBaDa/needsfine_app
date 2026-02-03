@@ -50,8 +50,6 @@ class ReviewCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
               children: [
-                // ❌ [삭제됨] 매장 사진 박스 제거
-
                 // 텍스트 영역 (Expanded)
                 Expanded(
                   child: Padding(
@@ -231,7 +229,7 @@ class ReviewCard extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // ✅ 3. 하단 아이콘 (보여주기용, 우측 정렬, 한 줄 배치)
+                  // ✅ 3. 하단 아이콘 (우측 정렬, 데이터 바인딩 수정)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end, // 우측 정렬
                     children: [
@@ -239,18 +237,20 @@ class ReviewCard extends StatelessWidget {
                       const Icon(Icons.thumb_up_alt_outlined, size: 14, color: Colors.grey),
                       const SizedBox(width: 4),
                       Text(
-                        "${review.likeCount}",
+                        "${review.likeCount}", // ✅ 모델 데이터 사용
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
 
                       const SizedBox(width: 16),
 
-                      // 저장 (아이콘만, 숫자는 0 처리 or 숨김)
+                      // 저장 (아이콘 + 숫자)
                       const Icon(Icons.bookmark_border_rounded, size: 14, color: Colors.grey),
                       const SizedBox(width: 4),
-                      const Text(
-                        "0", // 리스트에서는 저장 수를 불러오지 않으므로 0으로 고정
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      Text(
+                        // ✅ 모델에 saveCount가 있다면 연결, 없다면 0 처리
+                        // (모델에 saveCount 필드가 없다면 추가해야 합니다)
+                        "${review.saveCount ?? 0}",
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
 
                       const SizedBox(width: 16),
@@ -259,15 +259,15 @@ class ReviewCard extends StatelessWidget {
                       const Icon(Icons.chat_bubble_outline_rounded, size: 14, color: Colors.grey),
                       const SizedBox(width: 4),
                       Text(
-                        "${review.commentCount}",
+                        "${review.commentCount}", // ✅ 모델 데이터 사용
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
 
                       const SizedBox(width: 16),
 
-                      // 🚨 신고 버튼 (사이렌 아이콘, 빨간색)
+                      // 신고 버튼
                       const Icon(
-                        Icons.campaign, // 사이렌(확성기) 모양
+                        Icons.campaign,
                         size: 18,
                         color: Colors.red,
                       ),

@@ -30,6 +30,10 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   bool _isSaved = false;
   bool _isReported = false;
 
+  // ✅ 유저 프로필 상태 관리 (홈에서 안 넘어왔을 경우 대비)
+  late String _nickname;
+  String? _userProfileUrl;
+
   // 디자인 토큰
   static const Color _brand = Color(0xFF8A2BE2);
   static const Color _bg = Color(0xFFF2F2F7);
@@ -45,17 +49,44 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   @override
   void initState() {
     super.initState();
+    // 초기값 설정
+    _nickname = widget.review.nickname;
+    _userProfileUrl = widget.review.userProfileUrl;
+
     _checkOwnership();
     _fetchComments();
     _checkLikeStatus();
     _checkSaveStatus();
     _checkReportStatus();
+    _checkAndFetchProfile(); // ✅ 프로필 누락 확인 및 로드
   }
 
   @override
   void dispose() {
     _commentController.dispose();
     super.dispose();
+  }
+
+  // ✅ 프로필 정보가 비어있다면 다시 가져오는 안전장치 로직
+  Future<void> _checkAndFetchProfile() async {
+    if ((_nickname.isEmpty || _nickname == 'Unknown') && widget.review.userId != null) {
+      try {
+        final data = await _supabase
+            .from('profiles')
+            .select('nickname, profile_image_url')
+            .eq('id', widget.review.userId!)
+            .maybeSingle();
+
+        if (data != null && mounted) {
+          setState(() {
+            _nickname = data['nickname'] ?? '익명';
+            _userProfileUrl = data['profile_image_url'];
+          });
+        }
+      } catch (e) {
+        debugPrint("프로필 보완 로드 실패: $e");
+      }
+    }
   }
 
   Future<void> _checkOwnership() async {
@@ -165,13 +196,45 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
+  // ✅ [수정됨] 충돌(Duplicate Key) 방지를 위한 안전한 로직 적용
   Future<void> _toggleLike() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
+      return;
+    }
+
+    // 1. 현재 상태 백업 (에러 시 복구용)
+    final wasLiked = _isLiked;
+
+    // 2. 화면 선반영 (Optimistic Update)
+    setState(() => _isLiked = !wasLiked);
+
     try {
-      setState(() => _isLiked = !_isLiked);
-      await ReviewService.toggleLike(widget.review.id);
+      if (wasLiked) {
+        // 3-A. 이미 좋아요 상태였다면 -> 취소 (Delete)
+        await _supabase
+            .from('review_votes')
+            .delete()
+            .eq('user_id', userId)
+            .eq('review_id', widget.review.id);
+      } else {
+        // 3-B. 좋아요가 아니었다면 -> 등록 (Upsert)
+        // ✅ Insert 대신 Upsert를 사용하여 이미 존재할 경우 에러(23505)를 방지하고 덮어씀
+        await _supabase.from('review_votes').upsert(
+          {
+            'user_id': userId,
+            'review_id': widget.review.id,
+            'vote_type': 'like',
+          },
+          onConflict: 'user_id,review_id', // DB의 Unique Key 제약조건 컬럼
+        );
+      }
     } catch (e) {
+      // 4. 실패 시 롤백
+      debugPrint("❌ 좋아요 처리 에러: $e");
       if (mounted) {
-        setState(() => _isLiked = !_isLiked);
+        setState(() => _isLiked = wasLiked);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("오류가 발생했습니다.")));
       }
     }
@@ -544,7 +607,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     );
   }
 
-  // ✅ [수정] 별점 표기 변경
+  // ✅ [수정] 별점 표기 변경 및 로컬 상태 변수 사용
   Widget _buildUserInfo() {
     return Row(
       children: [
@@ -557,10 +620,10 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
           child: CircleAvatar(
             radius: 20,
             backgroundColor: Colors.grey[100],
-            backgroundImage: (widget.review.userProfileUrl != null && widget.review.userProfileUrl!.isNotEmpty)
-                ? CachedNetworkImageProvider(widget.review.userProfileUrl!)
+            backgroundImage: (_userProfileUrl != null && _userProfileUrl!.isNotEmpty)
+                ? CachedNetworkImageProvider(_userProfileUrl!)
                 : null,
-            child: (widget.review.userProfileUrl == null || widget.review.userProfileUrl!.isEmpty)
+            child: (_userProfileUrl == null || _userProfileUrl!.isEmpty)
                 ? const Icon(Icons.person, color: Colors.grey, size: 20)
                 : null,
           ),
@@ -569,7 +632,8 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.review.nickname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            // ✅ 위젯 속성 대신 로컬 상태 _nickname 사용
+            Text(_nickname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 2),
             Text(
               '${widget.review.createdAt.year}.${widget.review.createdAt.month}.${widget.review.createdAt.day}',
