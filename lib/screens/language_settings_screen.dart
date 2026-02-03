@@ -15,13 +15,12 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
   // 현재 선택된 언어 (임시 저장용)
   late Locale _selectedLocale;
 
-  // ✅ [수정] 언어 표기 변경 (가나다순)
-  // 한국어 Korean (한국어만 예외)
-  // 영어 English
-  // 미얀마어 (미얀마어 번역 -> မြန်မာစာ)
+  // ✅ [수정] 언어 목록에 '인도네시아어' 추가
+  // 규칙: 한글명 + 현지명
   final List<Map<String, dynamic>> _languages = [
     {'name': '미얀마어 မြန်မာစာ', 'code': 'my', 'country': null},
     {'name': '영어 English', 'code': 'en', 'country': null},
+    {'name': '인도네시아어 Bahasa Indonesia', 'code': 'id', 'country': null}, // ✅ 추가됨
     {'name': '한국어', 'code': 'ko', 'country': 'KR'},
   ];
 

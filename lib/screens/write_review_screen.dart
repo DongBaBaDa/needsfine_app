@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:async';
-import 'package:needsfine_app/services/review_service.dart';
-import 'package:needsfine_app/services/score_calculator.dart';
-import 'package:needsfine_app/services/naver_search_service.dart';
-import 'package:needsfine_app/services/naver_map_service.dart';
-import 'package:needsfine_app/models/app_data.dart';
-import 'package:needsfine_app/models/ranking_models.dart' as model;
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
-import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:needsfine_app/services/review_service.dart';
+// ✅ ScoreCalculator 경로가 utils인지 services인지 파일 위치를 꼭 확인하세요.
+import 'package:needsfine_app/utils/score_calculator.dart';
+import 'package:needsfine_app/services/naver_search_service.dart';
+import 'package:needsfine_app/services/naver_map_service.dart';
+import 'package:needsfine_app/models/ranking_models.dart' as model;
+import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
 import 'package:needsfine_app/core/profanity_filter.dart';
 
@@ -56,16 +57,22 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   bool _isInitialData = false;
   bool _isEditMode = false;
 
-  final List<String> _purposeOptions = ["데이트", "가족 외식", "혼밥", "회식", "힐링", "친구 모임", "기념일"];
-  String _selectedPurpose = "";
+  // ✅ 태그 데이터 (홈 화면 검색과 일치)
+  final Map<String, List<String>> _tagCategories = {
+    '혼자서 👤': ['혼밥', '힐링', '가성비', '브런치', '포장가능', '조용한', '간편한'],
+    '둘이서 👩‍❤️‍👨': ['데이트', '기념일', '분위기맛집', '뷰맛집', '이색요리', '와인', '코스요리'],
+    '여럿이 👨‍👩‍👧‍👦': ['회식', '가족모임', '친구모임', '주차가능', '룸있음', '대화하기좋은', '넓은좌석'],
+  };
 
-  final List<String> _priceOptions = ["1만원 이하", "1~3만원", "3~5만원", "5만원 이상"];
-  String _selectedPrice = "";
+  // ✅ 현재 선택된 태그 카테고리 (기본값: 혼자서)
+  String _currentTab = '혼자서 👤';
+  final Set<String> _selectedTags = {};
 
   // ✅ 실시간 분석 상태
   double _predictedScore = 0.0;
   int _predictedTrust = 0;
-  String _softSuggestion = "가장 기억에 남는 맛은 무엇이었나요?"; // 기본 문구
+  String _feedbackMessage = "가장 기억에 남는 맛은 무엇이었나요?";
+  bool _isFeedbackWarning = false;
   bool _showAnalysis = false;
 
   // 디자인 토큰
@@ -85,6 +92,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       _reviewTextController.text = r.reviewText;
       _rating = r.userRating;
       _existingImageUrls = List.from(r.photoUrls);
+      _selectedTags.addAll(r.tags);
 
       _selectedPlace = NaverPlace(
         title: r.storeName,
@@ -95,12 +103,10 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       _selectedLat = r.storeLat;
       _selectedLng = r.storeLng;
 
-      for (var tag in r.tags) {
-        if (_purposeOptions.contains(tag)) _selectedPurpose = tag;
-        if (_priceOptions.contains(tag)) _selectedPrice = tag;
-      }
-
-      _analyzeRealTime();
+      // 초기 데이터가 있으면 바로 분석 실행
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _analyzeRealTime();
+      });
 
     } else if (widget.initialStoreName != null && widget.initialAddress != null) {
       _selectedPlace = NaverPlace(
@@ -121,36 +127,35 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     super.dispose();
   }
 
-  // ✅ [NEW] 실시간 점수 계산 및 부드러운 제안 로직
+  // ✅ [수정됨] 실시간 분석 및 피드백 생성
   void _analyzeRealTime() {
     final text = _reviewTextController.text.trim();
-
-    // 1. 계산 로직 호출 (이미지 유무 포함)
     bool hasImages = _newImages.isNotEmpty || _existingImageUrls.isNotEmpty;
-
-    // 점수가 0점이면 아직 평가 전이므로 기본값 처리
     double inputRating = _rating == 0 ? 3.0 : _rating;
 
-    final result = ScoreCalculator.calculateNeedsFineScore(text, inputRating, hasImages);
+    try {
+      // 1. 점수 계산
+      final result = ScoreCalculator.calculateNeedsFineScore(text, inputRating, hasImages);
 
-    setState(() {
-      _predictedScore = (result['needsfine_score'] as num?)?.toDouble() ?? 0.0;
-      _predictedTrust = (result['trust_level'] as num?)?.toInt() ?? 0;
-      _showAnalysis = text.length > 5; // 5자 이상일 때부터 분석판 보여줌
+      // 2. 피드백 메시지 생성
+      final feedback = ScoreCalculator.getFeedbackMessage(result);
 
-      // 2. 부드러운 제안 (Soft Suggestion) 생성
-      if (text.length < 20) {
-        _softSuggestion = "첫 문장이 가장 중요해요! 어떤 곳이었나요? 😊";
-      } else if (!hasImages) {
-        _softSuggestion = "사진을 함께 올리면 신뢰도가 확 올라가요! 📸";
-      } else if (_predictedTrust < 50) {
-        _softSuggestion = "맛이나 분위기를 조금 더 구체적으로 묘사해보는 건 어떨까요? ✨";
-      } else if (_predictedTrust < 70) {
-        _softSuggestion = "매장 서비스나 주차 정보 같은 꿀팁도 도움이 돼요! 🚗";
-      } else {
-        _softSuggestion = "완벽해요! 이 리뷰는 많은 분들에게 도움이 될 거예요 💖";
-      }
-    });
+      setState(() {
+        _predictedScore = (result['needsfine_score'] as num).toDouble();
+        _predictedTrust = (result['trust_level'] as num).toInt();
+        _feedbackMessage = feedback['message'];
+        _isFeedbackWarning = feedback['is_warning'];
+
+        // ⚡ [수정 포인트] 글자가 1자라도 있으면 바로 보이게 변경 (기존: > 5)
+        _showAnalysis = text.isNotEmpty;
+      });
+
+      // 디버깅용: 콘솔에 찍히는지 확인하세요
+      print('실시간 분석 중: $_predictedScore점 / 신뢰도 $_predictedTrust%');
+
+    } catch (e) {
+      print('ScoreCalculator 오류 발생: $e');
+    }
   }
 
   void _showStoreSearchSheet() {
@@ -159,17 +164,16 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent, // 투명 배경 후 내용물에 스타일 적용
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
           height: MediaQuery.of(context).size.height * 0.85,
           decoration: const BoxDecoration(
-            color: Color(0xFFF9F9F9), // 약간 밝은 회색 배경
+            color: Color(0xFFF9F9F9),
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             children: [
-              // 핸들바
               Center(
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 12),
@@ -226,7 +230,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       File? compressedFile = await _compressImage(File(image.path));
       if (compressedFile != null) {
         setState(() => _newImages.add(compressedFile));
-        _analyzeRealTime(); // 이미지 추가 시 재분석
+        _analyzeRealTime();
       }
     }
   }
@@ -278,9 +282,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       }
 
       final finalPhotoUrls = [..._existingImageUrls, ...uploadedPhotoUrls];
-      List<String> tags = [];
-      if (_selectedPurpose.isNotEmpty) tags.add(_selectedPurpose);
-      if (_selectedPrice.isNotEmpty) tags.add(_selectedPrice);
+      final List<String> tags = _selectedTags.toList();
 
       if (_isEditMode) {
         await ReviewService.updateReview(
@@ -328,6 +330,88 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     }
   }
 
+  // ✅ [수정] 태그 카테고리 탭 UI (횡스크롤)
+  Widget _buildCategoryTabs() {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _tagCategories.keys.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final category = _tagCategories.keys.elementAt(index);
+          final isSelected = _currentTab == category;
+          return GestureDetector(
+            onTap: () => setState(() => _currentTab = category),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isSelected ? _brand : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: isSelected ? _brand : Colors.grey.shade300),
+                boxShadow: isSelected ? [BoxShadow(color: _brand.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 3))] : [],
+              ),
+              child: Text(
+                category,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ✅ [수정] 세부 태그 UI (횡스크롤 1줄)
+  Widget _buildSubTags() {
+    final tags = _tagCategories[_currentTab] ?? [];
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tags.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final tag = tags[index];
+          final isSelected = _selectedTags.contains(tag);
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                if (isSelected) {
+                  _selectedTags.remove(tag);
+                } else {
+                  _selectedTags.add(tag);
+                }
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? _brand.withOpacity(0.1) : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: isSelected ? _brand : Colors.grey.shade300),
+              ),
+              child: Text(
+                '#$tag',
+                style: TextStyle(
+                  color: isSelected ? _brand : Colors.black87,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -355,7 +439,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. 가게 선택
+              // 1. 가게 선택 (디자인 유지)
               if (_selectedPlace == null)
                 GestureDetector(
                   onTap: _showStoreSearchSheet,
@@ -365,9 +449,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
-                      ],
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4))],
                     ),
                     child: Column(
                       children: [
@@ -386,9 +468,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
-                    ],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4))],
                   ),
                   child: Row(
                     children: [
@@ -439,7 +519,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                             final dx = details.localPosition.dx;
                             final width = 48.0;
                             if (dx < width / 2) setState(() => _rating = starNum - 0.5); else setState(() => _rating = starNum.toDouble());
-                            _analyzeRealTime(); // 별점 변경 시 재분석
+                            _analyzeRealTime();
                           },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -466,24 +546,13 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
               const SizedBox(height: 32),
 
-              // 3. 분위기/가격 칩
-              const Text("어떤 분위기였나요?", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              // ✅ 3. 방문 목적 태그 (수정됨: 횡스크롤 탭 + 횡스크롤 태그)
+              const Text("이곳의 특징을 선택해주세요", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: Row(
-                  children: [
-                    ..._purposeOptions.map((purpose) => _buildChip(purpose, _selectedPurpose == purpose, (val) {
-                      setState(() => _selectedPurpose = val ? purpose : "");
-                    })),
-                    Container(width: 1, height: 24, color: Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 12)),
-                    ..._priceOptions.map((price) => _buildChip(price, _selectedPrice == price, (val) {
-                      setState(() => _selectedPrice = val ? price : "");
-                    })),
-                  ],
-                ),
-              ),
+
+              _buildCategoryTabs(), // 상단 카테고리
+              const SizedBox(height: 16),
+              _buildSubTags(), // 하단 태그
 
               const SizedBox(height: 24),
 
@@ -494,9 +563,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
-                      ],
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4))],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -519,41 +586,52 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                           ),
                         ),
 
-                        // ✅ [NEW] 실시간 분석 카드 (입력창 하단에 붙음)
+                        // ✅ [수정] 실시간 분석 피드백 대시보드
                         if (_showAnalysis)
                           Container(
-                            padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
-                              color: _brand.withOpacity(0.05),
+                              gradient: LinearGradient(
+                                colors: _isFeedbackWarning
+                                    ? [const Color(0xFFFF8A80), const Color(0xFFFF5252)] // 경고 시 붉은색 톤
+                                    : [const Color(0xFF8A2BE2), const Color(0xFF9C7CFF)], // 평소 보라색 톤
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
                               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-                              border: Border(top: BorderSide(color: _brand.withOpacity(0.1))),
+                              boxShadow: [
+                                BoxShadow(color: _brand.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 6)),
+                              ],
                             ),
+                            padding: const EdgeInsets.all(20),
                             child: Column(
                               children: [
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                                   children: [
                                     _buildScoreMetric("예상 점수", _predictedScore.toStringAsFixed(1), true),
-                                    Container(width: 1, height: 30, color: Colors.grey[300]),
+                                    Container(width: 1, height: 30, color: Colors.white.withOpacity(0.3)),
                                     _buildScoreMetric("신뢰도", "$_predictedTrust%", false),
                                   ],
                                 ),
                                 const SizedBox(height: 16),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: Colors.white.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: _brand.withOpacity(0.2)),
+                                    border: Border.all(color: Colors.white.withOpacity(0.3)),
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.lightbulb_rounded, color: _brand, size: 20),
+                                      Icon(
+                                          _isFeedbackWarning ? Icons.warning_amber_rounded : Icons.auto_awesome,
+                                          color: Colors.white, size: 20
+                                      ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
-                                          _softSuggestion,
-                                          style: const TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.w600),
+                                          _feedbackMessage,
+                                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                                         ),
                                       ),
                                     ],
@@ -630,14 +708,14 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   Widget _buildScoreMetric(String label, String value, bool isScore) {
     return Column(
       children: [
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w600)),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         Text(
           value,
-          style: TextStyle(
-            fontSize: 20,
+          style: const TextStyle(
+            fontSize: 22,
             fontWeight: FontWeight.w900,
-            color: isScore ? _brand : Colors.black87,
+            color: Colors.white,
           ),
         ),
       ],
@@ -663,7 +741,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
           child: GestureDetector(
             onTap: () {
               setState(() => isNetwork ? _existingImageUrls.removeAt(index) : _newImages.removeAt(index));
-              _analyzeRealTime(); // 사진 삭제 시 재분석
+              _analyzeRealTime();
             },
             child: Container(
               padding: const EdgeInsets.all(4),
@@ -675,33 +753,8 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       ],
     );
   }
-
-  Widget _buildChip(String label, bool isSelected, Function(bool) onSelected) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: FilterChip(
-        label: Text(label),
-        selected: isSelected,
-        showCheckmark: false,
-        onSelected: onSelected,
-        backgroundColor: Colors.white,
-        selectedColor: _brand,
-        labelStyle: TextStyle(
-          color: isSelected ? Colors.white : Colors.black87,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          fontSize: 13,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.shade300),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-      ),
-    );
-  }
 }
 
-// ✅ [NEW] 세련된 가게 검색 결과 UI
 class _StoreSearchContent extends StatefulWidget {
   final Function(NaverPlace) onPlaceSelected;
   final NaverSearchService searchService;

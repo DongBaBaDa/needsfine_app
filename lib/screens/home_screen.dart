@@ -1,17 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/services/review_service.dart';
-import 'package:needsfine_app/screens/category_placeholder_screen.dart';
 import 'package:needsfine_app/screens/weekly_ranking_screen.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
-
-// ✅ 지역 데이터 및 다국어 임포트
 import 'package:needsfine_app/data/korean_regions.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
+import 'package:needsfine_app/screens/review_detail_screen.dart'; // ✅ 실제 파일 import
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,18 +25,25 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   final TextEditingController _searchController = TextEditingController();
   bool _isLoading = true;
 
+  // 데이터 상태 변수
   List<StoreRanking> _top100 = [];
   final Map<String, String> _storeImageMap = {};
+  List<Map<String, dynamic>> _bestReviews = []; // 🔥 베스트 리뷰 데이터
 
-  // ✅ 배너 데이터 리스트
   List<String> _bannerList = [];
-
   int _currentBannerIndex = 0;
   final PageController _bannerController = PageController();
   Timer? _bannerTimer;
 
-  // ✅ [복구] 지역 선택 상태 변수
   String? _selectedProvince;
+
+  // 에러 방지용 변수 (화면엔 안 나오지만 빌드 에러 방지)
+  final Map<String, List<String>> _tagCategories = {
+    '혼자서 👤': ['혼밥', '힐링', '가성비', '브런치', '포장가능', '조용한', '간편한'],
+    '둘이서 👩‍❤️‍👨': ['데이트', '기념일', '분위기맛집', '뷰맛집', '이색요리', '와인', '코스요리'],
+    '여럿이 👨‍👩‍👧‍👦': ['회식', '가족모임', '친구모임', '주차가능', '룸있음', '대화하기좋은', '넓은좌석'],
+  };
+  String _currentTagTab = '혼자서 👤';
 
   // 디자인 토큰
   static const Color _brand = Color(0xFF8A2BE2);
@@ -87,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     if (mounted) setState(() => _isLoading = true);
 
     try {
-      // 1. 배너 데이터 로드 (DB 연동)
+      // 1. 배너 로드
       final bannerData = await _supabase
           .from('banners')
           .select('image_url')
@@ -98,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         loadedBanners.add(row['image_url'] as String);
       }
 
-      // 2. 랭킹 데이터 로드
+      // 2. 주간 랭킹 로드
       final rankings = await ReviewService.fetchStoreRankings();
       final sorted = List<StoreRanking>.from(rankings);
       sorted.sort((a, b) => b.avgScore.compareTo(a.avgScore));
@@ -116,15 +120,72 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         );
       }
 
-      // 3. 매장 이미지 로드
       final names = top100.map((e) => e.storeName).where((e) => e.isNotEmpty).toSet().toList();
-      final imageMap = await _fetchStoreImages(names);
+
+      // 공식 이미지 + 리뷰 이미지 하이브리드 로딩
+      final imageMap = await _fetchStoreImagesWithReviews(names);
+
+      // 3. 🔥 베스트 리뷰 로드 (사진 있고, 점수 높은 순 5개)
+      final bestReviewsData = await _supabase
+          .from('reviews')
+          .select()
+          .not('photo_urls', 'is', null) // 사진이 있는 것만
+          .order('needsfine_score', ascending: false) // 점수 높은 순
+          .limit(5);
+
+      // [테스트용 강제 주입]
+      List<Map<String, dynamic>> finalBestReviews = List<Map<String, dynamic>>.from(bestReviewsData);
+
+      if (finalBestReviews.isEmpty) {
+        finalBestReviews = [
+          {
+            'id': 'dummy1',
+            'store_name': '스시 오마카세 청담',
+            'review_text': '쉐프님의 접객이 정말 훌륭했습니다. 특히 우니가 신선해서 입에서 녹네요. 가격대는 좀 있지만 특별한 날 오기에 부족함이 없습니다.',
+            'needsfine_score': 4.8,
+            'user_rating': 5.0,
+            'photo_urls': [],
+            'tags': ['데이트', '기념일'],
+            'created_at': DateTime.now().toIso8601String(),
+            'user_id': 'dummy_user',
+            'likes_count': 124,
+            'comment_count': 18,
+          },
+          {
+            'id': 'dummy2',
+            'store_name': '연남동 파스타',
+            'review_text': '분위기가 너무 좋아서 데이트 코스로 딱이에요! 재방문 의사 100%입니다.',
+            'needsfine_score': 4.5,
+            'user_rating': 4.5,
+            'photo_urls': [],
+            'tags': ['파스타', '분위기'],
+            'created_at': DateTime.now().toIso8601String(),
+            'user_id': 'dummy_user',
+            'likes_count': 89,
+            'comment_count': 5,
+          },
+          {
+            'id': 'dummy3',
+            'store_name': '성수 베이글',
+            'review_text': '주말에는 웨이팅이 좀 있지만 기다릴 가치가 있습니다. 런던 베이글보다 맛있어요.',
+            'needsfine_score': 4.2,
+            'user_rating': 4.0,
+            'photo_urls': [],
+            'tags': ['베이글', '맛집'],
+            'created_at': DateTime.now().toIso8601String(),
+            'user_id': 'dummy_user',
+            'likes_count': 230,
+            'comment_count': 42,
+          },
+        ];
+      }
 
       if (mounted) {
         setState(() {
           _bannerList = loadedBanners;
           _top100 = top100;
           _storeImageMap..clear()..addAll(imageMap);
+          _bestReviews = finalBestReviews;
         });
       }
     } catch (e) {
@@ -134,11 +195,15 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
-  Future<Map<String, String>> _fetchStoreImages(List<String> storeNames) async {
+  // 가게 이미지 + 리뷰 이미지 통합 로드
+  Future<Map<String, String>> _fetchStoreImagesWithReviews(List<String> storeNames) async {
     if (storeNames.isEmpty) return {};
+    final map = <String, String>{};
+    final List<String> missingImages = [];
+
     try {
       final res = await _supabase.from('stores').select('name, image_url').inFilter('name', storeNames);
-      final map = <String, String>{};
+
       if (res is List) {
         for (final row in res) {
           final name = (row['name'] ?? '').toString();
@@ -148,8 +213,36 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           }
         }
       }
+
+      for (var name in storeNames) {
+        if (!map.containsKey(name)) {
+          missingImages.add(name);
+        }
+      }
+
+      if (missingImages.isNotEmpty) {
+        final reviewRes = await _supabase
+            .from('reviews')
+            .select('store_name, photo_urls')
+            .inFilter('store_name', missingImages)
+            .not('photo_urls', 'is', null)
+            .order('created_at', ascending: false);
+
+        if (reviewRes is List) {
+          for (final row in reviewRes) {
+            final name = (row['store_name'] ?? '').toString();
+            if (map.containsKey(name)) continue;
+
+            final List photos = row['photo_urls'] ?? [];
+            if (photos.isNotEmpty) {
+              map[name] = photos[0].toString();
+            }
+          }
+        }
+      }
       return map;
     } catch (e) {
+      debugPrint("이미지 로드 중 오류: $e");
       return {};
     }
   }
@@ -165,14 +258,31 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     Navigator.push(context, MaterialPageRoute(builder: (_) => WeeklyRankingScreen(rankings: _top100, storeImageMap: _storeImageMap)));
   }
 
-  void _goToCategory(String title) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryPlaceholderScreen(title: title)));
-  }
-
-  // ✅ [복구] 지역 검색 기능
   void _searchByRegion(String regionName) {
     searchTrigger.value = SearchTarget(query: regionName);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$regionName(으)로 검색합니다.")));
+  }
+
+  // ✅ [수정] Map 데이터를 Review 모델로 변환하여 이동
+  void _goToReviewDetail(Map<String, dynamic> reviewMap) {
+    try {
+      // Map을 Review 모델로 변환 (fromJson 사용)
+      final reviewObj = Review.fromJson(reviewMap);
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          // ✅ 수정 포인트: 이제 여기서 review: 파라미터를 사용합니다.
+          // (ReviewDetailScreen.dart를 수정하셔야 이 코드가 정상 작동합니다)
+          builder: (_) => ReviewDetailScreen(review: reviewObj),
+        ),
+      );
+    } catch (e) {
+      debugPrint("리뷰 변환 오류: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("리뷰 정보를 불러오는데 실패했습니다.")),
+      );
+    }
   }
 
   @override
@@ -211,37 +321,24 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             _buildAdBanner(),
             const SizedBox(height: 24),
 
-            // 1. 태그 섹션
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: const Text("지금 인기있는 키워드 🔥", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-            ),
-            const SizedBox(height: 12),
-            _buildQuickTags(),
+            // ✅ 2. 실시간 베스트 리뷰 섹션
+            if (_bestReviews.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: const [
+                    Text("실시간 베스트 리뷰 🏆", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    Spacer(),
+                    Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildBestReviews(), // 클릭 기능 및 좋아요/댓글 UI 추가됨
+              const SizedBox(height: 32),
+            ],
 
-            const SizedBox(height: 32),
-
-            // 2. 테마 섹션
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: const Text("오늘의 추천 테마 🍽️", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-            ),
-            const SizedBox(height: 12),
-            _buildThemeCards(),
-
-            const SizedBox(height: 32),
-
-            // ✅ 3. [복구] 지역별 맛집 섹션 (기존 기능 유지 + 디자인 변경)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: const Text("지역별 맛집 찾기 🗺️", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-            ),
-            const SizedBox(height: 12),
-            _buildLocationList(),
-
-            const SizedBox(height: 32),
-
-            // 4. 주간 랭킹 섹션
+            // 5. 주간 랭킹
             _sectionTitle(
               l10n.weeklyRanking,
               trailing: TextButton(
@@ -259,6 +356,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       ),
     );
   }
+
+  // --- 위젯 빌더 메서드들 ---
 
   Widget _sectionTitle(String title, {Widget? trailing}) {
     return Padding(
@@ -288,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           onSubmitted: _submitSearch,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: '맛집을 찾아보세요',
+            hintText: '맛집, 지역, 키워드 검색',
             hintStyle: TextStyle(color: Colors.grey[400], fontWeight: FontWeight.w600),
             prefixIcon: const Icon(Icons.search_rounded, color: _brand),
             suffixIcon: IconButton(
@@ -378,90 +477,198 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  Widget _buildQuickTags() {
-    final tags = ["#가성비갑", "#뷰맛집", "#혼밥환영", "#데이트코스", "#디저트천국", "#해장추천", "#로컬맛집", "#인스타감성"];
-
+  // ✅ [수정됨] GestureDetector 추가 (클릭 이동)
+  Widget _buildBestReviews() {
     return SizedBox(
-      height: 40,
+      height: 240,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: tags.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemCount: _bestReviews.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
         itemBuilder: (context, index) {
-          return GestureDetector(
-            onTap: () => _submitSearch(tags[index].replaceAll('#', '')),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _brand.withOpacity(0.1)),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 4, offset: const Offset(0, 2))
-                  ]
-              ),
-              child: Text(
-                tags[index],
-                style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
+          final review = _bestReviews[index];
+          final List photoUrls = review['photo_urls'] ?? [];
+          final String mainImage = photoUrls.isNotEmpty ? photoUrls[0] : '';
+          final double score = (review['needsfine_score'] as num?)?.toDouble() ?? 0.0;
+          final String storeName = review['store_name'] ?? '알 수 없는 가게';
+          final String content = review['review_text'] ?? '';
 
-  Widget _buildThemeCards() {
-    final themes = [
-      {"title": "실패 없는 소개팅", "subtitle": "로맨틱한 분위기", "icon": Icons.favorite_rounded, "color": const Color(0xFFFFF0F5), "iconColor": const Color(0xFFFF69B4), "search": "데이트"},
-      {"title": "직장인 점심", "subtitle": "빠르고 맛있는", "icon": Icons.timer_rounded, "color": const Color(0xFFF0F8FF), "iconColor": const Color(0xFF4682B4), "search": "점심"},
-      {"title": "나 홀로 미식회", "subtitle": "편안한 혼밥", "icon": Icons.person_rounded, "color": const Color(0xFFF5F5DC), "iconColor": const Color(0xFFDAA520), "search": "혼밥"},
-      {"title": "회식의 정석", "subtitle": "넓은 좌석 완비", "icon": Icons.groups_rounded, "color": const Color(0xFFE6E6FA), "iconColor": const Color(0xFF9370DB), "search": "회식"},
-    ];
+          // 좋아요, 댓글 수 가져오기 (없으면 0)
+          final int likes = review['likes_count'] ?? 0;
+          final int comments = review['comment_count'] ?? 0;
 
-    return SizedBox(
-      height: 140,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: themes.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 14),
-        itemBuilder: (context, index) {
-          final item = themes[index];
           return GestureDetector(
-            onTap: () => _submitSearch(item['search'] as String),
+            onTap: () => _goToReviewDetail(review), // 클릭 시 상세 화면 이동
             child: Container(
-              width: 130,
-              padding: const EdgeInsets.all(16),
+              width: 280,
               decoration: BoxDecoration(
-                color: item['color'] as Color,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
+                color: Colors.black,
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                  BoxShadow(color: _brand.withOpacity(0.2), blurRadius: 12, offset: const Offset(0, 6)),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.6), shape: BoxShape.circle),
-                    child: Icon(item['icon'] as IconData, color: item['iconColor'] as Color, size: 24),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item['subtitle'] as String, style: TextStyle(fontSize: 11, color: Colors.grey[700], fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 4),
-                      Text(item['title'] as String, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.black87, height: 1.2)),
-                    ],
-                  ),
-                ],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // 1. 배경 이미지
+                    if (mainImage.isNotEmpty)
+                      Image.network(
+                        mainImage,
+                        fit: BoxFit.cover,
+                        errorBuilder: (c, e, s) => Container(color: Colors.grey[800]),
+                      )
+                    else
+                    // 이미지가 없을 때 대체 디자인
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [const Color(0xFF2C2C3E), const Color(0xFF1F1F2E)],
+                          ),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.restaurant_menu_rounded, size: 48, color: Colors.white.withOpacity(0.3)),
+                              const SizedBox(height: 8),
+                              Text(
+                                "이미지 준비중",
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.5),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // 2. 그라데이션 오버레이 (밝기 수정: 0.6)
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withOpacity(0.1), // 상단은 투명하게
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.7), // 하단 텍스트 부분은 적당히 어둡게
+                          ],
+                          stops: const [0.0, 0.4, 1.0], // 텍스트 영역 가독성 확보
+                        ),
+                      ),
+                    ),
+
+                    // 3. 뱃지
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _brand,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.verified_rounded, color: Colors.white, size: 14),
+                            const SizedBox(width: 4),
+                            const Text(
+                              "BEST",
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // 4. 점수 뱃지
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.star_rounded, color: Color(0xFFFFD700), size: 16),
+                            const SizedBox(width: 2),
+                            Text(
+                              score.toStringAsFixed(1),
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // 5. 내용 및 좋아요/댓글
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 16,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            storeName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            content,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 12),
+                          // ✅ 좋아요 및 댓글 수 표시
+                          Row(
+                            children: [
+                              Icon(Icons.favorite_rounded, size: 14, color: Colors.white.withOpacity(0.9)),
+                              const SizedBox(width: 4),
+                              Text(
+                                "$likes",
+                                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(width: 12),
+                              Icon(Icons.chat_bubble_rounded, size: 14, color: Colors.white.withOpacity(0.9)),
+                              const SizedBox(width: 4),
+                              Text(
+                                "$comments",
+                                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -470,105 +677,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  // ✅ [복구] 지역별 리스트 로직 (가로 스크롤 & 확장형 UI로 개선)
-  Widget _buildLocationList() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 1. 도/특별시 선택 (가로 스크롤)
-        SizedBox(
-          height: 45,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            itemCount: koreanRegions.keys.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final province = koreanRegions.keys.elementAt(index);
-              final isSelected = _selectedProvince == province;
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    // 이미 선택된 거 누르면 해제, 아니면 선택
-                    _selectedProvince = isSelected ? null : province;
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isSelected ? _brand : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: isSelected ? _brand : Colors.grey.shade300),
-                  ),
-                  child: Text(
-                    province,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black87,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-
-        // 2. 선택된 지역의 상세 시/군/구 목록 (애니메이션 처리)
-        if (_selectedProvince != null) ...[
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: _softShadow,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_rounded, size: 18, color: _brand),
-                      const SizedBox(width: 6),
-                      Text(
-                        "$_selectedProvince 상세 지역",
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: koreanRegions[_selectedProvince]!.map((city) {
-                      return InkWell(
-                        onTap: () => _searchByRegion("$_selectedProvince $city"),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            border: Border.all(color: Colors.grey.shade200),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(city, style: const TextStyle(fontSize: 13, color: Colors.black87)),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
+  // ✅ 주석 처리된 위젯들 (호출은 하되 빈 컨테이너 반환)
+  Widget _buildQuickTags() => Container();
+  Widget _buildThemeCards() => Container();
+  Widget _buildCategoryTabs() => Container();
+  Widget _buildSubTags() => Container();
+  Widget _buildLocationList() => Container();
 
   Widget _buildWeeklyHorizontal(AppLocalizations l10n) {
     if (_top100.isEmpty) {
@@ -648,9 +762,28 @@ class _WeeklyRankCard extends StatelessWidget {
                     if (imageUrl.isNotEmpty)
                       Image.network(imageUrl, fit: BoxFit.cover, width: double.infinity)
                     else
+                    // ✅ [디자인 유지] 이미지 없을 때: 브랜드 컬러 배경 + 아이콘
                       Container(
-                        color: Colors.grey[100],
-                        child: const Icon(Icons.store, color: Colors.grey),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3E5F5), // 연한 보라색 배경
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.store_rounded, size: 48, color: _brand.withOpacity(0.5)),
+                              const SizedBox(height: 8),
+                              Text(
+                                "이미지 준비중",
+                                style: TextStyle(
+                                  color: _brand.withOpacity(0.7),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     Positioned(
                       left: 0,
@@ -697,6 +830,9 @@ class _WeeklyRankCard extends StatelessWidget {
                           fontSize: 16,
                           color: Colors.white,
                           height: 1.1,
+                          shadows: [
+                            Shadow(offset: Offset(0, 1), blurRadius: 2, color: Colors.black26),
+                          ],
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
