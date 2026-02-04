@@ -192,11 +192,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
 
     try {
       if (_isFollowing) {
+        // 팔로우 생성
         await _supabase.from('follows').insert({
           'follower_id': myId,
           'following_id': widget.userId,
         });
+
+        // 팔로우 알림 생성
+        await _supabase.from('notifications').insert({
+          'receiver_id': widget.userId,
+          'type': 'follow',
+          'reference_id': myId,
+        });
       } else {
+        // 언팔로우
         await _supabase.from('follows').delete()
             .eq('follower_id', myId)
             .eq('following_id', widget.userId);
@@ -498,9 +507,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   }
 
   Widget _buildProfileHeader() {
-    ImageProvider profileImage = _userProfile!.profileImageUrl.isNotEmpty
-        ? NetworkImage(_userProfile!.profileImageUrl)
-        : const AssetImage('assets/images/default_profile.png') as ImageProvider;
+    ImageProvider? profileImage;
+    if (_userProfile!.profileImageUrl.isNotEmpty) {
+      profileImage = NetworkImage(_userProfile!.profileImageUrl);
+    }
 
     return Container(
       color: Colors.white,
@@ -519,6 +529,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                   radius: 40,
                   backgroundImage: profileImage,
                   backgroundColor: Colors.grey[200],
+                  child: profileImage == null ? const Icon(Icons.person, size: 32, color: Colors.grey) : null,
                 ),
               ),
               const SizedBox(width: 24),

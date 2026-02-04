@@ -57,13 +57,11 @@ class MyFeedScreen extends StatelessWidget {
 
   // 1. 프로필 헤더
   Widget _buildProfileHeader(BuildContext context) {
-    ImageProvider profileImage;
+    ImageProvider? profileImage;
     if (userProfile.imageFile != null) {
       profileImage = FileImage(userProfile.imageFile!);
     } else if (userProfile.profileImageUrl.isNotEmpty) {
       profileImage = NetworkImage(userProfile.profileImageUrl);
-    } else {
-      profileImage = const AssetImage('assets/images/default_profile.png');
     }
 
     return Padding(
@@ -76,6 +74,7 @@ class MyFeedScreen extends StatelessWidget {
                 radius: 40,
                 backgroundColor: Colors.grey[200],
                 backgroundImage: profileImage,
+                child: profileImage == null ? const Icon(Icons.person, size: 32, color: Colors.grey) : null,
               ),
               const SizedBox(width: 20),
               Expanded(

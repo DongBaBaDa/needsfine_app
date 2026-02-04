@@ -36,7 +36,47 @@ class NotificationService {
     });
   }
 
-  // 3. 실시간 알림 리스너 (Stream)
+  // 3. 댓글 알림 생성
+  static Future<void> createCommentNotification({
+    required String reviewOwnerId,
+    required String commentId,
+    required String commenterNickname,
+  }) async {
+    try {
+      final currentUserId = _supabase.auth.currentUser?.id;
+      // 자기 자신의 리뷰에 댓글을 단 경우 알림 생성하지 않음
+      if (currentUserId == reviewOwnerId) return;
+
+      await _supabase.from('notifications').insert({
+        'receiver_id': reviewOwnerId,
+        'type': 'comment',
+        'reference_id': commentId, // 댓글 ID를 reference_id에 저장
+      });
+    } catch (e) {
+      print('댓글 알림 생성 실패: $e');
+    }
+  }
+
+  // 4. 팔로우 알림 생성
+  static Future<void> createFollowNotification({
+    required String followedUserId,
+    required String followerNickname,
+  }) async {
+    try {
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId == null) return;
+
+      await _supabase.from('notifications').insert({
+        'receiver_id': followedUserId,
+        'type': 'follow',
+        'reference_id': currentUserId, // 팔로우한 사람의 ID를 reference_id에 저장
+      });
+    } catch (e) {
+      print('팔로우 알림 생성 실패: $e');
+    }
+  }
+
+  // 5. 실시간 알림 리스너 (Stream)
   static Stream<List<AppNotification>> getNotificationStream() {
     final myId = _supabase.auth.currentUser?.id;
     return _supabase

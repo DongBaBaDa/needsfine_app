@@ -696,12 +696,13 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
-                    backgroundImage: (profileUrl != null &&
-                        profileUrl.isNotEmpty)
+                    backgroundImage: (profileUrl != null && profileUrl.isNotEmpty)
                         ? CachedNetworkImageProvider(profileUrl)
-                        : const AssetImage(
-                        'assets/images/default_profile.png')
-                    as ImageProvider,
+                        : null,
+                    backgroundColor: Colors.grey[200],
+                    child: (profileUrl == null || profileUrl.isEmpty)
+                        ? const Icon(Icons.person, size: 20, color: Colors.grey)
+                        : null,
                   ),
                   title: Text(nickname,
                       style: const TextStyle(

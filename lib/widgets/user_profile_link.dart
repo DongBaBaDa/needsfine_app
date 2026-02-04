@@ -24,20 +24,9 @@ class UserProfileLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 이미지 처리
-    ImageProvider avatarImage;
-    if (profileImageUrl != null && profileImageUrl!.isNotEmpty) {
-      avatarImage = NetworkImage(profileImageUrl!);
-    } else {
-      avatarImage = const AssetImage('assets/images/default_profile.png');
-    }
-
     return InkWell(
       onTap: () {
         if (userId == null) return;
-
-        // 내 아이디면 내 피드로 갈지, 마이페이지로 갈지 결정 (여기선 그냥 피드로 이동)
-        // final myId = Supabase.instance.client.auth.currentUser?.id;
 
         Navigator.push(
           context,
@@ -46,12 +35,17 @@ class UserProfileLink extends StatelessWidget {
       },
       borderRadius: BorderRadius.circular(avatarSize),
       child: Row(
-        mainAxisSize: MainAxisSize.min, // 내용물만큼만 크기 차지
+        mainAxisSize: MainAxisSize.min,
         children: [
           CircleAvatar(
             radius: avatarSize,
             backgroundColor: Colors.grey[200],
-            backgroundImage: avatarImage,
+            backgroundImage: (profileImageUrl != null && profileImageUrl!.isNotEmpty) 
+                ? NetworkImage(profileImageUrl!) 
+                : null,
+            child: (profileImageUrl == null || profileImageUrl!.isEmpty)
+                ? Icon(Icons.person, size: avatarSize * 0.9, color: Colors.grey)
+                : null,
           ),
           if (showNickname) ...[
             const SizedBox(width: 8),

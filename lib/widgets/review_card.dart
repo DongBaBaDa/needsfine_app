@@ -22,14 +22,6 @@ class ReviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    // 프로필 이미지 처리
-    ImageProvider avatarImage;
-    if (review.userProfileUrl != null && review.userProfileUrl!.isNotEmpty) {
-      avatarImage = NetworkImage(review.userProfileUrl!);
-    } else {
-      avatarImage = const AssetImage('assets/images/default_profile.png');
-    }
-
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       decoration: BoxDecoration(
@@ -147,7 +139,12 @@ class ReviewCard extends StatelessWidget {
                               CircleAvatar(
                                 radius: 12,
                                 backgroundColor: Colors.grey[200],
-                                backgroundImage: avatarImage,
+                                backgroundImage: (review.userProfileUrl != null && review.userProfileUrl!.isNotEmpty)
+                                    ? NetworkImage(review.userProfileUrl!)
+                                    : null,
+                                child: (review.userProfileUrl == null || review.userProfileUrl!.isEmpty)
+                                    ? const Icon(Icons.person, size: 12, color: Colors.grey)
+                                    : null,
                               ),
                               const SizedBox(width: 8),
                               Text(

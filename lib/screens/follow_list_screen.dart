@@ -192,7 +192,10 @@ class _FollowListState extends State<_FollowList> {
               backgroundColor: Colors.grey[200],
               backgroundImage: (user['profile_image_url'] != null && user['profile_image_url'].isNotEmpty)
                   ? NetworkImage(user['profile_image_url'])
-                  : const AssetImage('assets/images/default_profile.png') as ImageProvider,
+                  : null,
+              child: (user['profile_image_url'] == null || user['profile_image_url'].isEmpty)
+                  ? const Icon(Icons.person, size: 24, color: Colors.grey)
+                  : null,
             ),
             const SizedBox(width: 14),
 

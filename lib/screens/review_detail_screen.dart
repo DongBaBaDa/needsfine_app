@@ -334,11 +334,26 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
 
     try {
-      await _supabase.from('comments').insert({
+      // 1. 댓글 생성
+      final response = await _supabase.from('comments').insert({
         'review_id': widget.review.id,
         'user_id': userId,
         'content': text,
-      });
+      }).select().single();
+
+      // 2. 댓글 알림 생성 (자기 자신의 리뷰가 아닌 경우만)
+      if (widget.review.userId != null && widget.review.userId != userId) {
+        final commentId = response['id'];
+        final myProfile = await _supabase.from('profiles').select('nickname').eq('id', userId).maybeSingle();
+        final myNickname = myProfile?['nickname'] ?? '익명';
+        
+        // NotificationService import 필요
+        await _supabase.from('notifications').insert({
+          'receiver_id': widget.review.userId,
+          'type': 'comment',
+          'reference_id': commentId,
+        });
+      }
 
       _commentController.clear();
       FocusScope.of(context).unfocus();

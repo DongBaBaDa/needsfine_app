@@ -35,25 +35,103 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
     super.dispose();
   }
 
+  // ✅ 최적화: JOIN으로 필요한 모든 데이터 미리 로드
   Stream<List<Map<String, dynamic>>> _notificationStream() async* {
+    final currentUser = _supabase.auth.currentUser?.id;
+    if (currentUser == null) {
+      yield [];
+      return;
+    }
+
     final normalStream = _supabase
         .from('notifications')
         .stream(primaryKey: ['id'])
+        .eq('receiver_id', currentUser)
         .order('created_at', ascending: false)
         .limit(50);
 
     await for (var normalNotifications in normalStream) {
-      final filtered = normalNotifications.where((n) => n['type'] != 'notice').toList();
-      
+      List<Map<String, dynamic>> enrichedNotifications = [];
+
+      // 각 알림에 필요한 데이터를 미리 로드
+      for (var noti in normalNotifications) {
+        final type = noti['type'];
+        final refId = noti['reference_id'];
+        Map<String, dynamic> enriched = Map.from(noti);
+
+        try {
+          if (type == 'comment' && refId != null) {
+            // 댓글 정보 + 작성자 프로필 + 리뷰 매장명
+            final commentData = await _supabase
+                .from('comments')
+                .select('content, user_id, review_id, profiles!comments_user_id_fkey(nickname)')
+                .eq('id', refId)
+                .maybeSingle();
+
+            if (commentData != null) {
+              enriched['comment_content'] = commentData['content'] ?? '삭제된 댓글';
+              enriched['commenter_nickname'] = commentData['profiles']?['nickname'] ?? '알 수 없는 유저';
+
+              final reviewId = commentData['review_id'];
+              if (reviewId != null) {
+                final reviewData = await _supabase
+                    .from('reviews')
+                    .select('store_name')
+                    .eq('id', reviewId)
+                    .maybeSingle();
+                enriched['review_store_name'] = reviewData?['store_name'] ?? '매장';
+              } else {
+                enriched['review_store_name'] = '매장';
+              }
+            } else {
+              // 삭제된 댓글 처리
+              enriched['comment_content'] = '삭제된 댓글입니다';
+              enriched['commenter_nickname'] = '알 수 없는 유저';
+              enriched['review_store_name'] = '리뷰';
+            }
+          } else if (type == 'follow' && refId != null) {
+            // 팔로워 프로필
+            final profileData = await _supabase
+                .from('profiles')
+                .select('nickname')
+                .eq('id', refId)
+                .maybeSingle();
+            enriched['follower_nickname'] = profileData?['nickname'] ?? '알 수 없는 유저';
+          } else if ((type == 'like' || type == 'comment_like') && refId != null) {
+            // 리뷰 매장명
+            final reviewData = await _supabase
+                .from('reviews')
+                .select('store_name')
+                .eq('id', refId)
+                .maybeSingle();
+            enriched['review_store_name'] = reviewData?['store_name'] ?? '리뷰';
+
+            // 좋아요한 사람 닉네임
+            final saveData = await _supabase
+                .from('review_saves')
+                .select('user_id, profiles!review_saves_user_id_fkey(nickname)')
+                .eq('review_id', refId)
+                .order('created_at', ascending: false)
+                .limit(1)
+                .maybeSingle();
+            enriched['liker_nickname'] = saveData?['profiles']?['nickname'] ?? '알 수 없는 유저';
+          }
+        } catch (e) {
+          debugPrint('알림 데이터 로드 실패 (${noti['id']}): $e');
+        }
+
+        enrichedNotifications.add(enriched);
+      }
+
+      // 공지사항 추가
       final notices = await _supabase
           .from('notices')
           .select('*')
           .order('created_at', ascending: false)
           .limit(10);
-      
-      List<Map<String, dynamic>> allNotifications = List.from(filtered);
+
       for (var notice in notices) {
-        allNotifications.add({
+        enrichedNotifications.add({
           'id': 'notice_${notice['id']}',
           'type': 'notice',
           'title': notice['title'],
@@ -63,12 +141,12 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
           'reference_id': notice['id'],
         });
       }
-      
-      allNotifications.sort((a, b) => 
-        DateTime.parse(b['created_at']).compareTo(DateTime.parse(a['created_at']))
+
+      enrichedNotifications.sort((a, b) =>
+          DateTime.parse(b['created_at']).compareTo(DateTime.parse(a['created_at']))
       );
-      
-      yield allNotifications;
+
+      yield enrichedNotifications;
     }
   }
 
@@ -168,7 +246,7 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
             ),
           ),
           Divider(height: 1, thickness: 1, color: Colors.grey[100]),
-          
+
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _notificationStream(),
@@ -210,155 +288,59 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
   }
 }
 
-class NotificationItem extends StatefulWidget {
+// ✅ 완전히 리팩토링된 NotificationItem - 공지사항 스타일 적용
+class NotificationItem extends StatelessWidget {
   final Map<String, dynamic> notification;
   const NotificationItem({super.key, required this.notification});
 
-  @override
-  State<NotificationItem> createState() => _NotificationItemState();
-}
-
-class _NotificationItemState extends State<NotificationItem> {
-  final _supabase = Supabase.instance.client;
   static const Color _brand = Color(0xFF8A2BE2);
 
-  String? _commenterNickname;
-  String? _reviewStoreName;
-  String? _commentContent;
-  String? _followerNickname;
-  String? _likerNickname;
-  bool _isLoading = true;
+  Future<void> _markAsRead(BuildContext context) async {
+    final supabase = Supabase.instance.client;
+    final id = notification['id'];
+    final type = notification['type'];
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchData();
-  }
-
-  Future<void> _fetchData() async {
-    final type = widget.notification['type'];
-    final refId = widget.notification['reference_id'];
-
-    if (refId == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      if (type == 'notice') {
-        // 공지사항은 이미 데이터가 있음
-      } else if (type == 'comment') {
-        final commentData = await _supabase
-            .from('comments')
-            .select('content, user_id, review_id')
-            .eq('id', refId)
-            .maybeSingle();
-
-        debugPrint('댓글 데이터: $commentData');
-
-        if (commentData != null && mounted) {
-          final content = commentData['content'];
-          final userId = commentData['user_id'];
-          final reviewId = commentData['review_id'];
-          
-          debugPrint('content: $content, userId: $userId, reviewId: $reviewId');
-          
-          if (content != null) {
-            setState(() => _commentContent = content);
-          }
-
-          if (userId != null) {
-            final userData = await _supabase.from('profiles').select('nickname').eq('id', userId).maybeSingle();
-            debugPrint('유저 데이터: $userData');
-            if (userData != null && mounted) {
-              setState(() => _commenterNickname = userData['nickname']);
-            }
-          }
-
-          if (reviewId != null) {
-            final reviewData = await _supabase.from('reviews').select('store_name').eq('id', reviewId).maybeSingle();
-            debugPrint('리뷰 데이터: $reviewData');
-            if (reviewData != null && mounted) {
-              setState(() => _reviewStoreName = reviewData['store_name']);
-            }
-          }
-        } else {
-          debugPrint('댓글을 찾을 수 없음: refId=$refId');
-        }
-      } else if (type == 'follow') {
-        final data = await _supabase.from('profiles').select('nickname').eq('id', refId).maybeSingle();
-        if (data != null && mounted) {
-          setState(() => _followerNickname = data['nickname']);
-        }
-      } else if (type == 'like' || type == 'comment_like') {
-        final reviewData = await _supabase.from('reviews').select('store_name, user_id').eq('id', refId).maybeSingle();
-        if (reviewData != null && mounted) {
-          setState(() => _reviewStoreName = reviewData['store_name']);
-
-          final saveData = await _supabase
-              .from('review_saves')
-              .select('user_id')
-              .eq('review_id', refId)
-              .order('created_at', ascending: false)
-              .limit(1)
-              .maybeSingle();
-
-          if (saveData != null) {
-            final saverId = saveData['user_id'];
-            if (saverId != null) {
-              final userData = await _supabase.from('profiles').select('nickname').eq('id', saverId).maybeSingle();
-              if (userData != null && mounted) {
-                setState(() => _likerNickname = userData['nickname']);
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('데이터 로딩 실패: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _markAsRead() async {
-    final id = widget.notification['id'];
-    final type = widget.notification['type'];
-    
     if (type == 'notice') return;
 
-    final isRead = widget.notification['is_read'] ?? false;
+    final isRead = notification['is_read'] ?? false;
     if (isRead) return;
 
     try {
-      await _supabase.from('notifications').update({'is_read': true}).eq('id', id);
+      await supabase.from('notifications').update({'is_read': true}).eq('id', id);
     } catch (e) {
       debugPrint('읽음 처리 실패: $e');
     }
   }
 
-  Future<void> _handleNavigation() async {
-    await _markAsRead();
+  Future<void> _handleNavigation(BuildContext context) async {
+    await _markAsRead(context);
 
-    final type = widget.notification['type'];
-    final refId = widget.notification['reference_id'];
+    final supabase = Supabase.instance.client;
+    final type = notification['type'];
+    final refId = notification['reference_id'];
 
     if (type == 'follow' && refId != null) {
-      if (mounted) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: refId)));
-      }
+      Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: refId)));
     } else if ((type == 'comment' || type == 'like' || type == 'comment_like') && refId != null) {
       try {
         String reviewId = refId;
         if (type == 'comment') {
-          final commentData = await _supabase.from('comments').select('review_id').eq('id', refId).maybeSingle();
+          final commentData = await supabase.from('comments').select('review_id').eq('id', refId).maybeSingle();
           if (commentData != null) {
             reviewId = commentData['review_id'];
+          } else {
+            // 삭제된 댓글
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('삭제된 댓글입니다'))
+              );
+            }
+            return;
           }
         }
-        
-        final reviewData = await _supabase.from('reviews').select('*, profiles(*)').eq('id', reviewId).maybeSingle();
-        if (reviewData != null && mounted) {
+
+        final reviewData = await supabase.from('reviews').select('*, profiles(*)').eq('id', reviewId).maybeSingle();
+        if (reviewData != null && context.mounted) {
           Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: Review.fromJson(reviewData))));
         }
       } catch (e) {
@@ -378,200 +360,192 @@ class _NotificationItemState extends State<NotificationItem> {
 
   @override
   Widget build(BuildContext context) {
-    final noti = widget.notification;
-    final type = noti['type'] ?? '';
-    final isRead = noti['is_read'] ?? false;
-    final date = _formatDate(noti['created_at']);
+    final type = notification['type'] ?? '';
+    final isRead = notification['is_read'] ?? false;
+    final date = _formatDate(notification['created_at']);
 
+    // ✅ 공지사항 - 기존 스타일 유지
     if (type == 'notice') {
-      return Column(
-        children: [
-          Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              childrenPadding: EdgeInsets.zero,
-              iconColor: _brand,
-              collapsedIconColor: Colors.grey,
-              backgroundColor: Colors.grey[50],
-              title: Column(
+      return Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          childrenPadding: EdgeInsets.zero,
+          iconColor: _brand,
+          collapsedIconColor: Colors.grey,
+          backgroundColor: Colors.grey[50],
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(notification['title'] ?? '공지사항', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, height: 1.4)),
+              const SizedBox(height: 6),
+              Text(date, style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+            ],
+          ),
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(38, 0, 24, 32),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 6, height: 6,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: const BoxDecoration(color: Colors.transparent, shape: BoxShape.circle),
-                      ),
-                      Expanded(
-                        child: Text(noti['title'] ?? '공지사항', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, height: 1.4)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(date, style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  Text(notification['content'] ?? '', style: const TextStyle(height: 1.8, fontSize: 15, color: Colors.black87)),
                 ],
               ),
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(38, 0, 24, 32),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8),
-                      Text(noti['content'] ?? '', style: const TextStyle(height: 1.8, fontSize: 15, color: Colors.black87)),
-                    ],
-                  ),
-                ),
-              ],
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
+    // ✅ 댓글 알림 - 공지사항 스타일 적용
     if (type == 'comment') {
-      if (_isLoading) {
-        return const Padding(padding: EdgeInsets.all(24.0), child: Center(child: CircularProgressIndicator(color: _brand)));
-      }
+      final commenter = notification['commenter_nickname'] ?? '알 수 없는 유저';
+      final storeName = notification['review_store_name'] ?? '리뷰';
+      final content = notification['comment_content'] ?? '댓글 내용을 불러올 수 없습니다';
 
-      final commenter = _commenterNickname ?? '알 수 없는 유저';
-      final storeName = _reviewStoreName ?? '리뷰';
-      final content = _commentContent ?? '댓글 내용';
-
-      return Column(
-        children: [
-          Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              onExpansionChanged: (expanded) { if (expanded) _markAsRead(); },
-              tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              childrenPadding: EdgeInsets.zero,
-              iconColor: _brand,
-              collapsedIconColor: Colors.grey,
-              backgroundColor: Colors.grey[50],
-              title: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      return Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          onExpansionChanged: (expanded) { if (expanded) _markAsRead(context); },
+          tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          childrenPadding: EdgeInsets.zero,
+          iconColor: _brand,
+          collapsedIconColor: Colors.grey,
+          backgroundColor: Colors.grey[50],
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 6, height: 6,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(color: !isRead ? _brand : Colors.transparent, shape: BoxShape.circle),
-                      ),
-                      Expanded(
-                        child: RichText(
-                          text: TextSpan(
-                            style: const TextStyle(fontSize: 16, color: Colors.black87),
-                            children: [
-                              TextSpan(text: commenter, style: const TextStyle(fontWeight: FontWeight.w700)),
-                              const TextSpan(text: "님이 당신의 "),
-                              TextSpan(text: storeName, style: const TextStyle(fontWeight: FontWeight.w700, color: _brand)),
-                              const TextSpan(text: " 리뷰에 댓글을 달았습니다"),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  Container(
+                    width: 6, height: 6,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(color: !isRead ? _brand : Colors.transparent, shape: BoxShape.circle),
                   ),
-                  const SizedBox(height: 6),
-                  Text(date, style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
-                ],
-              ),
-              children: [
-                InkWell(
-                  onTap: _handleNavigation,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(38, 0, 24, 32),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 8),
-                        Text(content, style: const TextStyle(height: 1.8, fontSize: 15, color: Colors.black87)),
-                      ],
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 16, color: Colors.black87, height: 1.4),
+                        children: [
+                          TextSpan(text: commenter, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          const TextSpan(text: "님이 당신의 "),
+                          TextSpan(text: storeName, style: const TextStyle(fontWeight: FontWeight.w700, color: _brand)),
+                          const TextSpan(text: " 리뷰에 댓글을 달았습니다"),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-
-    if (type == 'follow') {
-      if (_isLoading) {
-        return const Padding(padding: EdgeInsets.all(24.0), child: Center(child: CircularProgressIndicator(color: _brand)));
-      }
-
-      final follower = _followerNickname ?? '알 수 없는 유저';
-
-      return InkWell(
-        onTap: _handleNavigation,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Row(
-            children: [
-              Container(
-                width: 6, height: 6,
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(color: !isRead ? _brand : Colors.transparent, shape: BoxShape.circle),
+                ],
               ),
-              Expanded(
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 14.0),
+                child: Text(date, style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+          children: [
+            InkWell(
+              onTap: () => _handleNavigation(context),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(38, 0, 24, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    RichText(
+                    const SizedBox(height: 8),
+                    Text(content, style: const TextStyle(height: 1.8, fontSize: 15, color: Colors.black87)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ✅ 팔로우 알림 - 공지사항 스타일 적용 (ExpansionTile)
+    if (type == 'follow') {
+      final follower = notification['follower_nickname'] ?? '알 수 없는 유저';
+
+      return Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          onExpansionChanged: (expanded) { if (expanded) _markAsRead(context); },
+          tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          childrenPadding: EdgeInsets.zero,
+          iconColor: _brand,
+          collapsedIconColor: Colors.grey,
+          backgroundColor: Colors.grey[50],
+          trailing: const SizedBox.shrink(), // 아이콘 숨김 (즉시 이동 가능)
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 6, height: 6,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(color: !isRead ? _brand : Colors.transparent, shape: BoxShape.circle),
+                  ),
+                  Expanded(
+                    child: RichText(
                       text: TextSpan(
-                        style: const TextStyle(fontSize: 16, color: Colors.black87),
+                        style: const TextStyle(fontSize: 16, color: Colors.black87, height: 1.4),
                         children: [
                           TextSpan(text: follower, style: const TextStyle(fontWeight: FontWeight.w700)),
                           const TextSpan(text: "님이 당신을 팔로우 했습니다"),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(date, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
-                  ],
-                ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
+                ],
               ),
-              const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 24),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 14.0),
+                child: Text(date, style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+              ),
             ],
           ),
+          children: [],
+          onTap: () => _handleNavigation(context),
         ),
       );
     }
 
+    // ✅ 좋아요/도움됨 알림 - 공지사항 스타일 적용 (ExpansionTile)
     if (type == 'like' || type == 'comment_like') {
-      if (_isLoading) {
-        return const Padding(padding: EdgeInsets.all(24.0), child: Center(child: CircularProgressIndicator(color: _brand)));
-      }
+      final liker = notification['liker_nickname'] ?? '알 수 없는 유저';
+      final storeName = notification['review_store_name'] ?? '리뷰';
 
-      final liker = _likerNickname ?? '알 수 없는 유저';
-      final storeName = _reviewStoreName ?? '리뷰';
-
-      return InkWell(
-        onTap: _handleNavigation,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Row(
+      return Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          onExpansionChanged: (expanded) { if (expanded) _markAsRead(context); },
+          tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          childrenPadding: EdgeInsets.zero,
+          iconColor: _brand,
+          collapsedIconColor: Colors.grey,
+          backgroundColor: Colors.grey[50],
+          trailing: const SizedBox.shrink(),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 6, height: 6,
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(color: !isRead ? _brand : Colors.transparent, shape: BoxShape.circle),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    RichText(
+              Row(
+                children: [
+                  Container(
+                    width: 6, height: 6,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(color: !isRead ? _brand : Colors.transparent, shape: BoxShape.circle),
+                  ),
+                  Expanded(
+                    child: RichText(
                       text: TextSpan(
-                        style: const TextStyle(fontSize: 16, color: Colors.black87),
+                        style: const TextStyle(fontSize: 16, color: Colors.black87, height: 1.4),
                         children: [
                           const TextSpan(text: "당신의 "),
                           TextSpan(text: storeName, style: const TextStyle(fontWeight: FontWeight.w700, color: _brand)),
@@ -581,14 +555,19 @@ class _NotificationItemState extends State<NotificationItem> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(date, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
-                  ],
-                ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
+                ],
               ),
-              const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 24),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 14.0),
+                child: Text(date, style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+              ),
             ],
           ),
+          children: [],
+          onTap: () => _handleNavigation(context),
         ),
       );
     }
