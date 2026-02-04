@@ -61,16 +61,28 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
 
         try {
           if (type == 'comment' && refId != null) {
-            // 댓글 정보 + 작성자 프로필 + 리뷰 매장명
+            // ✅ 댓글 정보 조회 (별도 쿼리로 분리하여 안정성 확보)
             final commentData = await _supabase
                 .from('comments')
-                .select('content, user_id, review_id, profiles!comments_user_id_fkey(nickname)')
+                .select('content, user_id, review_id')
                 .eq('id', refId)
                 .maybeSingle();
 
             if (commentData != null) {
               enriched['comment_content'] = commentData['content'] ?? '삭제된 댓글';
-              enriched['commenter_nickname'] = commentData['profiles']?['nickname'] ?? '알 수 없는 유저';
+              
+              // ✅ 댓글 작성자 닉네임 별도 조회
+              final commenterId = commentData['user_id'];
+              if (commenterId != null) {
+                final commenterProfile = await _supabase
+                    .from('profiles')
+                    .select('nickname')
+                    .eq('id', commenterId)
+                    .maybeSingle();
+                enriched['commenter_nickname'] = commenterProfile?['nickname'] ?? '알 수 없는 유저';
+              } else {
+                enriched['commenter_nickname'] = '알 수 없는 유저';
+              }
 
               final reviewId = commentData['review_id'];
               if (reviewId != null) {
@@ -90,32 +102,45 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
               enriched['review_store_name'] = '리뷰';
             }
           } else if (type == 'follow' && refId != null) {
-            // 팔로워 프로필
+            // ✅ 팔로워 프로필 조회 (디버그 로그 추가)
+            debugPrint('🔔 팔로우 알림 로드: refId=$refId');
             final profileData = await _supabase
                 .from('profiles')
                 .select('nickname')
                 .eq('id', refId)
                 .maybeSingle();
+            debugPrint('🔔 팔로우 프로필 결과: $profileData');
             enriched['follower_nickname'] = profileData?['nickname'] ?? '알 수 없는 유저';
-          } else if ((type == 'like' || type == 'comment_like') && refId != null) {
-            // 리뷰 매장명
-            final reviewData = await _supabase
-                .from('reviews')
-                .select('store_name')
-                .eq('id', refId)
-                .maybeSingle();
-            enriched['review_store_name'] = reviewData?['store_name'] ?? '리뷰';
+          } else if (type == 'like' || type == 'comment_like') {
+          // ✅ 좋아요/도움됨 알림 데이터 로드 (review_votes 사용!)
+          final reviewData = await _supabase
+              .from('reviews')
+              .select('store_name, user_id')
+              .eq('id', refId)
+              .maybeSingle();
 
-            // 좋아요한 사람 닉네임
-            final saveData = await _supabase
-                .from('review_saves')
-                .select('user_id, profiles!review_saves_user_id_fkey(nickname)')
+          if (reviewData != null) {
+            enriched['review_store_name'] = reviewData['store_name'] ?? '매장';
+
+            // review_votes 테이블에서 최근 좋아요 누른 사람 조회
+            final voteData = await _supabase
+                .from('review_votes')
+                .select('user_id, profiles!review_votes_user_id_fkey(nickname)')
                 .eq('review_id', refId)
                 .order('created_at', ascending: false)
                 .limit(1)
                 .maybeSingle();
-            enriched['liker_nickname'] = saveData?['profiles']?['nickname'] ?? '알 수 없는 유저';
+
+            if (voteData != null && voteData['profiles'] != null) {
+              enriched['liker_nickname'] = voteData['profiles']['nickname'] ?? '알 수 없는 유저';
+            } else {
+              enriched['liker_nickname'] = '알 수 없는 유저';
+            }
+          } else {
+            enriched['review_store_name'] = '매장';
+            enriched['liker_nickname'] = '알 수 없는 유저';
           }
+        }
         } catch (e) {
           debugPrint('알림 데이터 로드 실패 (${noti['id']}): $e');
         }
@@ -364,7 +389,7 @@ class NotificationItem extends StatelessWidget {
     final isRead = notification['is_read'] ?? false;
     final date = _formatDate(notification['created_at']);
 
-    // ✅ 공지사항 - 기존 스타일 유지
+    // ✅ 공지사항 - 다른 알림과 동일한 Row 구조 적용 (읽음 표시 점 위치에 동일한 여백)
     if (type == 'notice') {
       return Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -377,9 +402,20 @@ class NotificationItem extends StatelessWidget {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(notification['title'] ?? '공지사항', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, height: 1.4)),
+              Row(
+                children: [
+                  // ✅ 다른 알림들과 동일한 14px 여백 (6px 점 + 8px margin)
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(notification['title'] ?? '공지사항', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, height: 1.4)),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
-              Text(date, style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+              Padding(
+                padding: const EdgeInsets.only(left: 14.0),
+                child: Text(date, style: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+              ),
             ],
           ),
           children: [
@@ -466,21 +502,18 @@ class NotificationItem extends StatelessWidget {
       );
     }
 
-    // ✅ 팔로우 알림 - 공지사항 스타일 적용 (ExpansionTile)
+    // ✅ 팔로우 알림 - 공지사항 스타일 적용 (InkWell)
     if (type == 'follow') {
       final follower = notification['follower_nickname'] ?? '알 수 없는 유저';
 
-      return Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          onExpansionChanged: (expanded) { if (expanded) _markAsRead(context); },
-          tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          childrenPadding: EdgeInsets.zero,
-          iconColor: _brand,
-          collapsedIconColor: Colors.grey,
-          backgroundColor: Colors.grey[50],
-          trailing: const SizedBox.shrink(), // 아이콘 숨김 (즉시 이동 가능)
-          title: Column(
+      return InkWell(
+        onTap: () async {
+          await _markAsRead(context);
+          await _handleNavigation(context);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -511,28 +544,23 @@ class NotificationItem extends StatelessWidget {
               ),
             ],
           ),
-          children: [],
-          onTap: () => _handleNavigation(context),
         ),
       );
     }
 
-    // ✅ 좋아요/도움됨 알림 - 공지사항 스타일 적용 (ExpansionTile)
+    // ✅ 좋아요/도움됨 알림 - 공지사항 스타일 적용 (InkWell)
     if (type == 'like' || type == 'comment_like') {
       final liker = notification['liker_nickname'] ?? '알 수 없는 유저';
       final storeName = notification['review_store_name'] ?? '리뷰';
 
-      return Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          onExpansionChanged: (expanded) { if (expanded) _markAsRead(context); },
-          tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          childrenPadding: EdgeInsets.zero,
-          iconColor: _brand,
-          collapsedIconColor: Colors.grey,
-          backgroundColor: Colors.grey[50],
-          trailing: const SizedBox.shrink(),
-          title: Column(
+      return InkWell(
+        onTap: () async {
+          await _markAsRead(context);
+          await _handleNavigation(context);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -566,8 +594,6 @@ class NotificationItem extends StatelessWidget {
               ),
             ],
           ),
-          children: [],
-          onTap: () => _handleNavigation(context),
         ),
       );
     }
