@@ -198,12 +198,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
           'following_id': widget.userId,
         });
 
-        // 팔로우 알림 생성
-        await _supabase.from('notifications').insert({
-          'receiver_id': widget.userId,
-          'type': 'follow',
-          'reference_id': myId,
-        });
+        // 팔로우 알림 생성 (실패해도 팔로우 상태는 유지)
+        try {
+          await _supabase.from('notifications').insert({
+            'receiver_id': widget.userId,
+            'type': 'follow',
+            'reference_id': myId,
+          });
+        } catch (e) {
+          debugPrint('팔로우 알림 전송 실패: $e');
+        }
       } else {
         // 언팔로우
         await _supabase.from('follows').delete()

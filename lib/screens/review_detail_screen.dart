@@ -530,24 +530,26 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                         _isLoadingComments
                             ? const Center(child: CircularProgressIndicator(color: _brand))
                             : _comments.isEmpty
-                            ? Container(
-                          padding: const EdgeInsets.symmetric(vertical: 30),
-                          child: const Center(child: Text("첫 댓글을 남겨보세요! 👋", style: TextStyle(color: Colors.grey))),
+                            ? const Padding(
+                          padding: EdgeInsets.all(32.0),
+                          child: Center(child: Text("아직 댓글이 없습니다.\n첫 댓글을 남겨보세요!", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey))),
                         )
                             : ListView.separated(
                           physics: const NeverScrollableScrollPhysics(),
                           shrinkWrap: true,
                           itemCount: _comments.length,
-                          separatorBuilder: (_, __) => const Divider(height: 24, thickness: 1, color: Color(0xFFEEEEEE)),
+                          separatorBuilder: (_, __) => const SizedBox(height: 16),
                           itemBuilder: (context, index) {
                             final comment = _comments[index];
-                            final profile = comment['profiles'];
-                            return _buildCommentItem(
-                              profile?['nickname'] ?? '익명',
-                              comment['content'] ?? '',
-                              profile?['profile_image_url'],
-                              comment['user_id'],
-                            );
+                            final profile = comment['profiles'] ?? {};
+                            final user = profile['nickname'] ?? '알 수 없는 유저';
+                            final text = comment['content'] ?? '';
+                            final profileUrl = profile['profile_image_url'];
+                            final userId = comment['user_id'];
+                            final commentId = comment['id'];
+                            final isMine = userId != null && userId == _supabase.auth.currentUser?.id;
+
+                            return _buildCommentItem(commentId, user, text, profileUrl, userId, isMine);
                           },
                         ),
                         const SizedBox(height: 40),
@@ -754,7 +756,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     );
   }
 
-  Widget _buildCommentItem(String user, String text, String? profileUrl, String? userId) {
+  Widget _buildCommentItem(String commentId, String user, String text, String? profileUrl, String? userId, bool isMine) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -776,21 +778,103 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              InkWell(
-                onTap: () {
-                  if (userId != null) {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)));
-                  }
-                },
-                child: Text(user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  InkWell(
+                    onTap: () {
+                      if (userId != null) {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)));
+                      }
+                    },
+                    child: Text(user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                  if (isMine)
+                    SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: PopupMenuButton<String>(
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.more_horiz_rounded, size: 16, color: Colors.grey),
+                        onSelected: (value) {
+                          if (value == 'edit') _editComment(commentId, text);
+                          if (value == 'delete') _deleteComment(commentId);
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(value: 'edit', height: 32, child: Text('수정', style: TextStyle(fontSize: 13))),
+                          const PopupMenuItem(value: 'delete', height: 32, child: Text('삭제', style: TextStyle(fontSize: 13, color: Colors.red))),
+                        ],
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4)),
             ],
           ),
         )
       ],
     );
+  }
+
+  // ✅ 댓글 수정
+  Future<void> _editComment(String commentId, String oldText) async {
+    final controller = TextEditingController(text: oldText);
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("댓글 수정", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: "내용을 입력하세요"),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("취소", style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () async {
+              final newText = controller.text.trim();
+              if (newText.isNotEmpty && newText != oldText) {
+                try {
+                  await _supabase.from('comments').update({'content': newText}).eq('id', commentId);
+                  _fetchComments(); // 목록 갱신
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("댓글이 수정되었습니다.")));
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("수정 실패")));
+                }
+              }
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text("저장", style: TextStyle(color: Color(0xFF8A2BE2), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ 댓글 삭제
+  Future<void> _deleteComment(String commentId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("댓글 삭제"),
+        content: const Text("정말로 이 댓글을 삭제하시겠습니까?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("취소", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("삭제", style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _supabase.from('comments').delete().eq('id', commentId);
+        _fetchComments(); // 목록 갱신
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("댓글이 삭제되었습니다.")));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("삭제 실패")));
+      }
+    }
   }
 
   Widget _buildCommentInput() {

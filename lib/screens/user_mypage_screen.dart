@@ -245,14 +245,12 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _StatBadge(
-                  leading: const Text("NF", style: TextStyle(color: Color(0xFF8A2BE2), fontWeight: FontWeight.w900, fontSize: 13)),
-                  label: " ${_avgNeedsFineScore.toStringAsFixed(1)}",
+                  label: "니즈파인 점수 ${_avgNeedsFineScore.toStringAsFixed(1)}",
                   color: const Color(0xFF8A2BE2)
               ),
               const SizedBox(width: 10),
               _StatBadge(
-                  leading: const Icon(Icons.verified_user_rounded, size: 14, color: Colors.blueAccent),
-                  label: "${l10n.reliability} $_avgTrustLevel%",
+                  label: "신뢰도 $_avgTrustLevel%",
                   color: Colors.blueAccent
               ),
             ],
@@ -559,23 +557,21 @@ class _MenuItem extends StatelessWidget {
 }
 
 class _StatBadge extends StatelessWidget {
-  final Widget leading;
   final String label;
   final Color color;
-  const _StatBadge({required this.leading, required this.label, required this.color});
+  const _StatBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          leading,
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14),
       ),
     );
   }

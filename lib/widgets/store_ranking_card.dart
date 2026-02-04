@@ -139,11 +139,11 @@ class StoreRankingCard extends StatelessWidget {
 
           // 3. [우측] 니즈파인 점수 & 신뢰도
           Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                l10n.avgNeedsFineScore, // "평균 니즈파인 점수"
+                '니즈파인 점수',
                 style: const TextStyle(
                   fontSize: 11,
                   color: Color(0xFF9C7CFF),
@@ -154,7 +154,7 @@ class StoreRankingCard extends StatelessWidget {
               Text(
                 ranking.avgScore.toStringAsFixed(1),
                 style: const TextStyle(
-                  fontSize: 26, // 숫자 강조
+                  fontSize: 26,
                   fontWeight: FontWeight.w900,
                   color: Color(0xFF9C7CFF),
                   height: 1.0,

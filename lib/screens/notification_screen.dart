@@ -61,17 +61,33 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
 
         try {
           if (type == 'comment' && refId != null) {
-            // ✅ 댓글 정보 조회 (별도 쿼리로 분리하여 안정성 확보)
-            final commentData = await _supabase
+            Map<String, dynamic>? commentData;
+
+            // 1차 시도: refId를 comment ID로 가정하고 조회
+            commentData = await _supabase
                 .from('comments')
                 .select('content, user_id, review_id')
                 .eq('id', refId)
                 .maybeSingle();
 
+            // 2차 시도: 실패 시 refId를 review ID로 가정하고, 해당 리뷰의 최신 댓글 1개를 조회 (Fallback)
+            if (commentData == null) {
+              final fallbackComments = await _supabase
+                  .from('comments')
+                  .select('content, user_id, review_id')
+                  .eq('review_id', refId)
+                  .order('created_at', ascending: false)
+                  .limit(1);
+              
+              if (fallbackComments.isNotEmpty) {
+                commentData = fallbackComments.first;
+              }
+            }
+
             if (commentData != null) {
               enriched['comment_content'] = commentData['content'] ?? '삭제된 댓글';
               
-              // ✅ 댓글 작성자 닉네임 별도 조회
+              // 댓글 작성자 닉네임 조회
               final commenterId = commentData['user_id'];
               if (commenterId != null) {
                 final commenterProfile = await _supabase
@@ -96,7 +112,7 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
                 enriched['review_store_name'] = '매장';
               }
             } else {
-              // 삭제된 댓글 처리
+              // 댓글을 찾을 수 없음
               enriched['comment_content'] = '삭제된 댓글입니다';
               enriched['commenter_nickname'] = '알 수 없는 유저';
               enriched['review_store_name'] = '리뷰';
