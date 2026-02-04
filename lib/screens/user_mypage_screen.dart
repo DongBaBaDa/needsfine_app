@@ -73,7 +73,8 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
         for (final item in rawList) {
           final review = (item is Map) ? Map<String, dynamic>.from(item as Map) : <String, dynamic>{};
           totalScore += ((review['needsfine_score'] as num?) ?? 0).toDouble();
-          totalTrust += (((review['trust_level'] as num?) ?? 0).round());
+          final double trustScore = (review['trust_level'] as num?)?.toDouble() ?? 50.0;
+          totalTrust += trustScore.round();
         }
         _avgNeedsFineScore = totalScore / rawList.length;
         _avgTrustLevel = (totalTrust / rawList.length).round();
@@ -244,13 +245,13 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _StatBadge(
-                  icon: Icons.star_rounded,
-                  label: "${l10n.needsFine} ${_avgNeedsFineScore.toStringAsFixed(1)}",
+                  leading: const Text("NF", style: TextStyle(color: Color(0xFF8A2BE2), fontWeight: FontWeight.w900, fontSize: 13)),
+                  label: " ${_avgNeedsFineScore.toStringAsFixed(1)}",
                   color: const Color(0xFF8A2BE2)
               ),
               const SizedBox(width: 10),
               _StatBadge(
-                  icon: Icons.verified_user_rounded,
+                  leading: const Icon(Icons.verified_user_rounded, size: 14, color: Colors.blueAccent),
                   label: "${l10n.reliability} $_avgTrustLevel%",
                   color: Colors.blueAccent
               ),
@@ -558,10 +559,10 @@ class _MenuItem extends StatelessWidget {
 }
 
 class _StatBadge extends StatelessWidget {
-  final IconData icon;
+  final Widget leading;
   final String label;
   final Color color;
-  const _StatBadge({required this.icon, required this.label, required this.color});
+  const _StatBadge({required this.leading, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -571,8 +572,8 @@ class _StatBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
+          leading,
+          const SizedBox(width: 4),
           Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
         ],
       ),

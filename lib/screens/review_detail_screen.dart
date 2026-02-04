@@ -341,19 +341,8 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
         'content': text,
       }).select().single();
 
-      // 2. 댓글 알림 생성 (자기 자신의 리뷰가 아닌 경우만)
-      if (widget.review.userId != null && widget.review.userId != userId) {
-        final commentId = response['id'];
-        final myProfile = await _supabase.from('profiles').select('nickname').eq('id', userId).maybeSingle();
-        final myNickname = myProfile?['nickname'] ?? '익명';
-        
-        // NotificationService import 필요
-        await _supabase.from('notifications').insert({
-          'receiver_id': widget.review.userId,
-          'type': 'comment',
-          'reference_id': commentId,
-        });
-      }
+      // 2. 댓글 알림 생성 (DB Trigger 'tr_comment_notification'에서 자동 처리됨)
+      // 중복 방지를 위해 앱 내 수동 생성 로직 삭제함
 
       _commentController.clear();
       FocusScope.of(context).unfocus();

@@ -441,7 +441,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           final double score = (review['needsfine_score'] as num?)?.toDouble() ?? 0.0;
           final String storeName = review['store_name'] ?? '알 수 없는 가게';
           final String content = review['review_text'] ?? '';
-          final double trustScore = (review['trust_score'] as num?)?.toDouble() ?? 98.0;
+          final double trustScore = (review['trust_level'] as num?)?.toDouble() ?? 50.0;
 
           int getCount(dynamic key) {
             final val = review[key];
