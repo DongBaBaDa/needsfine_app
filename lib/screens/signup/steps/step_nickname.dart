@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class StepNickname extends StatefulWidget {
   final TextEditingController nicknameController;
-  final VoidCallback onNext; // [중요] onComplete나 isLoading이 아님
+  final VoidCallback onComplete; // 가입 완료 액션
+  final bool isLoading;
   final ValueChanged<String>? onChanged;
 
   const StepNickname({
     super.key,
     required this.nicknameController,
-    required this.onNext,
+    required this.onComplete,
+    this.isLoading = false,
     this.onChanged,
   });
 
@@ -49,19 +53,19 @@ class _StepNicknameState extends State<StepNickname> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('닉네임을 정해주세요', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(AppLocalizations.of(context)!.setNickname, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text('나중에 언제든 변경할 수 있어요.', style: TextStyle(fontSize: 14, color: Colors.grey)),
+          Text(AppLocalizations.of(context)!.nicknameInfo, style: const TextStyle(fontSize: 14, color: Colors.grey)),
           const SizedBox(height: 40),
 
           TextFormField(
             controller: widget.nicknameController,
             onChanged: widget.onChanged,
-            decoration: const InputDecoration(
-              labelText: '닉네임',
-              hintText: '한글, 영문, 숫자 포함 2~10자',
-              prefixIcon: Icon(Icons.person_outline),
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: AppLocalizations.of(context)!.nickname,
+              hintText: AppLocalizations.of(context)!.nicknameHint,
+              prefixIcon: const Icon(Icons.person_outline),
+              border: const OutlineInputBorder(),
             ),
             maxLength: 10,
           ),
@@ -73,14 +77,16 @@ class _StepNicknameState extends State<StepNickname> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: _isNextEnabled ? widget.onNext : null,
+              onPressed: (_isNextEnabled && !widget.isLoading) ? widget.onComplete : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF8A2BE2),
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: Colors.grey[300],
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('다음', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: widget.isLoading
+                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(AppLocalizations.of(context)!.completeSignup, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           ),
           const SizedBox(height: 20),

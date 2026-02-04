@@ -9,6 +9,7 @@ import 'package:needsfine_app/models/app_data.dart' show Store;
 import 'package:needsfine_app/models/ranking_models.dart' show Review;
 
 import 'package:needsfine_app/widgets/review_card.dart';
+import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
 
 import 'package:needsfine_app/screens/notice_screen.dart';
@@ -329,13 +330,8 @@ class _StoreReviewsScreenState extends State<StoreReviewsScreen> {
             onPressed: _reload,
             icon: const Icon(Icons.refresh_rounded, color: Colors.black87),
           ),
-          IconButton(
-            tooltip: "알림",
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const NoticeScreen()));
-            },
-            icon: const Icon(Icons.notifications_none_rounded, color: Colors.black87),
-          ),
+          // ✅ 홈화면과 동일한 NotificationBadge 위젯 사용
+          NotificationBadge(onTap: () => Navigator.pushNamed(context, '/notifications')),
           const SizedBox(width: 4),
         ],
       ),

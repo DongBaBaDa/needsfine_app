@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class StepPassword extends StatefulWidget {
   final TextEditingController passwordController;
@@ -6,6 +7,8 @@ class StepPassword extends StatefulWidget {
   final String pwMessage;
   final String confirmMessage;
   final VoidCallback onNext;
+  final bool isPasswordValid;
+  final bool isConfirmValid;
 
   const StepPassword({
     super.key,
@@ -14,6 +17,8 @@ class StepPassword extends StatefulWidget {
     required this.pwMessage,
     required this.confirmMessage,
     required this.onNext,
+    required this.isPasswordValid,
+    required this.isConfirmValid,
   });
 
   @override
@@ -41,9 +46,9 @@ class _StepPasswordState extends State<StepPassword> {
     final pw = widget.passwordController.text;
     final confirm = widget.confirmController.text;
 
-    // 조건: 비밀번호 유효성 메시지가 '가능'을 포함하고, 확인 메시지가 '일치'를 포함할 때
-    final isEnabled = widget.pwMessage.contains('가능') &&
-        widget.confirmMessage.contains('일치') &&
+    // 조건: 부모에서 전달받은 유효성 플래그 확인
+    final isEnabled = widget.isPasswordValid &&
+        widget.isConfirmValid &&
         pw.isNotEmpty && confirm.isNotEmpty;
 
     if (_isNextEnabled != isEnabled) {
@@ -55,7 +60,6 @@ class _StepPasswordState extends State<StepPassword> {
 
   @override
   Widget build(BuildContext context) {
-    // [핵심 수정] LayoutBuilder + SingleChildScrollView + IntrinsicHeight 조합
     // 키보드가 올라와도 에러 없이 스크롤되게 하고, 평소에는 버튼을 바닥에 붙입니다.
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -70,9 +74,9 @@ class _StepPasswordState extends State<StepPassword> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('비밀번호를 설정해주세요', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text(AppLocalizations.of(context)!.setPassword, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    const Text('영문, 숫자, 특수문자 포함 8자 이상', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                    Text(AppLocalizations.of(context)!.passwordHint, style: const TextStyle(fontSize: 14, color: Colors.grey)),
                     const SizedBox(height: 40),
 
                     // 비밀번호 입력
@@ -80,11 +84,11 @@ class _StepPasswordState extends State<StepPassword> {
                       controller: widget.passwordController,
                       obscureText: true,
                       decoration: InputDecoration(
-                        labelText: '비밀번호',
-                        hintText: '비밀번호 입력',
+                        labelText: AppLocalizations.of(context)!.password,
+                        hintText: AppLocalizations.of(context)!.enterPassword,
                         border: const OutlineInputBorder(),
-                        errorText: widget.pwMessage.isEmpty || widget.pwMessage.contains('가능') ? null : widget.pwMessage,
-                        helperText: widget.pwMessage.contains('가능') ? widget.pwMessage : null,
+                        errorText: widget.isPasswordValid ? null : (widget.pwMessage.isNotEmpty ? widget.pwMessage : null),
+                        helperText: widget.isPasswordValid ? widget.pwMessage : null,
                         helperStyle: const TextStyle(color: Colors.blue),
                       ),
                     ),
@@ -95,11 +99,11 @@ class _StepPasswordState extends State<StepPassword> {
                       controller: widget.confirmController,
                       obscureText: true,
                       decoration: InputDecoration(
-                        labelText: '비밀번호 확인',
-                        hintText: '비밀번호 재입력',
+                        labelText: AppLocalizations.of(context)!.confirmPassword,
+                        hintText: AppLocalizations.of(context)!.reenterPassword,
                         border: const OutlineInputBorder(),
-                        errorText: widget.confirmMessage.isEmpty || widget.confirmMessage.contains('일치합니다') ? null : widget.confirmMessage,
-                        helperText: widget.confirmMessage.contains('일치합니다') ? widget.confirmMessage : null,
+                        errorText: widget.isConfirmValid ? null : (widget.confirmMessage.isNotEmpty ? widget.confirmMessage : null),
+                        helperText: widget.isConfirmValid ? widget.confirmMessage : null,
                         helperStyle: const TextStyle(color: Colors.blue),
                       ),
                     ),
@@ -117,7 +121,7 @@ class _StepPasswordState extends State<StepPassword> {
                           disabledBackgroundColor: Colors.grey[300],
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text('다음', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        child: Text(AppLocalizations.of(context)!.next, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       ),
                     ),
                     // 키보드에 딱 붙지 않게 약간의 여백 추가

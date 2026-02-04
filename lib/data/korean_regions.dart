@@ -1,4 +1,6 @@
 // lib/data/korean_regions.dart
+
+// Korean (한글) version
 final Map<String, List<String>> koreanRegions = {
   "서울특별시": ["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구", "동대문구", "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구", "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"],
   "부산광역시": ["강서구", "금정구", "기장군", "남구", "동구", "동래구", "부산진구", "북구", "사상구", "사하구", "서구", "수영구", "연제구", "영도구", "중구", "해운대구"],
@@ -17,4 +19,66 @@ final Map<String, List<String>> koreanRegions = {
   "경상북도": ["경산시", "경주시", "고령군", "구미시", "김천시", "문경시", "봉화군", "상주시", "성주군", "안동시", "영덕군", "영양군", "영주시", "영천시", "예천군", "울릉군", "울진군", "의성군", "청도군", "청송군", "칠곡군", "포항시 남구", "포항시 북구"],
   "경상남도": ["거제시", "거창군", "고성군", "김해시", "남해군", "밀양시", "사천시", "산청군", "양산시", "의령군", "진주시", "창녕군", "창원시 마산합포구", "창원시 마산회원구", "창원시 성산구", "창원시 의창구", "창원시 진해구", "통영시", "하동군", "함안군", "함양군", "합천군"],
   "제주특별자치도": ["서귀포시", "제주시"]
+};
+
+// English (Romanized) version
+final Map<String, List<String>> koreanRegionsEnglish = {
+  "Seoul": ["Gangnam-gu", "Gangdong-gu", "Gangbuk-gu", "Gangseo-gu", "Gwanak-gu", "Gwangjin-gu", "Guro-gu", "Geumcheon-gu", "Nowon-gu", "Dobong-gu", "Dongdaemun-gu", "Dongjak-gu", "Mapo-gu", "Seodaemun-gu", "Seocho-gu", "Seongdong-gu", "Seongbuk-gu", "Songpa-gu", "Yangcheon-gu", "Yeongdeungpo-gu", "Yongsan-gu", "Eunpyeong-gu", "Jongno-gu", "Jung-gu", "Jungnang-gu"],
+  "Busan": ["Gangseo-gu", "Geumjeong-gu", "Gijang-gun", "Nam-gu", "Dong-gu", "Dongnae-gu", "Busanjin-gu", "Buk-gu", "Sasang-gu", "Saha-gu", "Seo-gu", "Suyeong-gu", "Yeonje-gu", "Yeongdo-gu", "Jung-gu", "Haeundae-gu"],
+  "Daegu": ["Nam-gu", "Dalseo-gu", "Dalseong-gun", "Dong-gu", "Buk-gu", "Seo-gu", "Suseong-gu", "Jung-gu", "Gunwi-gun"],
+  "Incheon": ["Ganghwa-gun", "Gyeyang-gu", "Michuhol-gu", "Namdong-gu", "Dong-gu", "Bupyeong-gu", "Seo-gu", "Yeonsu-gu", "Ongjin-gun", "Jung-gu"],
+  "Gwangju": ["Gwangsan-gu", "Nam-gu", "Dong-gu", "Buk-gu", "Seo-gu"],
+  "Daejeon": ["Daedeok-gu", "Dong-gu", "Seo-gu", "Yuseong-gu", "Jung-gu"],
+  "Ulsan": ["Nam-gu", "Dong-gu", "Buk-gu", "Ulju-gun", "Jung-gu"],
+  "Sejong": ["Sejong-si"],
+  "Gyeonggi-do": ["Gapyeong-gun", "Goyang Deogyang-gu", "Goyang Ilsandong-gu", "Goyang Ilsanseo-gu", "Gwacheon-si", "Gwangmyeong-si", "Gwangju-si", "Guri-si", "Gunpo-si", "Gimpo-si", "Namyangju-si", "Dongducheon-si", "Bucheon-si", "Seongnam Bundang-gu", "Seongnam Sujeong-gu", "Seongnam Jungwon-gu", "Suwon Gwonseon-gu", "Suwon Muwon-gu", "Suwon Jangan-gu", "Suwon Paldal-gu", "Suwon Yeongtong-gu", "Siheung-si", "Ansan Danwon-gu", "Ansan Sangnok-gu", "Anseong-si", "Anyang Dongan-gu", "Anyang Manan-gu", "Yangju-si", "Yangpyeong-gun", "Yeoju-si", "Yeoncheon-gun", "Osan-si", "Yongin Giheung-gu", "Yongin Suji-gu", "Yongin Cheoin-gu", "Uiwang-si", "Uijeongbu-si", "Icheon-si", "Paju-si", "Pyeongtaek-si", "Pocheon-si", "Hanam-si", "Hwaseong-si"],
+  "Gangwon-do": ["Gangneung-si", "Goseong-gun", "Donghae-si", "Samcheok-si", "Sokcho-si", "Yanggu-gun", "Yangyang-gun", "Yeongwol-gun", "Wonju-si", "Inje-gun", "Jeongseon-gun", "Cheorwon-gun", "Chuncheon-si", "Taebaek-si", "Pyeongchang-gun", "Hongcheon-gun", "Hwacheon-gun", "Hoengseong-gun"],
+  "Chungcheongbuk-do": ["Goesan-gun", "Danyang-gun", "Boeun-gun", "Yeongdong-gun", "Okcheon-gun", "Eumseong-gun", "Jecheon-si", "Jeungpyeong-gun", "Jincheon-gun", "Cheongju Sangdang-gu", "Cheongju Seowon-gu", "Cheongju Cheongwon-gu", "Cheongju Heungdeok-gu", "Chungju-si"],
+  "Chungcheongnam-do": ["Gyeryong-si", "Gongju-si", "Geumsan-gun", "Nonsan-si", "Dangjin-si", "Boryeong-si", "Buyeo-gun", "Seosan-si", "Seocheon-gun", "Asan-si", "Yesan-gun", "Cheonan Dongnam-gu", "Cheonan Seobuk-gu", "Cheongyang-gun", "Taean-gun", "Hongseong-gun"],
+  "Jeollabuk-do": ["Gochang-gun", "Gunsan-si", "Gimje-si", "Namwon-si", "Muju-gun", "Buan-gun", "Sunchang-gun", "Wanju-gun", "Iksan-si", "Imsil-gun", "Jangsu-gun", "Jeonju Deokjin-gu", "Jeonju Wansan-gu", "Jeongeup-si", "Jinan-gun"],
+  "Jeollanam-do": ["Gangjin-gun", "Goheung-gun", "Gokseong-gun", "Gwangyang-si", "Gurye-gun", "Naju-si", "Damyang-gun", "Mokpo-si", "Muan-gun", "Boseong-gun", "Suncheon-si", "Sinan-gun", "Yeosu-si", "Yeonggwang-gun", "Yeongam-gun", "Wando-gun", "Jangseong-gun", "Jangheung-gun", "Jindo-gun", "Hampyeong-gun", "Haenam-gun", "Hwasun-gun"],
+  "Gyeongsangbuk-do": ["Gyeongsan-si", "Gyeongju-si", "Goryeong-gun", "Gumi-si", "Gimcheon-si", "Mungyeong-si", "Bonghwa-gun", "Sangju-si", "Seongju-gun", "Andong-si", "Yeongdeok-gun", "Yeongyang-gun", "Yeongju-si", "Yeongcheon-si", "Yecheon-gun", "Ulleung-gun", "Uljin-gun", "Uiseong-gun", "Cheongdo-gun", "Cheongsong-gun", "Chilgok-gun", "Pohang Nam-gu", "Pohang Buk-gu"],
+  "Gyeongsangnam-do": ["Geoje-si", "Geochang-gun", "Goseong-gun", "Gimhae-si", "Namhae-gun", "Miryang-si", "Sacheon-si", "Sancheong-gun", "Yangsan-si", "Uiryeong-gun", "Jinju-si", "Changnyeong-gun", "Changwon Masanhappo-gu", "Changwon Masanhoewon-gu", "Changwon Seongsan-gu", "Changwon Uichang-gu", "Changwon Jinhae-gu", "Tongyeong-si", "Hadong-gun", "Haman-gun", "Hamyang-gun", "Hapcheon-gun"],
+  "Jeju-do": ["Seogwipo-si", "Jeju-si"]
+};
+
+// Mapping from Korean to English keys (for lookup)
+final Map<String, String> koreanToEnglishSido = {
+  "서울특별시": "Seoul",
+  "부산광역시": "Busan",
+  "대구광역시": "Daegu",
+  "인천광역시": "Incheon",
+  "광주광역시": "Gwangju",
+  "대전광역시": "Daejeon",
+  "울산광역시": "Ulsan",
+  "세종특별자치시": "Sejong",
+  "경기도": "Gyeonggi-do",
+  "강원특별자치도": "Gangwon-do",
+  "충청북도": "Chungcheongbuk-do",
+  "충청남도": "Chungcheongnam-do",
+  "전북특별자치도": "Jeollabuk-do",
+  "전라남도": "Jeollanam-do",
+  "경상북도": "Gyeongsangbuk-do",
+  "경상남도": "Gyeongsangnam-do",
+  "제주특별자치도": "Jeju-do",
+};
+
+final Map<String, String> englishToKoreanSido = {
+  "Seoul": "서울특별시",
+  "Busan": "부산광역시",
+  "Daegu": "대구광역시",
+  "Incheon": "인천광역시",
+  "Gwangju": "광주광역시",
+  "Daejeon": "대전광역시",
+  "Ulsan": "울산광역시",
+  "Sejong": "세종특별자치시",
+  "Gyeonggi-do": "경기도",
+  "Gangwon-do": "강원특별자치도",
+  "Chungcheongbuk-do": "충청북도",
+  "Chungcheongnam-do": "충청남도",
+  "Jeollabuk-do": "전북특별자치도",
+  "Jeollanam-do": "전라남도",
+  "Gyeongsangbuk-do": "경상북도",
+  "Gyeongsangnam-do": "경상남도",
+  "Jeju-do": "제주특별자치도",
 };

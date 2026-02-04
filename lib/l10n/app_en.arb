@@ -159,5 +159,45 @@
   "signupFailed": "Signup failed",
   "myActivity": "My Activity",
   "customerSupport": "Support",
-  "noImages": "No images available."
+  "noImages": "No images available.",
+
+  "invalidEmail": "Please enter a valid email.",
+  "authCodeSent": "Verification code sent. Check your email.",
+  "sendFailed": "Send failed: {error}",
+  "invalidAuthCodeLength": "Enter 6-digit code.",
+  "emailVerified": "Email verified.",
+  "verificationFailed": "Verification failed.",
+  "invalidAuthCode": "Invalid or expired code.",
+  "nicknameRequired": "Nickname is required.",
+  "signupError": "Error: {error}",
+  "sessionExpired": "Session expired. Please retry.",
+  "emailAutoVerified": "Email verified automatically.",
+  
+  "enterEmail": "Enter your email.",
+  "emailUsageInfo": "Used for login and account recovery.",
+  "authCode": "6-digit Code",
+  "requestAuth": "Verify",
+  "resend": "Resend",
+  "next": "Next",
+  
+  "setPassword": "Set Password",
+  "passwordHint": "8 or more characters, including letters, numbers, and special characters",
+  "enterPassword": "Enter password",
+  "confirmPassword": "Confirm Password",
+  "reenterPassword": "Re-enter password",
+  
+  "whereDoYouLive": "Where do you live?",
+  "regionInfo": "Required for local recommendations.",
+  "city": "City/Province",
+  "district": "District",
+  
+  "setNickname": "Pick a Nickname",
+  "nicknameInfo": "You can change this later.",
+  "nickname": "Nickname",
+  "nicknameHint": "2-10 chars, letters & numbers",
+  "completeSignup": "Complete",
+  
+  "welcome": "Welcome!",
+  "signupCompleteMessage": "Sign up complete.",
+  "getStarted": "Get Started"
 }

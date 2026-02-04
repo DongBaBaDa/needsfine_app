@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 // 🔴 [필수] HomeScreen 파일 경로에 맞춰 주석 해제하세요.
 // import 'package:needsfine_app/screens/home_screen.dart';
 
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class StepSuccess extends StatelessWidget {
   final VoidCallback? onClose;
 
@@ -22,9 +24,9 @@ class StepSuccess extends StatelessWidget {
             height: 100,
           ),
           const SizedBox(height: 24),
-          const Text('환영합니다!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(AppLocalizations.of(context)!.welcome, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
-          const Text('NeedsFine 회원가입이 완료되었습니다.', style: TextStyle(color: Colors.grey)),
+          Text(AppLocalizations.of(context)!.signupCompleteMessage, style: const TextStyle(color: Colors.grey)),
           const SizedBox(height: 40),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -49,7 +51,7 @@ class StepSuccess extends StatelessWidget {
                   backgroundColor: const Color(0xFF8A2BE2),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('시작하기', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: Text(AppLocalizations.of(context)!.getStarted, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
           )

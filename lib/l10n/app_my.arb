@@ -158,5 +158,45 @@
   "signupFailed": "အကောင့်မဖွင့်နိုင်",
   "myActivity": "လှုပ်ရှားမှု",
   "customerSupport": "အကူအညီ",
-  "noImages": "ပုံမရှိပါ။"
+  "noImages": "ပုံမရှိပါ။",
+
+  "invalidEmail": "အီးမေးလ် မမှန်ပါ။",
+  "authCodeSent": "အတည်ပြုကုဒ် ပေးပို့လိုက်ပါပြီ။ သင့်အီးမေးလ်ကို စစ်ဆေးပါ။",
+  "sendFailed": "ပေးပို့မှု မအောင်မြင်ပါ: {error}",
+  "invalidAuthCodeLength": "၆ လုံးပါ ကုဒ်ကို ထည့်ပါ။",
+  "emailVerified": "အီးမေးလ် အတည်ပြုပြီးပါပြီ။",
+  "verificationFailed": "အတည်ပြုမှု မအောင်မြင်ပါ။",
+  "invalidAuthCode": "ကုဒ်မှားနေသည် သို့မဟုတ် သက်တမ်းကုန်သွားပါပြီ။",
+  "nicknameRequired": "အမည်ပြောင် ထည့်ပါ။",
+  "signupError": "အကောင့်ဖွင့်ရာတွင် အမှားရှိနေသည်: {error}",
+  "sessionExpired": "Login အချိန်ကုန်သွားပါပြီ။ ပြန်စပါ။",
+  "emailAutoVerified": "အီးမေးလ် အတည်ပြုပြီးပါပြီ။",
+  
+  "enterEmail": "သင့်အီးမေးလ်လိပ်စာကို ထည့်ပါ။",
+  "emailUsageInfo": "Login ဝင်ရန်နှင့် အကောင့်ပြန်ယူရန် အသုံးပြုသည်။",
+  "authCode": "၆ လုံး ကုဒ်",
+  "requestAuth": "ကုဒ်ယူမည်",
+  "resend": "ပြန်ပို့",
+  "next": "ရှေ့ဆက်",
+  
+  "setPassword": "စကားဝှက် သတ်မှတ်ပါ",
+  "passwordHint": "အနည်းဆုံး ၈ လုံး၊ စာလုံးနှင့် ဂဏန်းများ ပါဝင်ရမည်။",
+  "enterPassword": "စကားဝှက် ထည့်ပါ",
+  "confirmPassword": "စကားဝှက် အတည်ပြုပါ",
+  "reenterPassword": "ပြန်ရိုက်ပါ",
+  
+  "whereDoYouLive": "သင် ဘယ်မှာ နေထိုင်ပါသလဲ?",
+  "regionInfo": "သင့်ဒေသတွင်း ဆိုင်ထောက်ခံချက်များအတွက် လိုအပ်ပါသည်။",
+  "city": "မြို့ / ပြည်နယ်",
+  "district": "မြို့နယ်",
+  
+  "setNickname": "အမည်ပြောင် ပေးပါ",
+  "nicknameInfo": "နောက်မှ ပြန်ပြင်နိုင်သည်။",
+  "nickname": "အမည်ပြောင်",
+  "nicknameHint": "၂-၁၀ လုံး၊ စာလုံးနှင့် ဂဏန်း",
+  "completeSignup": "ပြီးပြီ",
+  
+  "welcome": "ကြိုဆိုပါတယ်!",
+  "signupCompleteMessage": "NeedsFine အကောင့်ဖွင့်ခြင်း ပြီးဆုံးပါပြီ။",
+  "getStarted": "စမယ်"
 }

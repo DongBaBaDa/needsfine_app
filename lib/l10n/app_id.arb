@@ -179,5 +179,45 @@
   "signupFailed": "Gagal daftar",
   "myActivity": "Aktivitas Saya",
   "customerSupport": "Bantuan",
-  "noImages": "Gaada gambar."
+  "noImages": "Gaada gambar.",
+
+  "invalidEmail": "Email tidak valid.",
+  "authCodeSent": "Kode verifikasi telah dikirim. Silakan cek email Anda.",
+  "sendFailed": "Gagal mengirim: {error}",
+  "invalidAuthCodeLength": "Silakan masukkan kode 6 digit.",
+  "emailVerified": "Verifikasi email berhasil.",
+  "verificationFailed": "Verifikasi gagal.",
+  "invalidAuthCode": "Kode verifikasi salah atau sudah kedaluwarsa.",
+  "nicknameRequired": "Silakan isi nickname Anda.",
+  "signupError": "Terjadi kesalahan saat mendaftar: {error}",
+  "sessionExpired": "Sesi login telah berakhir. Silakan coba lagi dari awal.",
+  "emailAutoVerified": "Email telah terverifikasi secara otomatis.",
+  
+  "enterEmail": "Masukkan alamat email Anda.",
+  "emailUsageInfo": "Digunakan untuk login dan pemulihan akun.",
+  "authCode": "Kode 6 Digit",
+  "requestAuth": "Minta Kode",
+  "resend": "Kirim Ulang",
+  "next": "Lanjut",
+  
+  "setPassword": "Buat Password",
+  "passwordHint": "8 karakter atau lebih, kombinasi huruf & angka.",
+  "enterPassword": "Masukkan Password",
+  "confirmPassword": "Konfirmasi Password",
+  "reenterPassword": "Masukkan ulang password",
+  
+  "whereDoYouLive": "Di mana Anda tinggal?",
+  "regionInfo": "Diperlukan untuk rekomendasi tempat di sekitar Anda.",
+  "city": "Kota/Provinsi",
+  "district": "Kecamatan/Kelurahan",
+  
+  "setNickname": "Pilih Nickname",
+  "nicknameInfo": "Anda dapat mengubahnya nanti.",
+  "nickname": "Nickname",
+  "nicknameHint": "2-10 karakter, huruf & angka",
+  "completeSignup": "Selesai",
+  
+  "welcome": "Selamat Datang!",
+  "signupCompleteMessage": "Pendaftaran NeedsFine berhasil.",
+  "getStarted": "Mulai"
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class StepRegion extends StatelessWidget {
   final String? selectedSido;
   final String? selectedSigungu;
@@ -30,21 +32,21 @@ class StepRegion extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('어디에 거주하시나요?', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(AppLocalizations.of(context)!.whereDoYouLive, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text('동네 맛집 추천을 위해 필요해요.', style: TextStyle(fontSize: 14, color: Colors.grey)),
+          Text(AppLocalizations.of(context)!.regionInfo, style: const TextStyle(fontSize: 14, color: Colors.grey)),
           const SizedBox(height: 40),
 
           DropdownButtonFormField<String>(
             value: selectedSido,
-            decoration: const InputDecoration(border: OutlineInputBorder(), labelText: '시/도'),
+            decoration: InputDecoration(border: const OutlineInputBorder(), labelText: AppLocalizations.of(context)!.city),
             items: sidoList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
             onChanged: onSidoChanged,
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             value: selectedSigungu,
-            decoration: const InputDecoration(border: OutlineInputBorder(), labelText: '시/군/구'),
+            decoration: InputDecoration(border: const OutlineInputBorder(), labelText: AppLocalizations.of(context)!.district),
             items: sigunguList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
             onChanged: selectedSido == null ? null : onSigunguChanged,
           ),
@@ -63,7 +65,7 @@ class StepRegion extends StatelessWidget {
                 disabledBackgroundColor: Colors.grey[300],
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('다음', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Text(AppLocalizations.of(context)!.next, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           ),
           const SizedBox(height: 20),

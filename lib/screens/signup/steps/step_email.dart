@@ -1,12 +1,26 @@
 import 'package:flutter/material.dart';
 
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class StepEmail extends StatefulWidget {
   final TextEditingController emailController;
-  final VoidCallback onNext; // 다음 단계로 이동하는 함수
+  final TextEditingController authCodeController;
+  final bool isAuthCodeSent;
+  final bool isEmailVerified;
+  final bool isLoading;
+  final VoidCallback onSendTap;
+  final VoidCallback onVerifyTap;
+  final VoidCallback onNext;
 
   const StepEmail({
     super.key,
     required this.emailController,
+    required this.authCodeController,
+    required this.isAuthCodeSent,
+    required this.isEmailVerified,
+    required this.isLoading,
+    required this.onSendTap,
+    required this.onVerifyTap,
     required this.onNext,
   });
 
@@ -51,29 +65,98 @@ class _StepEmailState extends State<StepEmail> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '이메일을 입력해주세요.',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          Text(
+            AppLocalizations.of(context)!.enterEmail,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-          const Text(
-            '로그인 및 계정 찾기에 사용됩니다.',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
+          Text(
+            AppLocalizations.of(context)!.emailUsageInfo,
+            style: const TextStyle(fontSize: 14, color: Colors.grey),
           ),
           const SizedBox(height: 40),
 
-          // 이메일 입력 필드
-          TextFormField(
-            controller: widget.emailController,
-            decoration: const InputDecoration(
-              labelText: '이메일',
-              hintText: 'example@email.com',
-              prefixIcon: Icon(Icons.email_outlined),
-              border: OutlineInputBorder(),
-              helperText: '인증 과정 없이 바로 진행됩니다.', // 안내 문구
-            ),
-            keyboardType: TextInputType.emailAddress,
+          // 이메일 입력 필드 & 전송 버튼
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: widget.emailController,
+                  enabled: !widget.isEmailVerified, // 인증 완료되면 수정 불가
+                  decoration: InputDecoration(
+                    labelText: AppLocalizations.of(context)!.emailAddress,
+                    hintText: 'example@email.com',
+                    prefixIcon: const Icon(Icons.email_outlined),
+                    border: const OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: (widget.isEmailVerified || widget.isLoading || !_isNextEnabled)
+                      ? null
+                      : widget.onSendTap,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  ),
+                  child: Text(widget.isAuthCodeSent ? AppLocalizations.of(context)!.resend : AppLocalizations.of(context)!.requestAuth),
+                ),
+              ),
+            ],
           ),
+
+          // 인증번호 입력 필드 (전송된 경우에만 표시)
+          if (widget.isAuthCodeSent && !widget.isEmailVerified) ...[
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: widget.authCodeController,
+                    decoration: InputDecoration(
+                      labelText: AppLocalizations.of(context)!.authCode,
+                      hintText: '123456',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      border: const OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: widget.isLoading ? null : widget.onVerifyTap,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8A2BE2),
+                      foregroundColor: Colors.white, // 브랜드 컬러
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                    child: Text(AppLocalizations.of(context)!.confirm),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // 인증 완료 메시지
+          if (widget.isEmailVerified) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.green),
+                const SizedBox(width: 8),
+                Text(AppLocalizations.of(context)!.emailVerified, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
 
           const Spacer(),
 
@@ -82,8 +165,8 @@ class _StepEmailState extends State<StepEmail> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              // 이메일 형식이 맞으면(onNext) 실행, 아니면 null(비활성화)
-              onPressed: _isNextEnabled ? widget.onNext : null,
+              // 이메일 인증이 완료되어야만 다음으로 진행 가능
+              onPressed: widget.isEmailVerified ? widget.onNext : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF8A2BE2),
                 foregroundColor: Colors.white,
@@ -92,7 +175,9 @@ class _StepEmailState extends State<StepEmail> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text('다음', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: widget.isLoading
+                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(AppLocalizations.of(context)!.next, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           ),
           const SizedBox(height: 20),

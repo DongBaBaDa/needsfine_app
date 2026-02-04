@@ -9,7 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:needsfine_app/services/review_service.dart';
 // ✅ ScoreCalculator 경로가 utils인지 services인지 파일 위치를 꼭 확인하세요.
-import 'package:needsfine_app/utils/score_calculator.dart';
+import 'package:needsfine_app/services/score_calculator.dart';
 import 'package:needsfine_app/services/naver_search_service.dart';
 import 'package:needsfine_app/services/naver_map_service.dart';
 import 'package:needsfine_app/models/ranking_models.dart' as model;

@@ -189,5 +189,45 @@
   "signupFailed": "가입 실패",
   "myActivity": "나의 활동",
   "customerSupport": "고객 지원",
-  "noImages": "등록된 이미지가 없습니다."
+  "noImages": "등록된 이미지가 없습니다.",
+
+  "invalidEmail": "올바른 이메일을 입력해주세요.",
+  "authCodeSent": "인증번호가 발송되었습니다. 메일함을 확인해주세요.",
+  "sendFailed": "발송 실패: {error}",
+  "invalidAuthCodeLength": "인증번호 6자리를 입력해주세요.",
+  "emailVerified": "이메일 인증이 완료되었습니다.",
+  "verificationFailed": "인증 실패",
+  "invalidAuthCode": "인증번호가 올바르지 않거나 만료되었습니다.",
+  "nicknameRequired": "닉네임을 입력해주세요.",
+  "signupError": "가입 처리 중 오류 발생: {error}",
+  "sessionExpired": "로그인 세션이 만료되었습니다. 처음부터 다시 시도해주세요.",
+  "emailAutoVerified": "이메일 확인되었습니다. (인증 생략됨)",
+  
+  "enterEmail": "이메일을 입력해주세요.",
+  "emailUsageInfo": "로그인 및 계정 찾기에 사용됩니다.",
+  "authCode": "인증번호 6자리",
+  "requestAuth": "인증요청",
+  "resend": "재전송",
+  "next": "다음",
+  
+  "setPassword": "비밀번호를 설정해주세요",
+  "passwordHint": "영문, 숫자, 특수문자 포함 8자 이상",
+  "enterPassword": "비밀번호 입력",
+  "confirmPassword": "비밀번호 확인",
+  "reenterPassword": "비밀번호 재입력",
+  
+  "whereDoYouLive": "어디에 거주하시나요?",
+  "regionInfo": "동네 맛집 추천을 위해 필요해요.",
+  "city": "시/도",
+  "district": "시/군/구",
+  
+  "setNickname": "닉네임을 정해주세요",
+  "nicknameInfo": "나중에 언제든 변경할 수 있어요.",
+  "nickname": "닉네임",
+  "nicknameHint": "한글, 영문, 숫자 포함 2~10자",
+  "completeSignup": "가입 완료",
+  
+  "welcome": "환영합니다!",
+  "signupCompleteMessage": "NeedsFine 회원가입이 완료되었습니다.",
+  "getStarted": "시작하기"
 }
