@@ -133,33 +133,43 @@ class ReviewCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 작성자 프로필
-                  InkWell(
-                    onTap: onTapProfile,
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 12,
-                          backgroundColor: Colors.grey[200],
-                          backgroundImage: avatarImage,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          review.nickname,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: Colors.black87,
+                  Row(
+                    children: [
+                      // ✅ 프로필 사진 + 닉네임만 클릭 가능
+                      InkWell(
+                        onTap: onTapProfile,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircleAvatar(
+                                radius: 12,
+                                backgroundColor: Colors.grey[200],
+                                backgroundImage: avatarImage,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                review.nickname,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Icon(Icons.star, size: 14, color: Colors.amber.withOpacity(0.4)),
-                        const SizedBox(width: 2),
-                        Text(
-                          "${review.userRating}",
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.star, size: 14, color: Colors.amber.withOpacity(0.4)),
+                      const SizedBox(width: 2),
+                      Text(
+                        "${review.userRating}",
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
                   ),
 
                   // 태그 표시

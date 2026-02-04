@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:needsfine_app/core/search_trigger.dart'; // ✅ 클릭 시 지도 이동을 위해 추가
+import 'package:needsfine_app/core/search_trigger.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
-// ✅ 연결 화면
 import 'package:needsfine_app/screens/my_list_detail_screen.dart';
 import 'package:needsfine_app/screens/saved_stores_screen.dart';
 
@@ -18,6 +18,12 @@ class _MyListsScreenState extends State<MyListsScreen> {
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _lists = []; // 사용자 정의 리스트 목록
+  
+  // ✅ 리스트 공유 상태 관리
+  Map<String, bool> _publicStates = {}; // 각 리스트의 공개/비공개 상태
+  
+  // ✅ 탭 상태 (0: 내 리스트, 1: 공유한 리스트)
+  int _currentTab = 0;
 
   // ✅ 카운트 변수들
   Map<String, int> _listCounts = {}; // 각 리스트별 아이템 개수
@@ -59,6 +65,11 @@ class _MyListsScreenState extends State<MyListsScreen> {
 
       setState(() {
         _lists = List<Map<String, dynamic>>.from(listRes);
+        // ✅ 공개 상태 초기화 (기본값: false)
+        _publicStates = {
+          for (final list in _lists)
+            (list['id'] ?? '').toString(): (list['is_public'] ?? false) as bool
+        };
         _savedStoresCount = savedCount;
       });
 
@@ -84,6 +95,8 @@ class _MyListsScreenState extends State<MyListsScreen> {
             .from('user_list_items')
             .count(CountOption.exact)
             .eq('list_id', id);
+        
+        debugPrint('🔍 리스트 ID: $id, 아이템 개수: $count');
         return MapEntry(id, count);
       });
 
@@ -191,9 +204,11 @@ class _MyListsScreenState extends State<MyListsScreen> {
     if (name.isEmpty) return;
 
     try {
+      // ✅ 기본값: 비공개 (is_public: false)
       await _supabase.from('user_lists').insert({
         'user_id': userId,
         'name': name,
+        'is_public': false, // 기본값 비공개
       });
 
       await _fetchAllData();
@@ -208,12 +223,79 @@ class _MyListsScreenState extends State<MyListsScreen> {
     }
   }
 
-  Future<void> _deleteList(String listId) async {
+  Future<void> _deleteList(String listId, String listName) async {
+    // ✅ 삭제 확인 다이얼로그
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('리스트 삭제',
+            style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text('"$listName" 리스트를 삭제하시겠습니까?\n리스트 내 모든 항목이 함께 삭제됩니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('삭제', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     try {
+      // ✅ 리스트 삭제 (user_list_items는 CASCADE로 자동 삭제됨)
       await _supabase.from('user_lists').delete().eq('id', listId);
       await _fetchAllData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('리스트가 삭제되었습니다.')),
+        );
+      }
     } catch (e) {
       debugPrint('리스트 삭제 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('삭제에 실패했습니다.')),
+        );
+      }
+    }
+  }
+
+  // ✅ 리스트 공유 토글
+  Future<void> _togglePublicState(String listId) async {
+    final currentState = _publicStates[listId] ?? false;
+    final newState = !currentState;
+
+    try {
+      await _supabase
+          .from('user_lists')
+          .update({'is_public': newState})
+          .eq('id', listId);
+
+      setState(() => _publicStates[listId] = newState);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newState ? '리스트가 공개로 설정되었습니다.' : '리스트가 비공개로 설정되었습니다.'),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('공개 설정 변경 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('설정 변경에 실패했습니다.')),
+        );
+      }
     }
   }
 
@@ -237,11 +319,24 @@ class _MyListsScreenState extends State<MyListsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    
+    // ✅ 탭별 리스트 필터링
+    final filteredLists = _currentTab == 0
+        ? _lists.where((list) {
+            final id = (list['id'] ?? '').toString();
+            return !(_publicStates[id] ?? false); // 비공개 리스트만
+          }).toList()
+        : _lists.where((list) {
+            final id = (list['id'] ?? '').toString();
+            return _publicStates[id] ?? false; // 공개 리스트만
+          }).toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
-        title: const Text("나만의 리스트",
-            style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black)),
+        title: Text(l10n.myOwnList,
+            style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -268,17 +363,84 @@ class _MyListsScreenState extends State<MyListsScreen> {
                   color: Color(0xFFAEAEB2)),
             ),
             const SizedBox(height: 20),
-            const Padding(
-              padding: EdgeInsets.only(left: 4, bottom: 8),
-              child: Text("내 리스트",
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey)),
+
+            // ✅ 탭 UI 추가 (내 리스트 / 공유한 리스트)
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _currentTab = 0),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _currentTab == 0
+                              ? const Color(0xFF8A2BE2)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '내 리스트',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: _currentTab == 0
+                                ? Colors.white
+                                : Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _currentTab = 1),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _currentTab == 1
+                              ? const Color(0xFF8A2BE2)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '공유한 리스트',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: _currentTab == 1
+                                ? Colors.white
+                                : Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
-            // ✅ 2. 사용자 리스트 목록
-            if (_lists.isEmpty) ...[
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                _currentTab == 0 ? "내 리스트" : "공유한 리스트",
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+
+            // ✅ 2. 사용자 리스트 목록 (필터링된 리스트)
+            if (filteredLists.isEmpty) ...[
               Container(
                 padding: const EdgeInsets.all(24),
                 alignment: Alignment.center,
@@ -291,21 +453,25 @@ class _MyListsScreenState extends State<MyListsScreen> {
                     const Icon(Icons.playlist_add,
                         size: 48, color: Color(0xFFD1D1D6)),
                     const SizedBox(height: 16),
-                    const Text(
-                      "리스트가 없습니다.\n새로운 리스트를 만들어보세요!",
+                    Text(
+                      _currentTab == 0
+                          ? "리스트가 없습니다.\n새로운 리스트를 만들어보세요!"
+                          : "공유한 리스트가 없습니다.",
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Color(0xFF8E8E93)),
+                      style: const TextStyle(color: Color(0xFF8E8E93)),
                     ),
-                    const SizedBox(height: 16),
-                    OutlinedButton(
-                      onPressed: _createList,
-                      child: const Text("리스트 만들기"),
-                    ),
+                    if (_currentTab == 0) ...[
+                      const SizedBox(height: 16),
+                      OutlinedButton(
+                        onPressed: _createList,
+                        child: const Text("리스트 만들기"),
+                      ),
+                    ],
                   ],
                 ),
               )
             ] else ...[
-              ..._lists.map((item) {
+              ...filteredLists.map((item) {
                 final id = (item['id'] ?? '').toString();
                 final name = (item['name'] ?? '이름 없음').toString();
                 final count = _listCounts[id] ?? 0;
@@ -320,13 +486,47 @@ class _MyListsScreenState extends State<MyListsScreen> {
                     trailing: PopupMenuButton<String>(
                       icon: const Icon(Icons.more_horiz,
                           color: Color(0xFF3A3A3C)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       onSelected: (value) {
-                        if (value == 'delete') _deleteList(id);
+                        if (value == 'share') {
+                          _togglePublicState(id);
+                        } else if (value == 'delete') {
+                          _deleteList(id, name);
+                        }
                       },
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                            value: 'delete', child: Text("리스트 삭제")),
-                      ],
+                      itemBuilder: (_) {
+                        final isPublic = _publicStates[id] ?? false;
+                        return [
+                          PopupMenuItem(
+                            value: 'share',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isPublic ? Icons.lock : Icons.share,
+                                  size: 20,
+                                  color: const Color(0xFF8A2BE2),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(isPublic ? '비공개로 전환' : '공개로 전환'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline,
+                                    size: 20, color: Colors.red),
+                                SizedBox(width: 12),
+                                Text('리스트 삭제',
+                                    style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ];
+                      },
                     ),
                   ),
                 );

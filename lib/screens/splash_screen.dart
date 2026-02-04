@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/screens/initial_screen.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -59,6 +60,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
@@ -70,26 +73,26 @@ class _SplashScreenState extends State<SplashScreen> {
               width: 150,
             ),
             const SizedBox(height: 32),
-            const Text(
-              '니즈파인',
-              style: TextStyle(
+            Text(
+              l10n.appName,
+              style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
                 color: Colors.black,
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
-              '진짜가 필요해',
-              style: TextStyle(
+            Text(
+              l10n.appTagline,
+              style: const TextStyle(
                 fontSize: 20,
                 color: Colors.black87,
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              '경험과 데이터가 만나는 곳',
-              style: TextStyle(
+            Text(
+              l10n.appSubtitle,
+              style: const TextStyle(
                 fontSize: 14,
                 color: Colors.grey,
               ),

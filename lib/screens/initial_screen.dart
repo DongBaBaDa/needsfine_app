@@ -7,7 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/screens/signup/user_join_screen.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
 import 'package:needsfine_app/screens/email_login_screen.dart';
+import 'package:needsfine_app/screens/language_settings_screen.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class InitialScreen extends StatefulWidget {
   const InitialScreen({super.key});
@@ -127,42 +129,47 @@ class _InitialScreenState extends State<InitialScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: _isLoading
-              ? const CircularProgressIndicator(color: kNeedsFinePurple)
-              : SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // 로고
-                Image.asset(
-                  'assets/images/icon.png',
-                  height: 100,
-                  errorBuilder: (ctx, err, stack) => const Icon(Icons.error, size: 100, color: Colors.grey),
-                ),
-                const SizedBox(height: 16),
+      body: Stack(
+        children: [
+          // 기존 화면 콘텐츠
+          SafeArea(
+            child: Center(
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: kNeedsFinePurple)
+                  : SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // 로고
+                    Image.asset(
+                      'assets/images/icon.png',
+                      height: 100,
+                      errorBuilder: (ctx, err, stack) => const Icon(Icons.error, size: 100, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
 
-                const Text('니즈파인',
-                    style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: kNeedsFinePurple)),
-                const Text('진짜가 필요해',
-                    style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                        letterSpacing: 1.2)),
+                    Text(l10n.appName,
+                        style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: kNeedsFinePurple)),
+                    Text(l10n.appTagline,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                            letterSpacing: 1.2)),
 
-                const SizedBox(height: 120), // 중앙 공백 확보
+                    const SizedBox(height: 120), // 중앙 공백 확보
 
-                // ------------------------------------------------
-                // 🔒 [심사 대비] 소셜 로그인 UI 숨김 (주석 처리)
-                // ------------------------------------------------
-                /*
+                    // ------------------------------------------------
+                    // 🔒 [심사 대비] 소셜 로그인 UI 숨김 (주석 처리)
+                    // ------------------------------------------------
+                    /*
                       const Row(
                         children: [
                           Expanded(child: Divider(color: Color(0xFFEEEEEE))),
@@ -203,52 +210,74 @@ class _InitialScreenState extends State<InitialScreen> {
                       ),
                       const SizedBox(height: 60),
                       */
-                // ------------------------------------------------
+                    // ------------------------------------------------
 
-                // ✅ 이메일 로그인을 메인 버튼으로 변경 (심사 통과용 UI 개선)
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const EmailLoginScreen()),
-                      ).then((_) => _checkLoginStatus());
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kNeedsFinePurple,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
+                    // ✅ 이메일 로그인을 메인 버튼으로 변경 (심사 통과용 UI 개선)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const EmailLoginScreen()),
+                          ).then((_) => _checkLoginStatus());
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kNeedsFinePurple,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        child: Text(l10n.emailLoginButton,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold)),
+                      ),
                     ),
-                    child: const Text('이메일로 로그인',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold)),
-                  ),
-                ),
 
-                const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const UserJoinScreen()),
-                    ).then((_) => _checkLoginStatus());
-                  },
-                  child: const Text('이메일로 회원가입하기',
-                      style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 14,
-                          decoration: TextDecoration.underline)),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const UserJoinScreen()),
+                        ).then((_) => _checkLoginStatus());
+                      },
+                      child: Text(l10n.emailSignupButton,
+                          style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 14,
+                              decoration: TextDecoration.underline)),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+          
+          // ✅ 우측 하단 언어 선택 버튼
+          Positioned(
+            right: 20,
+            bottom: 50,
+            child: FloatingActionButton(
+              backgroundColor: Colors.white,
+              elevation: 4,
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LanguageSettingsScreen(),
+                  ),
+                );
+                if (mounted) setState(() {}); // 언어 변경 후 화면 갱신
+              },
+              child: const Icon(Icons.language, color: kNeedsFinePurple, size: 28),
+            ),
+          ),
+        ],
       ),
     );
   }

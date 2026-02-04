@@ -75,7 +75,10 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
         return;
       }
 
-      final reviewRes = await _supabase.from('reviews').select().inFilter('id', reviewIds);
+      final reviewRes = await _supabase
+          .from('reviews')
+          .select('*, store_lat, store_lng')
+          .inFilter('id', reviewIds);
       final reviewMap = <String, Map<String, dynamic>>{
         for (final r in List<Map<String, dynamic>>.from(reviewRes))
           (r['id'] ?? '').toString(): Map<String, dynamic>.from(r),
@@ -83,9 +86,30 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
 
       // 기존 order 유지
       final items = <Review>[];
+      final orphanedReviewIds = <String>[]; // ✅ 삭제된 리뷰 ID 수집
+      
       for (final id in reviewIds) {
         final json = reviewMap[id];
-        if (json != null) items.add(Review.fromJson(json));
+        if (json != null) {
+          items.add(Review.fromJson(json));
+        } else {
+          debugPrint('⚠️ 리뷰를 찾을 수 없음: $id (DB에만 존재, 삭제된 리뷰)');
+          orphanedReviewIds.add(id);
+        }
+      }
+
+      // ✅ 삭제된 리뷰가 있으면 user_list_items에서 자동 제거
+      if (orphanedReviewIds.isNotEmpty) {
+        try {
+          await _supabase
+              .from('user_list_items')
+              .delete()
+              .eq('list_id', widget.listId)
+              .inFilter('review_id', orphanedReviewIds);
+          debugPrint('✅ 삭제된 리뷰 ${orphanedReviewIds.length}개를 리스트에서 제거했습니다.');
+        } catch (e) {
+          debugPrint('삭제된 리뷰 정리 실패: $e');
+        }
       }
 
       if (mounted) {
@@ -101,14 +125,19 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
   }
 
   void _goToMap(Review review) {
-    if (review.storeName.isNotEmpty) {
+    if (review.storeName.isEmpty) return;
+    
+    // ✅ 최적화: Navigator.pop과 searchTrigger를 동시에 처리
+    Navigator.pop(context);
+    
+    // ✅ 즉시 실행하여 화면 전환 속도 향상
+    Future.microtask(() {
       searchTrigger.value = SearchTarget(
         query: review.storeName,
-        lat: review.storeLat,
-        lng: review.storeLng,
+        lat: review.storeLat != 0.0 ? review.storeLat : null,
+        lng: review.storeLng != 0.0 ? review.storeLng : null,
       );
-      Navigator.pop(context);
-    }
+    });
   }
 
   // ==========================================================
@@ -140,6 +169,8 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
       if (name.isEmpty) continue;
 
       try {
+        debugPrint('🔍 매장 검색: $name (주소: $addr)');
+        
         // ✅ 해당 매장의 최신 리뷰 1개를 대표로 사용
         final res = await _supabase
             .from('reviews')
@@ -152,13 +183,19 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
         final list = List<Map<String, dynamic>>.from(res);
         if (list.isNotEmpty) {
           final rid = (list.first['id'] ?? '').toString();
-          if (rid.isNotEmpty) ids.add(rid);
+          if (rid.isNotEmpty) {
+            debugPrint('✅ 리뷰 찾음: $rid');
+            ids.add(rid);
+          }
+        } else {
+          debugPrint('⚠️ 리뷰 없음: $name (주소 불일치 가능성)');
         }
       } catch (e) {
-        debugPrint('리뷰 id 변환 실패: $e');
+        debugPrint('❌ 리뷰 id 변환 실패: $name - $e');
       }
     }
 
+    debugPrint('🎯 총 변환된 리뷰 ID: ${ids.length}개');
     return ids;
   }
 
@@ -332,9 +369,11 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                           if (!mounted) return;
 
                           if (reviewIds.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("추가할 수 있는 리뷰가 없는 매장입니다.")),
-                            );
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("추가할 수 있는 리뷰가 없는 매장입니다.")),
+                              );
+                            }
                             return;
                           }
 

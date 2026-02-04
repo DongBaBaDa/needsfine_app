@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io'; // SocketException 처리를 위해 필요
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
@@ -8,6 +9,14 @@ import 'package:needsfine_app/screens/weekly_ranking_screen.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/screens/review_detail_screen.dart';
+
+class StoreMetadata {
+  final String? imageUrl;
+  final double? lat;
+  final double? lng;
+
+  StoreMetadata({this.imageUrl, this.lat, this.lng});
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,19 +31,20 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
   final _supabase = Supabase.instance.client;
   final TextEditingController _searchController = TextEditingController();
-  bool _isLoading = true;
 
-  // 데이터 상태 변수
+  // 초기 로딩 상태
+  bool _isInitialLoading = true;
+
   List<StoreRanking> _top100 = [];
-  final Map<String, String> _storeImageMap = {};
+  final Map<String, StoreMetadata> _storeMetadataMap = {};
   List<Map<String, dynamic>> _bestReviews = [];
-
   List<String> _bannerList = [];
+
+  // 배너 관련
   int _currentBannerIndex = 0;
   final PageController _bannerController = PageController();
   Timer? _bannerTimer;
 
-  // 디자인 토큰
   static const Color _brand = Color(0xFF8A2BE2);
   static const Color _bg = Color(0xFFF2F2F7);
   static const Color _card = Colors.white;
@@ -50,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   @override
   void initState() {
     super.initState();
-    _loadHomeData();
+    _loadHomeDataProgressive();
     _startBannerTimer();
   }
 
@@ -76,23 +86,44 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     });
   }
 
-  Future<void> _loadHomeData() async {
-    if (mounted) setState(() => _isLoading = true);
+  // 🔄 [네트워크 재시도 로직]
+  Future<T> _retryRequest<T>(Future<T> Function() request, {int retries = 3}) async {
+    for (int i = 0; i < retries; i++) {
+      try {
+        return await request();
+      } catch (e) {
+        if (e is SocketException || e.toString().contains('SocketException')) {
+          if (i == retries - 1) rethrow; // 마지막 시도도 실패하면 에러 던짐
+
+          // ⚡ [수정 완료] const 키워드 제거 (변수 i가 포함되어 있어서 const 불가능)
+          await Future.delayed(Duration(milliseconds: 500 * (i + 1)));
+
+          debugPrint("🔄 네트워크 재연결 시도 중... (${i + 1}/$retries)");
+        } else {
+          rethrow;
+        }
+      }
+    }
+    throw Exception("네트워크 연결 실패");
+  }
+
+  // 🚀 [핵심] 프로그레시브 로딩
+  Future<void> _loadHomeDataProgressive() async {
+    if (_top100.isEmpty && mounted) setState(() => _isInitialLoading = true);
 
     try {
-      // 1. 배너 로드
-      final bannerData = await _supabase
-          .from('banners')
-          .select('image_url')
-          .order('created_at', ascending: true);
+      // 1단계: 필수 데이터
+      final results = await Future.wait<dynamic>([
+        _retryRequest(() => _supabase.from('banners').select('image_url').order('created_at', ascending: true)),
+        _retryRequest(() => ReviewService.fetchStoreRankings()),
+        _retryRequest(() => _supabase.from('reviews').select('*, profiles(nickname, profile_image_url), review_votes(count), comments(count)').not('photo_urls', 'is', null).order('needsfine_score', ascending: false).limit(5)),
+      ]);
 
-      final List<String> loadedBanners = [];
-      for (var row in bannerData) {
-        loadedBanners.add(row['image_url'] as String);
-      }
+      final bannerData = results[0] as List<dynamic>;
+      final rankings = results[1] as List<StoreRanking>;
+      final bestReviewsData = results[2] as List<dynamic>;
 
-      // 2. 주간 랭킹 로드
-      final rankings = await ReviewService.fetchStoreRankings();
+      // 랭킹 정렬
       final sorted = List<StoreRanking>.from(rankings);
       sorted.sort((a, b) => b.avgScore.compareTo(a.avgScore));
 
@@ -109,89 +140,66 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         );
       }
 
-      final names = top100.map((e) => e.storeName).where((e) => e.isNotEmpty).toSet().toList();
-
-      // 공식 이미지 + 리뷰 이미지 하이브리드 로딩
-      final imageMap = await _fetchStoreImagesWithReviews(names);
-
-      // 3. 베스트 리뷰 로드
-      final bestReviewsData = await _supabase
-          .from('reviews')
-          .select('''
-            *, 
-            profiles(nickname, profile_image_url),
-            review_votes(count), 
-            comments(count)
-          ''')
-          .not('photo_urls', 'is', null)
-          .order('needsfine_score', ascending: false)
-          .limit(5);
-
-      List<Map<String, dynamic>> finalBestReviews = List<Map<String, dynamic>>.from(bestReviewsData);
-
-      if (finalBestReviews.isEmpty) {
-        finalBestReviews = [
-          {
-            'id': 'dummy1',
-            'store_name': '스시 오마카세 청담',
-            'review_text': '쉐프님의 접객이 정말 훌륭했습니다.',
-            'needsfine_score': 4.8,
-            'user_rating': 5.0,
-            'photo_urls': [],
-            'tags': ['데이트', '기념일'],
-            'created_at': DateTime.now().toIso8601String(),
-            'user_id': 'dummy_user',
-            'review_votes': [{'count': 124}],
-            'comments': [{'count': 18}],
-            'profiles': {'nickname': '미식가라이언', 'profile_image_url': null}
-          },
-        ];
-      }
-
+      // 🔥 [1차 UI 갱신]
       if (mounted) {
         setState(() {
-          _bannerList = loadedBanners;
+          _bannerList = bannerData.map((e) => e['image_url'] as String).toList();
           _top100 = top100;
-          _storeImageMap..clear()..addAll(imageMap);
-          _bestReviews = finalBestReviews;
+          _bestReviews = List<Map<String, dynamic>>.from(bestReviewsData);
+          _isInitialLoading = false;
         });
       }
+
+      // 2단계: 무거운 데이터 (좌표, 이미지) 백그라운드 로딩
+      final names = top100.map((e) => e.storeName).where((e) => e.isNotEmpty).toSet().toList();
+      final metaMap = await _fetchStoreMetadata(names);
+
+      // 🔥 [2차 UI 갱신]
+      if (mounted) {
+        setState(() {
+          _storeMetadataMap..clear()..addAll(metaMap);
+        });
+      }
+
     } catch (e) {
       debugPrint("홈 데이터 로드 실패: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isInitialLoading = false);
     }
   }
 
-  Future<Map<String, String>> _fetchStoreImagesWithReviews(List<String> storeNames) async {
+  Future<Map<String, StoreMetadata>> _fetchStoreMetadata(List<String> storeNames) async {
     if (storeNames.isEmpty) return {};
-    final map = <String, String>{};
-    final List<String> missingImages = [];
+    final map = <String, StoreMetadata>{};
+    final List<String> missingStores = [];
 
     try {
-      final res = await _supabase.from('stores').select('name, image_url').inFilter('name', storeNames);
+      // 좌표 쿼리도 재시도 로직 적용
+      final res = await _retryRequest(() => _supabase
+          .from('stores')
+          .select('name, image_url, lat, lng')
+          .inFilter('name', storeNames));
 
       if (res is List) {
         for (final row in res) {
           final name = (row['name'] ?? '').toString();
           final url = (row['image_url'] ?? '').toString();
-          if (name.isNotEmpty && url.isNotEmpty) {
-            map[name] = url;
+          final lat = (row['lat'] as num?)?.toDouble();
+          final lng = (row['lng'] as num?)?.toDouble();
+          if (name.isNotEmpty) {
+            map[name] = StoreMetadata(imageUrl: url, lat: lat, lng: lng);
           }
         }
       }
 
       for (var name in storeNames) {
-        if (!map.containsKey(name)) {
-          missingImages.add(name);
-        }
+        if (!map.containsKey(name)) missingStores.add(name);
       }
 
-      if (missingImages.isNotEmpty) {
+      if (missingStores.isNotEmpty) {
         final reviewRes = await _supabase
             .from('reviews')
             .select('store_name, photo_urls')
-            .inFilter('store_name', missingImages)
+            .inFilter('store_name', missingStores)
             .not('photo_urls', 'is', null)
             .order('created_at', ascending: false);
 
@@ -201,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             if (map.containsKey(name)) continue;
             final List photos = row['photo_urls'] ?? [];
             if (photos.isNotEmpty) {
-              map[name] = photos[0].toString();
+              map[name] = StoreMetadata(imageUrl: photos[0].toString(), lat: null, lng: null);
             }
           }
         }
@@ -215,31 +223,24 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   void _submitSearch(String q) {
     final query = q.trim();
     if (query.isEmpty) return;
-    searchTrigger.value = SearchTarget(query: query);
+
+    Future.microtask(() {
+      searchTrigger.value = SearchTarget(query: query);
+    });
     FocusScope.of(context).unfocus();
   }
 
   void _goToWeeklyMore() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => WeeklyRankingScreen(rankings: _top100, storeImageMap: _storeImageMap)));
+    final imageMap = _storeMetadataMap.map((key, value) => MapEntry(key, value.imageUrl ?? ''));
+    Navigator.push(context, MaterialPageRoute(builder: (_) => WeeklyRankingScreen(rankings: _top100, storeImageMap: imageMap)));
   }
 
   void _goToReviewDetail(Map<String, dynamic> reviewMap) async {
     try {
       final reviewObj = Review.fromJson(reviewMap);
-
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ReviewDetailScreen(review: reviewObj),
-        ),
-      );
-
-      _loadHomeData();
-
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: reviewObj)));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("리뷰 정보를 불러오는데 실패했습니다.")),
-      );
+      // Error handling
     }
   }
 
@@ -266,8 +267,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       ),
       body: RefreshIndicator(
         color: _brand,
-        onRefresh: _loadHomeData,
-        child: _isLoading
+        onRefresh: _loadHomeDataProgressive,
+        child: _isInitialLoading
             ? const Center(child: CircularProgressIndicator(color: _brand))
             : ListView(
           physics: const BouncingScrollPhysics(),
@@ -282,10 +283,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
-                  children: const [
-                    Text("실시간 베스트 리뷰 🏆", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-                    Spacer(),
-                    Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                  children: [
+                    Text(l10n.realTimeBestReviews, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    const Spacer(),
+                    const Icon(Icons.chevron_right_rounded, color: Colors.grey),
                   ],
                 ),
               ),
@@ -326,6 +327,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   }
 
   Widget _buildSearchBar() {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
@@ -340,7 +342,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           onSubmitted: _submitSearch,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: '맛집, 지역, 키워드 검색',
+            hintText: l10n.searchPlaceholder,
             hintStyle: TextStyle(color: Colors.grey[400], fontWeight: FontWeight.w600),
             prefixIcon: const Icon(Icons.search_rounded, color: _brand),
             suffixIcon: IconButton(
@@ -356,6 +358,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   }
 
   Widget _buildAdBanner() {
+    final l10n = AppLocalizations.of(context)!;
     bool isEmpty = _bannerList.isEmpty;
     int totalCount = isEmpty ? 0 : _bannerList.length;
     int displayIndex = isEmpty ? 0 : (_currentBannerIndex + 1);
@@ -370,13 +373,13 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(20)),
-                child: const Center(
+                child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.image_not_supported_outlined, size: 48, color: Colors.grey),
-                      SizedBox(height: 8),
-                      Text("등록된 이미지가 없습니다.", style: TextStyle(color: Colors.grey)),
+                      const Icon(Icons.image_not_supported_outlined, size: 48, color: Colors.grey),
+                      const SizedBox(height: 8),
+                      Text(l10n.noImages, style: const TextStyle(color: Colors.grey)),
                     ],
                   ),
                 ),
@@ -498,7 +501,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                         ),
                       ),
                     ),
-                    // (왼쪽) 1위 BEST
                     Positioned(
                       top: 16,
                       left: 16,
@@ -521,17 +523,15 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                         ),
                       ),
                     ),
-                    // (오른쪽) 니즈파인 점수 + 신뢰도
                     Positioned(
                       top: 16,
                       right: 16,
                       child: Row(
                         children: [
-                          // 1. 니즈파인 점수
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF3E5F5).withOpacity(0.95), // 연한 니즈파인색
+                              color: const Color(0xFFF3E5F5).withOpacity(0.95),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -544,11 +544,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                             ),
                           ),
                           const SizedBox(width: 8),
-                          // 2. 신뢰도
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE3F2FD).withOpacity(0.95), // 연한 파란색
+                              color: const Color(0xFFE3F2FD).withOpacity(0.95),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -616,12 +615,23 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         separatorBuilder: (_, __) => const SizedBox(width: 16),
         itemBuilder: (context, index) {
           final r = _top100[index];
-          final imageUrl = _storeImageMap[r.storeName] ?? '';
+          final meta = _storeMetadataMap[r.storeName];
+          final imageUrl = meta?.imageUrl ?? '';
+
           return _WeeklyRankCard(
             ranking: r,
             imageUrl: imageUrl,
             onTap: () {
-              if (r.storeName.isNotEmpty) searchTrigger.value = SearchTarget(query: r.storeName);
+              if (r.storeName.isNotEmpty) {
+                // 클릭 시점에 메타데이터(좌표)가 있으면 바로 이동
+                Future.microtask(() {
+                  searchTrigger.value = SearchTarget(
+                    query: r.storeName,
+                    lat: meta?.lat,
+                    lng: meta?.lng,
+                  );
+                });
+              }
             },
             l10n: l10n,
           );
@@ -677,14 +687,14 @@ class _WeeklyRankCard extends StatelessWidget {
                       Image.network(imageUrl, fit: BoxFit.cover, width: double.infinity)
                     else
                       Container(
-                        decoration: BoxDecoration(color: const Color(0xFFF3E5F5)),
+                        decoration: const BoxDecoration(color: Color(0xFFF3E5F5)),
                         child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.store_rounded, size: 48, color: _brand.withOpacity(0.5)),
                               const SizedBox(height: 8),
-                              Text("이미지 준비중", style: TextStyle(color: _brand.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text(l10n.imagePreparing, style: TextStyle(color: _brand.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -715,7 +725,7 @@ class _WeeklyRankCard extends StatelessWidget {
                           border: Border.all(color: Colors.black.withOpacity(0.06)),
                         ),
                         child: Text(
-                          '${ranking.rank}위',
+                          '${ranking.rank}${l10n.rank}',
                           style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.black),
                         ),
                       ),
@@ -735,12 +745,10 @@ class _WeeklyRankCard extends StatelessWidget {
                 ),
               ),
             ),
-            // ✅ [수정] 둘 다 Expanded로 감싸서 1:1 비율 적용
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               child: Row(
                 children: [
-                  // 1. 니즈파인 점수 (Expanded 추가)
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -750,7 +758,7 @@ class _WeeklyRankCard extends StatelessWidget {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        "니즈파인 ${ranking.avgScore.toStringAsFixed(1)}",
+                          "${l10n.needsFine} ${ranking.avgScore.toStringAsFixed(1)}",
                         style: const TextStyle(
                           color: _brand,
                           fontWeight: FontWeight.w900,
@@ -762,7 +770,6 @@ class _WeeklyRankCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // 2. 신뢰도 (Expanded 유지)
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -772,7 +779,7 @@ class _WeeklyRankCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        '신뢰도 ${ranking.avgTrust.toStringAsFixed(0)}%',
+                        '${l10n.trustScore} ${ranking.avgTrust.toStringAsFixed(0)}%',
                         style: const TextStyle(
                           color: Colors.blue,
                           fontWeight: FontWeight.w900,

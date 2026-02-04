@@ -116,11 +116,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
       final List<Review> reviews = (reviewData as List).map((e) => Review.fromJson(e)).toList();
       _calculateStats(reviews);
 
-      // 4. 유저의 리스트 데이터 불러오기 (최근 3개만 미리보기)
+      // 4. 유저의 공개 리스트만 불러오기 (최근 3개만 미리보기)
       final listsData = await _supabase
           .from('user_lists')
           .select()
           .eq('user_id', widget.userId)
+          .eq('is_public', true) // ✅ 공개 리스트만 표시
           .order('created_at', ascending: false)
           .limit(3);
 
@@ -433,7 +434,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: const [
-                Text("User Lists", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Text("유저 리스트", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
               ],
             ),
@@ -622,7 +623,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Taste Identity", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const Text("취향 분석", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -683,7 +684,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Score History", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const Text("평점 분포", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 24),
           SizedBox(
             height: 120,

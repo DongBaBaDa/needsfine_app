@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/data/korean_regions.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 // Steps imports
 import 'steps/step_email.dart';
@@ -79,32 +80,35 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
   }
 
   void _validatePassword() {
+    final l10n = AppLocalizations.of(context)!;
     final val = _passwordController.text;
     final RegExp upperCase = RegExp(r'[A-Z]');
     final RegExp lowerCase = RegExp(r'[a-z]');
-    final RegExp specialChar = RegExp(r'[!@#\$%^&*(),.?":{}|<>]');
-    String message = '8자 이상, 영문 대/소문자, 특수문자 포함';
+    final RegExp specialChar = RegExp(r'[!@#\\$%^\u0026*(),.?\":{}|\u003c\u003e]');
+    String message = l10n.passwordRequirement;
 
     if (val.length >= 8 &&
         upperCase.hasMatch(val) &&
         lowerCase.hasMatch(val) &&
         specialChar.hasMatch(val)) {
-      message = '사용 가능한 비밀번호입니다.';
+      message = l10n.passwordValid;
     }
     setState(() => _passwordValidationMessage = message);
   }
 
   void _validateConfirmPassword() {
+    final l10n = AppLocalizations.of(context)!;
     final val = _confirmPasswordController.text;
     setState(() {
       _confirmPasswordMessage = (_passwordController.text == val && val.isNotEmpty)
-          ? '비밀번호가 일치합니다.'
-          : '비밀번호가 일치하지 않습니다.';
+          ? l10n.passwordMatch
+          : l10n.passwordMismatch;
     });
   }
 
   // ✅ [핵심 수정] 실제 가입 로직 복원 및 강화
   Future<void> _completeSignUp() async {
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _isLoading = true);
     try {
       final email = _emailController.text.trim();
@@ -145,7 +149,7 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     } catch (e) {
       if (mounted) {
         // 에러 메시지 표시 (이미 존재하는 이메일 등)
-        _showSnackBar('가입 실패: ${e.toString().replaceAll('AuthException:', '')}', isError: true);
+        _showSnackBar('${l10n.signupFailed}: ${e.toString().replaceAll('AuthException:', '')}', isError: true);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -175,9 +179,11 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text('회원가입'),
+        title: Text(l10n.signup),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _prevPage,
