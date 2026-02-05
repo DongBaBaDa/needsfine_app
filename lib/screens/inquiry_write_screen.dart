@@ -52,7 +52,7 @@ class _InquiryWriteScreenState extends State<InquiryWriteScreen> {
       // 기존에 존재하던 'feedback' 테이블 활용
       await _supabase.from('feedback').insert({
         'user_id': userId,
-        'email': _emailController.text, // 답변 받을 이메일 저장
+        'email': _emailController.text, // 답변 받을 이메일
         'message': _contentController.text,
       });
 

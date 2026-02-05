@@ -584,6 +584,21 @@ class AppLocalizationsId extends AppLocalizations {
   String get nicknameHint => '2-10 karakter, huruf & angka';
 
   @override
+  String get checkDuplicate => 'Cek';
+
+  @override
+  String get nicknameEmpty => 'Harap masukkan nickname.';
+
+  @override
+  String get nicknameTooShort => 'Nickname harus minimal 2 karakter.';
+
+  @override
+  String get nicknameDuplicate => 'Nickname ini sudah digunakan.';
+
+  @override
+  String get nicknameAvailable => 'Nickname ini tersedia.';
+
+  @override
   String get completeSignup => 'Selesai';
 
   @override

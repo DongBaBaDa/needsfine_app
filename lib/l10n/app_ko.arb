@@ -225,6 +225,11 @@
   "nicknameInfo": "나중에 언제든 변경할 수 있어요.",
   "nickname": "닉네임",
   "nicknameHint": "한글, 영문, 숫자 포함 2~10자",
+  "checkDuplicate": "중복확인",
+  "nicknameEmpty": "닉네임을 입력해주세요.",
+  "nicknameTooShort": "닉네임은 2자 이상이어야 합니다.",
+  "nicknameDuplicate": "이미 사용 중인 닉네임입니다.",
+  "nicknameAvailable": "사용 가능한 닉네임입니다.",
   "completeSignup": "가입 완료",
   
   "welcome": "환영합니다!",

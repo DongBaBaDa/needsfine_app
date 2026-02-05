@@ -1212,6 +1212,36 @@ abstract class AppLocalizations {
   /// **'한글, 영문, 숫자 포함 2~10자'**
   String get nicknameHint;
 
+  /// No description provided for @checkDuplicate.
+  ///
+  /// In ko, this message translates to:
+  /// **'중복확인'**
+  String get checkDuplicate;
+
+  /// No description provided for @nicknameEmpty.
+  ///
+  /// In ko, this message translates to:
+  /// **'닉네임을 입력해주세요.'**
+  String get nicknameEmpty;
+
+  /// No description provided for @nicknameTooShort.
+  ///
+  /// In ko, this message translates to:
+  /// **'닉네임은 2자 이상이어야 합니다.'**
+  String get nicknameTooShort;
+
+  /// No description provided for @nicknameDuplicate.
+  ///
+  /// In ko, this message translates to:
+  /// **'이미 사용 중인 닉네임입니다.'**
+  String get nicknameDuplicate;
+
+  /// No description provided for @nicknameAvailable.
+  ///
+  /// In ko, this message translates to:
+  /// **'사용 가능한 닉네임입니다.'**
+  String get nicknameAvailable;
+
   /// No description provided for @completeSignup.
   ///
   /// In ko, this message translates to:

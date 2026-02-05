@@ -157,6 +157,11 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
       _passwordValidationMessage = message;
       _isPasswordValid = isValid;
     });
+    
+    // 비밀번호 변경 시 확인 필드도 재검증 (버튼 즉시 활성화)
+    if (_confirmPasswordController.text.isNotEmpty) {
+      _validateConfirmPassword();
+    }
   }
 
   void _validateConfirmPassword() {

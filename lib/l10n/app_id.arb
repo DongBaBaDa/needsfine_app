@@ -215,6 +215,11 @@
   "nicknameInfo": "Anda dapat mengubahnya nanti.",
   "nickname": "Nickname",
   "nicknameHint": "2-10 karakter, huruf & angka",
+  "checkDuplicate": "Cek",
+  "nicknameEmpty": "Harap masukkan nickname.",
+  "nicknameTooShort": "Nickname harus minimal 2 karakter.",
+  "nicknameDuplicate": "Nickname ini sudah digunakan.",
+  "nicknameAvailable": "Nickname ini tersedia.",
   "completeSignup": "Selesai",
   
   "welcome": "Selamat Datang!",

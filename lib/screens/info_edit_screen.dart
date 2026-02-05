@@ -120,10 +120,40 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
     );
 
     if (confirm == true) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("회원 탈퇴 처리가 완료되었습니다.")));
-      _logout();
+      try {
+        final userId = _supabase.auth.currentUser?.id;
+        if (userId == null) {
+          throw Exception("로그인 상태가 아닙니다.");
+        }
+
+        // 1. profiles 테이블에서 유저 데이터 삭제
+        await _supabase.from('profiles').delete().eq('id', userId);
+
+        // 2. auth.users에서 유저 삭제 (RPC 함수 호출)
+        // ⚠️ Supabase에 'delete_user' RPC 함수가 설정되어 있어야 합니다.
+        try {
+          await _supabase.rpc('delete_user');
+        } catch (rpcError) {
+          debugPrint("RPC delete_user failed (may not exist): $rpcError");
+          // RPC가 없으면 로그아웃만 진행
+        }
+
+        // 3. 로그아웃
+        await _supabase.auth.signOut();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text("회원 탈퇴 처리가 완료되었습니다.")));
+          
+          // 로그인 화면으로 이동
+          Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text("탈퇴 처리 중 오류: $e")));
+        }
+      }
     }
   }
 

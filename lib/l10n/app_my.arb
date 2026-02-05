@@ -194,6 +194,11 @@
   "nicknameInfo": "နောက်မှ ပြန်ပြင်နိုင်သည်။",
   "nickname": "အမည်ပြောင်",
   "nicknameHint": "၂-၁၀ လုံး၊ စာလုံးနှင့် ဂဏန်း",
+  "checkDuplicate": "စစ်ရန်",
+  "nicknameEmpty": "အမည်ပြောင် ရိုက်ထည့်ပါ။",
+  "nicknameTooShort": "အမည်ပြောင် အနည်းဆုံး ၂ လုံး ရှိရမည်။",
+  "nicknameDuplicate": "ဒီအမည်ပြောင် သုံးပြီးသား ဖြစ်နေပါသည်။",
+  "nicknameAvailable": "ဒီအမည်ပြောင် သုံးနိုင်ပါသည်။",
   "completeSignup": "ပြီးပြီ",
   
   "welcome": "ကြိုဆိုပါတယ်!",

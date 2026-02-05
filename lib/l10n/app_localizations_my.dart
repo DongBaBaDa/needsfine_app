@@ -584,6 +584,21 @@ class AppLocalizationsMy extends AppLocalizations {
   String get nicknameHint => '၂-၁၀ လုံး၊ စာလုံးနှင့် ဂဏန်း';
 
   @override
+  String get checkDuplicate => 'စစ်ရန်';
+
+  @override
+  String get nicknameEmpty => 'အမည်ပြောင် ရိုက်ထည့်ပါ။';
+
+  @override
+  String get nicknameTooShort => 'အမည်ပြောင် အနည်းဆုံး ၂ လုံး ရှိရမည်။';
+
+  @override
+  String get nicknameDuplicate => 'ဒီအမည်ပြောင် သုံးပြီးသား ဖြစ်နေပါသည်။';
+
+  @override
+  String get nicknameAvailable => 'ဒီအမည်ပြောင် သုံးနိုင်ပါသည်။';
+
+  @override
   String get completeSignup => 'ပြီးပြီ';
 
   @override

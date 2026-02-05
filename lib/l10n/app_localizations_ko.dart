@@ -580,6 +580,21 @@ class AppLocalizationsKo extends AppLocalizations {
   String get nicknameHint => '한글, 영문, 숫자 포함 2~10자';
 
   @override
+  String get checkDuplicate => '중복확인';
+
+  @override
+  String get nicknameEmpty => '닉네임을 입력해주세요.';
+
+  @override
+  String get nicknameTooShort => '닉네임은 2자 이상이어야 합니다.';
+
+  @override
+  String get nicknameDuplicate => '이미 사용 중인 닉네임입니다.';
+
+  @override
+  String get nicknameAvailable => '사용 가능한 닉네임입니다.';
+
+  @override
   String get completeSignup => '가입 완료';
 
   @override

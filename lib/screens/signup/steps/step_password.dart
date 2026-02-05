@@ -42,6 +42,16 @@ class _StepPasswordState extends State<StepPassword> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant StepPassword oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 부모에서 유효성 플래그가 변경되면 버튼 상태 재확인
+    if (oldWidget.isPasswordValid != widget.isPasswordValid ||
+        oldWidget.isConfirmValid != widget.isConfirmValid) {
+      _checkInput();
+    }
+  }
+
   void _checkInput() {
     final pw = widget.passwordController.text;
     final confirm = widget.confirmController.text;

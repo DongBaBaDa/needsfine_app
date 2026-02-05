@@ -581,6 +581,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nicknameHint => '2-10 chars, letters & numbers';
 
   @override
+  String get checkDuplicate => 'Check';
+
+  @override
+  String get nicknameEmpty => 'Please enter a nickname.';
+
+  @override
+  String get nicknameTooShort => 'Nickname must be at least 2 characters.';
+
+  @override
+  String get nicknameDuplicate => 'This nickname is already taken.';
+
+  @override
+  String get nicknameAvailable => 'This nickname is available.';
+
+  @override
   String get completeSignup => 'Complete';
 
   @override

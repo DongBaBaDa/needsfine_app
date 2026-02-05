@@ -195,6 +195,11 @@
   "nicknameInfo": "You can change this later.",
   "nickname": "Nickname",
   "nicknameHint": "2-10 chars, letters & numbers",
+  "checkDuplicate": "Check",
+  "nicknameEmpty": "Please enter a nickname.",
+  "nicknameTooShort": "Nickname must be at least 2 characters.",
+  "nicknameDuplicate": "This nickname is already taken.",
+  "nicknameAvailable": "This nickname is available.",
   "completeSignup": "Complete",
   
   "welcome": "Welcome!",
