@@ -53,7 +53,7 @@ class _InquiryWriteScreenState extends State<InquiryWriteScreen> {
       await _supabase.from('feedback').insert({
         'user_id': userId,
         'email': _emailController.text, // 답변 받을 이메일
-        'message': _contentController.text,
+        'content': _contentController.text,  // DB 트리거가 content를 기대함
       });
 
       if (!mounted) return;
