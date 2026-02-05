@@ -60,18 +60,28 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
         Map<String, dynamic> enriched = Map.from(noti);
 
         try {
+          // DEBUG: START
+          if (type == 'comment' || type == 'like') {
+             debugPrint('🔔 [$type] Processing RefID: $refId');
+          }
+
           if (type == 'comment' && refId != null) {
             Map<String, dynamic>? commentData;
 
-            // 1차 시도: refId를 comment ID로 가정하고 조회
+            // 1차 시도
             commentData = await _supabase
                 .from('comments')
                 .select('content, user_id, review_id')
                 .eq('id', refId)
                 .maybeSingle();
+            
+            if (commentData != null) {
+               debugPrint('✅ [$type] Found by Comment ID: $refId, User: ${commentData['user_id']}');
+            }
 
-            // 2차 시도: 실패 시 refId를 review ID로 가정하고, 해당 리뷰의 최신 댓글 1개를 조회 (Fallback)
+            // 2차 시도
             if (commentData == null) {
+              debugPrint('⚠️ [$type] Not found by Comment ID. Trying fallback (Review ID)...');
               final fallbackComments = await _supabase
                   .from('comments')
                   .select('content, user_id, review_id')
@@ -81,13 +91,15 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
               
               if (fallbackComments.isNotEmpty) {
                 commentData = fallbackComments.first;
+                debugPrint('✅ [$type] Found generic comment for Review ID: $refId');
+              } else {
+                debugPrint('❌ [$type] No comments found for Review ID: $refId');
               }
             }
 
             if (commentData != null) {
               enriched['comment_content'] = commentData['content'] ?? '삭제된 댓글';
               
-              // 댓글 작성자 닉네임 조회
               final commenterId = commentData['user_id'];
               if (commenterId != null) {
                 final commenterProfile = await _supabase
@@ -96,6 +108,7 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
                     .eq('id', commenterId)
                     .maybeSingle();
                 enriched['commenter_nickname'] = commenterProfile?['nickname'] ?? '알 수 없는 유저';
+                debugPrint('👤 [$type] Commenter: ${enriched['commenter_nickname']} (ID: $commenterId)');
               } else {
                 enriched['commenter_nickname'] = '알 수 없는 유저';
               }
@@ -112,23 +125,20 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
                 enriched['review_store_name'] = '매장';
               }
             } else {
-              // 댓글을 찾을 수 없음
               enriched['comment_content'] = '삭제된 댓글입니다';
               enriched['commenter_nickname'] = '알 수 없는 유저';
               enriched['review_store_name'] = '리뷰';
             }
           } else if (type == 'follow' && refId != null) {
-            // ✅ 팔로워 프로필 조회 (디버그 로그 추가)
-            debugPrint('🔔 팔로우 알림 로드: refId=$refId');
+            debugPrint('🔔 [follow] Loading Profile: $refId');
             final profileData = await _supabase
                 .from('profiles')
                 .select('nickname')
                 .eq('id', refId)
                 .maybeSingle();
-            debugPrint('🔔 팔로우 프로필 결과: $profileData');
             enriched['follower_nickname'] = profileData?['nickname'] ?? '알 수 없는 유저';
           } else if (type == 'like' || type == 'comment_like') {
-          // ✅ 좋아요/도움됨 알림 데이터 로드 (review_votes 사용!)
+          // ✅ 좋아요/도움됨 알림 데이터 로드
           final reviewData = await _supabase
               .from('reviews')
               .select('store_name, user_id')
@@ -141,24 +151,39 @@ class _NotificationScreenState extends State<NotificationScreen> with SingleTick
             // review_votes 테이블에서 최근 좋아요 누른 사람 조회
             final voteData = await _supabase
                 .from('review_votes')
-                .select('user_id, profiles!review_votes_user_id_fkey(nickname)')
+                .select('user_id')
                 .eq('review_id', refId)
                 .order('created_at', ascending: false)
                 .limit(1)
                 .maybeSingle();
 
-            if (voteData != null && voteData['profiles'] != null) {
-              enriched['liker_nickname'] = voteData['profiles']['nickname'] ?? '알 수 없는 유저';
+            if (voteData != null) {
+              final likerId = voteData['user_id'];
+              debugPrint('❤️ [like] Found Vote User ID: $likerId');
+              
+              if (likerId != null) {
+                final likerProfile = await _supabase
+                    .from('profiles')
+                    .select('nickname')
+                    .eq('id', likerId)
+                    .maybeSingle();
+                enriched['liker_nickname'] = likerProfile?['nickname'] ?? '알 수 없는 유저';
+                debugPrint('👤 [like] Liker: ${enriched['liker_nickname']}');
+              } else {
+                enriched['liker_nickname'] = '알 수 없는 유저';
+              }
             } else {
+              debugPrint('❌ [like] No votes found for review: $refId');
               enriched['liker_nickname'] = '알 수 없는 유저';
             }
           } else {
+            debugPrint('❌ [like] Review not found: $refId');
             enriched['review_store_name'] = '매장';
             enriched['liker_nickname'] = '알 수 없는 유저';
           }
         }
         } catch (e) {
-          debugPrint('알림 데이터 로드 실패 (${noti['id']}): $e');
+          debugPrint('🚨 알림 데이터 로드 Exception (${noti['id']}): $e');
         }
 
         enrichedNotifications.add(enriched);
@@ -456,6 +481,23 @@ class NotificationItem extends StatelessWidget {
       final commenter = notification['commenter_nickname'] ?? '알 수 없는 유저';
       final storeName = notification['review_store_name'] ?? '리뷰';
       final content = notification['comment_content'] ?? '댓글 내용을 불러올 수 없습니다';
+      final rawContent = notification['content'] ?? '새로운 댓글이 있습니다';
+
+      // 💥 데이터 조회 실패(오펀 데이터) 시 스냅샷(rawContent) 보여주기
+      final bool isOrphaned = commenter == '알 수 없는 유저';
+      final titleWidget = isOrphaned
+          ? Text(rawContent, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, height: 1.4))
+          : RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 16, color: Colors.black87, height: 1.4),
+                children: [
+                   TextSpan(text: commenter, style: const TextStyle(fontWeight: FontWeight.w700)),
+                   const TextSpan(text: "님이 당신의 "),
+                   TextSpan(text: storeName, style: const TextStyle(fontWeight: FontWeight.w700, color: _brand)),
+                   const TextSpan(text: " 리뷰에 댓글을 달았습니다"),
+                ],
+              ),
+            );
 
       return Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -476,19 +518,7 @@ class NotificationItem extends StatelessWidget {
                     margin: const EdgeInsets.only(right: 8),
                     decoration: BoxDecoration(color: !isRead ? _brand : Colors.transparent, shape: BoxShape.circle),
                   ),
-                  Expanded(
-                    child: RichText(
-                      text: TextSpan(
-                        style: const TextStyle(fontSize: 16, color: Colors.black87, height: 1.4),
-                        children: [
-                          TextSpan(text: commenter, style: const TextStyle(fontWeight: FontWeight.w700)),
-                          const TextSpan(text: "님이 당신의 "),
-                          TextSpan(text: storeName, style: const TextStyle(fontWeight: FontWeight.w700, color: _brand)),
-                          const TextSpan(text: " 리뷰에 댓글을 달았습니다"),
-                        ],
-                      ),
-                    ),
-                  ),
+                  Expanded(child: titleWidget),
                 ],
               ),
               const SizedBox(height: 6),
@@ -518,10 +548,9 @@ class NotificationItem extends StatelessWidget {
       );
     }
 
-    // ✅ 팔로우 알림 - 공지사항 스타일 적용 (InkWell)
+    // ✅ 팔로우 알림 (변경 없음)
     if (type == 'follow') {
       final follower = notification['follower_nickname'] ?? '알 수 없는 유저';
-
       return InkWell(
         onTap: () async {
           await _markAsRead(context);
@@ -568,6 +597,24 @@ class NotificationItem extends StatelessWidget {
     if (type == 'like' || type == 'comment_like') {
       final liker = notification['liker_nickname'] ?? '알 수 없는 유저';
       final storeName = notification['review_store_name'] ?? '리뷰';
+      final rawContent = notification['content'] ?? '누군가 리뷰를 좋아합니다';
+
+      // 💥 데이터 조회 실패(오펀 데이터) 시 스냅샷(rawContent) 보여주기
+      final bool isOrphaned = liker == '알 수 없는 유저';
+      final titleWidget = isOrphaned
+          ? Text(rawContent, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, height: 1.4))
+          : RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 16, color: Colors.black87, height: 1.4),
+                children: [
+                   const TextSpan(text: "당신의 "),
+                   TextSpan(text: storeName, style: const TextStyle(fontWeight: FontWeight.w700, color: _brand)),
+                   const TextSpan(text: "의 리뷰가 "),
+                   TextSpan(text: liker, style: const TextStyle(fontWeight: FontWeight.w700)),
+                   const TextSpan(text: "님에게 도움이 되었습니다"),
+                ],
+              ),
+            );
 
       return InkWell(
         onTap: () async {
@@ -586,20 +633,7 @@ class NotificationItem extends StatelessWidget {
                     margin: const EdgeInsets.only(right: 8),
                     decoration: BoxDecoration(color: !isRead ? _brand : Colors.transparent, shape: BoxShape.circle),
                   ),
-                  Expanded(
-                    child: RichText(
-                      text: TextSpan(
-                        style: const TextStyle(fontSize: 16, color: Colors.black87, height: 1.4),
-                        children: [
-                          const TextSpan(text: "당신의 "),
-                          TextSpan(text: storeName, style: const TextStyle(fontWeight: FontWeight.w700, color: _brand)),
-                          const TextSpan(text: "의 리뷰가 "),
-                          TextSpan(text: liker, style: const TextStyle(fontWeight: FontWeight.w700)),
-                          const TextSpan(text: "님에게 도움이 되었습니다"),
-                        ],
-                      ),
-                    ),
-                  ),
+                  Expanded(child: titleWidget),
                   const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
                 ],
               ),

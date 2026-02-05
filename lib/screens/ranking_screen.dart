@@ -454,46 +454,64 @@ class _RankingScreenState extends State<RankingScreen> {
   Widget _buildReviewList(AppLocalizations l10n) {
     final reviews = _getSortedReviews();
     if (reviews.isEmpty && !_isLoading) {
-      return Center(child: Text(l10n.noListGenerated));
+      return RefreshIndicator(
+        onRefresh: () => _loadInitialData(isRefresh: true),
+        color: const Color(0xFF8A2BE2),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Container(
+              height: constraints.maxHeight,
+              alignment: Alignment.center,
+              child: Text(l10n.noListGenerated),
+            ),
+          ),
+        ),
+      );
     }
 
-    return ListView.separated(
-      controller: _scrollController,
-      itemCount: reviews.length + (_hasMore ? 1 : 0),
-      separatorBuilder: (_, __) => Container(height: 1, color: const Color(0xFFEEEEEE)),
-      itemBuilder: (context, index) {
-        if (index == reviews.length) {
-          return const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Center(child: CircularProgressIndicator()),
+    return RefreshIndicator(
+      onRefresh: () => _loadInitialData(isRefresh: true),
+      color: const Color(0xFF8A2BE2),
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        controller: _scrollController,
+        itemCount: reviews.length + (_hasMore ? 1 : 0),
+        separatorBuilder: (_, __) => Container(height: 1, color: const Color(0xFFEEEEEE)),
+        itemBuilder: (context, index) {
+          if (index == reviews.length) {
+            return const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return ReviewCard(
+            review: reviews[index],
+            onTap: () async {
+              final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: reviews[index])));
+              if (result == true) _loadInitialData(isRefresh: true);
+            },
+            onTapStore: () {
+              if (reviews[index].storeName.isNotEmpty) {
+                searchTrigger.value = SearchTarget(
+                    query: reviews[index].storeName,
+                    lat: reviews[index].storeLat,
+                    lng: reviews[index].storeLng
+                );
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.movingToMap)));
+              }
+            },
+            onTapProfile: () {
+              if (reviews[index].userId != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => UserProfileScreen(userId: reviews[index].userId!)),
+                );
+              }
+            },
           );
-        }
-        return ReviewCard(
-          review: reviews[index],
-          onTap: () async {
-            final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: reviews[index])));
-            if (result == true) _loadInitialData(isRefresh: true);
-          },
-          onTapStore: () {
-            if (reviews[index].storeName.isNotEmpty) {
-              searchTrigger.value = SearchTarget(
-                  query: reviews[index].storeName,
-                  lat: reviews[index].storeLat,
-                  lng: reviews[index].storeLng
-              );
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.movingToMap)));
-            }
-          },
-          onTapProfile: () {
-            if (reviews[index].userId != null) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => UserProfileScreen(userId: reviews[index].userId!)),
-              );
-            }
-          },
-        );
-      },
+        },
+      ),
     );
   }
 
@@ -501,51 +519,71 @@ class _RankingScreenState extends State<RankingScreen> {
     final rankings = _getSortedRankings();
     final double overallAverage = _stats?.average ?? 0.0;
 
-    return rankings.isEmpty
-        ? Center(child: Text(l10n.noInfo))
-        : ListView.builder(
-      itemCount: rankings.length,
-      itemBuilder: (context, index) {
-        final ranking = rankings[index];
-
-        final double currentScore = _rankingSortOption == '니즈파인 순'
-            ? ranking.avgScore
-            : ranking.avgUserRating;
-
-        final bool isAboveAverage = currentScore >= overallAverage;
-
-        final nextRanking = (index + 1 < rankings.length)
-            ? rankings[index + 1]
-            : null;
-
-        final double? nextScore = nextRanking != null
-            ? (_rankingSortOption == '니즈파인 순' ? nextRanking.avgScore : nextRanking.avgUserRating)
-            : null;
-
-        final bool isNextBelowAverage = nextScore != null && nextScore < overallAverage;
-        final bool showDivider = isAboveAverage && isNextBelowAverage;
-
-        return Column(
-          children: [
-            GestureDetector(
-              onTap: () {
-                // ✅ [핵심] 지도 검색 트리거 작동
-                searchTrigger.value = SearchTarget(query: ranking.storeName);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ranking.storeName} ${l10n.movingToMap}")));
-              },
-              child: StoreRankingCard(
-                ranking: ranking,
-                sortOption: _rankingSortOption,
-              ),
+    if (rankings.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () => _loadInitialData(isRefresh: true),
+        color: const Color(0xFF8A2BE2),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Container(
+              height: constraints.maxHeight,
+              alignment: Alignment.center,
+              child: Text(l10n.noInfo),
             ),
+          ),
+        ),
+      );
+    }
 
-            if (showDivider) _buildAverageDivider(overallAverage, l10n),
+    return RefreshIndicator(
+      onRefresh: () => _loadInitialData(isRefresh: true),
+      color: const Color(0xFF8A2BE2),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: rankings.length,
+        itemBuilder: (context, index) {
+          final ranking = rankings[index];
 
-            if (!showDivider && index < rankings.length - 1)
-              const Divider(height: 1),
-          ],
-        );
-      },
+          final double currentScore = _rankingSortOption == '니즈파인 순'
+              ? ranking.avgScore
+              : ranking.avgUserRating;
+
+          final bool isAboveAverage = currentScore >= overallAverage;
+
+          final nextRanking = (index + 1 < rankings.length)
+              ? rankings[index + 1]
+              : null;
+
+          final double? nextScore = nextRanking != null
+              ? (_rankingSortOption == '니즈파인 순' ? nextRanking.avgScore : nextRanking.avgUserRating)
+              : null;
+
+          final bool isNextBelowAverage = nextScore != null && nextScore < overallAverage;
+          final bool showDivider = isAboveAverage && isNextBelowAverage;
+
+          return Column(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  // ✅ [핵심] 지도 검색 트리거 작동
+                  searchTrigger.value = SearchTarget(query: ranking.storeName);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ranking.storeName} ${l10n.movingToMap}")));
+                },
+                child: StoreRankingCard(
+                  ranking: ranking,
+                  sortOption: _rankingSortOption,
+                ),
+              ),
+
+              if (showDivider) _buildAverageDivider(overallAverage, l10n),
+
+              if (!showDivider && index < rankings.length - 1)
+                const Divider(height: 1),
+            ],
+          );
+        },
+      ),
     );
   }
 

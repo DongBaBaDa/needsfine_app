@@ -14,6 +14,7 @@ import 'package:needsfine_app/l10n/app_localizations.dart';
 
 import 'package:needsfine_app/screens/notice_screen.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart';
+import 'package:needsfine_app/screens/review_detail_screen.dart';
 
 enum StoreReviewFilter { latest, needsfineHigh, trustHigh, bitter }
 
@@ -403,14 +404,10 @@ class _StoreReviewsScreenState extends State<StoreReviewsScreen> {
                   return ReviewCard(
                     review: r,
                     onTap: () {
-                      showDialog(
-                        context: context,
-                        builder: (_) => AlertDialog(
-                          title: Text(r.nickname),
-                          content: SingleChildScrollView(child: Text(r.reviewText)),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(context), child: const Text("닫기")),
-                          ],
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ReviewDetailScreen(review: r),
                         ),
                       );
                     },

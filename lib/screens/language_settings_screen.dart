@@ -15,13 +15,17 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
   // 현재 선택된 언어 (임시 저장용)
   late Locale _selectedLocale;
 
-  // ✅ [수정] 언어 목록에 '인도네시아어' 추가
-  // 규칙: 한글명 + 현지명
+  // ✅ 9개국어 지원 (한국어, 영어, 일본어, 중국어, 스페인어, 아랍어, 포르투갈어, 인도네시아어, 미얀마어)
   final List<Map<String, dynamic>> _languages = [
-    {'name': '미얀마어 မြန်မာစာ', 'code': 'my', 'country': null},
-    {'name': '영어 English', 'code': 'en', 'country': null},
-    {'name': '인도네시아어 Bahasa Indonesia', 'code': 'id', 'country': null}, // ✅ 추가됨
     {'name': '한국어', 'code': 'ko', 'country': 'KR'},
+    {'name': '영어 English', 'code': 'en', 'country': null},
+    {'name': '日本語', 'code': 'ja', 'country': null},
+    {'name': '中文', 'code': 'zh', 'country': null},
+    {'name': 'Español', 'code': 'es', 'country': null},
+    {'name': 'العربية', 'code': 'ar', 'country': null},
+    {'name': 'Português', 'code': 'pt', 'country': null},
+    {'name': 'Bahasa Indonesia', 'code': 'id', 'country': null},
+    {'name': 'မြန်မာစာ', 'code': 'my', 'country': null},
   ];
 
   @override

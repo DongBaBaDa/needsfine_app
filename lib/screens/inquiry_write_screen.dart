@@ -54,6 +54,7 @@ class _InquiryWriteScreenState extends State<InquiryWriteScreen> {
         'user_id': userId,
         'email': _emailController.text, // 답변 받을 이메일
         'content': _contentController.text,  // DB 트리거가 content를 기대함
+        'message': _contentController.text,  // 기존 message 컬럼도 함께 저장 (NOT NULL 대응)
       });
 
       if (!mounted) return;

@@ -138,10 +138,10 @@ class Review {
       storeLng: (json['store_lng'] as num?)?.toDouble() ?? 0.0,
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now(),
 
-      // ✅ [수정] Relation Count 파싱 적용
-      likeCount: parseCount(json['review_votes']),
-      commentCount: parseCount(json['comments']),
-      saveCount: parseCount(json['review_saves']),
+      // ✅ [수정] 물리적 컬럼(like_count) 우선 확인 후, 없으면 Relation Count 파싱
+      likeCount: (json['like_count'] as int?) ?? parseCount(json['review_votes']),
+      commentCount: (json['comment_count'] as int?) ?? parseCount(json['comments']),
+      saveCount: (json['save_count'] as int?) ?? parseCount(json['review_saves']),
 
       myCommentText: json['comment_content']?.toString(),
       myCommentCreatedAt: json['comment_created_at'] != null
