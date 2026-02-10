@@ -110,16 +110,20 @@
       "name": {}
     }
   },
-  "startFollowingMessage": "{name}さんをフォロー",
-  "@startFollowingMessage": {
-    "placeholders": {
-      "name": {}
-    }
-  },
   "unfollowMessage": "{name}さんのフォロー解除",
   "@unfollowMessage": {
     "placeholders": {
       "name": {}
+    }
+  },
+  "deleteAction": "削除",
+  "unknownStore": "不明店",
+  "notices": "お知らせ",
+  "writeNotice": "作成",
+  "followMessage": "{nickname}をフォロー",
+  "@followMessage": {
+    "placeholders": {
+      "nickname": {}
     }
   },
 

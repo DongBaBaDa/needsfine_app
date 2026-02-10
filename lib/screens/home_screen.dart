@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/services/review_service.dart';
+import 'package:needsfine_app/services/feed_service.dart';
+import 'package:needsfine_app/services/user_blocking_service.dart';
 import 'package:needsfine_app/screens/weekly_ranking_screen.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
@@ -62,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     super.initState();
     _loadHomeDataProgressive();
     _startBannerTimer();
+    UserBlockingService.fetchBlockedUsers(); // 차단 리스트 초기화
   }
 
   @override
@@ -112,11 +115,19 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     if (_top100.isEmpty && mounted) setState(() => _isInitialLoading = true);
 
     try {
-      // 1단계: 필수 데이터
       final results = await Future.wait<dynamic>([
-        _retryRequest(() => _supabase.from('banners').select('image_url').order('created_at', ascending: true)),
-        _retryRequest(() => ReviewService.fetchStoreRankings()),
-        _retryRequest(() => _supabase.from('reviews').select('*, profiles(nickname, profile_image_url), review_votes(count), comments(count)').not('photo_urls', 'is', null).order('needsfine_score', ascending: false).limit(5)),
+        _retryRequest(() => _supabase.from('banners').select('image_url').order('created_at', ascending: true)).catchError((e) {
+          debugPrint("배너 로드 실패: $e");
+          return <Map<String, dynamic>>[];
+        }),
+        _retryRequest(() => ReviewService.fetchStoreRankings()).catchError((e) {
+          debugPrint("랭킹 로드 실패: $e");
+          return <StoreRanking>[];
+        }),
+        _retryRequest(() => _supabase.from('reviews').select('*, profiles(nickname, profile_image_url), review_votes(count), comments(count)').not('photo_urls', 'is', null).order('like_count', ascending: false).order('view_count', ascending: false).order('created_at', ascending: false).limit(5)).catchError((e) {
+          debugPrint("베스트 리뷰 로드 실패: $e");
+          return <Map<String, dynamic>>[];
+        }),
       ]);
 
       final bannerData = results[0] as List<dynamic>;
@@ -151,18 +162,21 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       }
 
       // 2단계: 무거운 데이터 (좌표, 이미지) 백그라운드 로딩
-      final names = top100.map((e) => e.storeName).where((e) => e.isNotEmpty).toSet().toList();
-      final metaMap = await _fetchStoreMetadata(names);
+      if (top100.isNotEmpty) {
+        final names = top100.map((e) => e.storeName).where((e) => e.isNotEmpty).toSet().toList();
+        final metaMap = await _fetchStoreMetadata(names);
 
-      // 🔥 [2차 UI 갱신]
-      if (mounted) {
-        setState(() {
-          _storeMetadataMap..clear()..addAll(metaMap);
-        });
+        // 🔥 [2차 UI 갱신]
+        if (mounted) {
+          setState(() {
+            _storeMetadataMap..clear()..addAll(metaMap);
+          });
+        }
       }
 
     } catch (e) {
-      debugPrint("홈 데이터 로드 실패: $e");
+      debugPrint("홈 데이터 로드 중 예상치 못한 실패: $e");
+    } finally {
       if (mounted) setState(() => _isInitialLoading = false);
     }
   }
@@ -439,7 +453,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           final List photoUrls = review['photo_urls'] ?? [];
           final String mainImage = photoUrls.isNotEmpty ? photoUrls[0] : '';
           final double score = (review['needsfine_score'] as num?)?.toDouble() ?? 0.0;
-          final String storeName = review['store_name'] ?? '알 수 없는 가게';
+          final l10n = AppLocalizations.of(context)!;
+          final String storeName = review['store_name'] ?? l10n.unknownStore;
           final String content = review['review_text'] ?? '';
           final double trustScore = (review['trust_level'] as num?)?.toDouble() ?? 50.0;
 
@@ -454,6 +469,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
           final int likes = getCount('review_votes');
           final int comments = getCount('comments');
+          final int views = getCount('view_count'); // ✅ 조회수 추가
 
           return GestureDetector(
             onTap: () => _goToReviewDetail(review),
@@ -514,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                           ],
                         ),
                         child: Text(
-                          "${index + 1}위 BEST",
+                          "${index + 1}${l10n.rank} BEST",
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -529,32 +545,32 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                       child: Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF3E5F5).withOpacity(0.95),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              "니즈파인 ${score.toStringAsFixed(1)}",
+                              "${l10n.needsFine} ${score.toStringAsFixed(1)}",
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: _brand,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 4),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
                             decoration: BoxDecoration(
                               color: const Color(0xFFE3F2FD).withOpacity(0.95),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
-                              "신뢰도 ${trustScore.toStringAsFixed(0)}%",
+                              "${l10n.trustScore} ${trustScore.toStringAsFixed(0)}%",
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: Colors.blue,
                               ),
                             ),
@@ -582,6 +598,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                               Icon(Icons.chat_bubble_rounded, size: 14, color: Colors.white.withOpacity(0.9)),
                               const SizedBox(width: 4),
                               Text("$comments", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
+                              const SizedBox(width: 12),
+                              Icon(Icons.remove_red_eye_rounded, size: 14, color: Colors.white.withOpacity(0.9)),
+                              const SizedBox(width: 4),
+                              Text("$views", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ],
@@ -750,11 +770,12 @@ class _WeeklyRankCard extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
+                    flex: 3,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
                       decoration: BoxDecoration(
                         color: _brand.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       alignment: Alignment.center,
                       child: Text(
@@ -769,14 +790,15 @@ class _WeeklyRankCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 4),
                   Expanded(
+                    flex: 2,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: Colors.blue.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         '${l10n.trustScore} ${ranking.avgTrust.toStringAsFixed(0)}%',

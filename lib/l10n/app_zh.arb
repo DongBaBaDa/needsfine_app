@@ -110,16 +110,20 @@
       "name": {}
     }
   },
-  "startFollowingMessage": "已关注{name}",
-  "@startFollowingMessage": {
-    "placeholders": {
-      "name": {}
-    }
-  },
   "unfollowMessage": "已取消关注{name}",
   "@unfollowMessage": {
     "placeholders": {
       "name": {}
+    }
+  },
+  "deleteAction": "删除",
+  "unknownStore": "未知店铺",
+  "notices": "公告",
+  "writeNotice": "发布",
+  "followMessage": "已关注{nickname}",
+  "@followMessage": {
+    "placeholders": {
+      "nickname": {}
     }
   },
 

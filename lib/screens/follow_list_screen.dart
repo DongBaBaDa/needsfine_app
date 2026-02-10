@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart'; // 상대방 프로필 이동용
 
 class FollowListScreen extends StatefulWidget {
@@ -40,6 +41,7 @@ class _FollowListScreenState extends State<FollowListScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -58,9 +60,9 @@ class _FollowListScreenState extends State<FollowListScreen> with SingleTickerPr
           indicatorColor: _brand,
           indicatorWeight: 2,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-          tabs: const [
-            Tab(text: "팔로워"),
-            Tab(text: "팔로잉"),
+          tabs: [
+            Tab(text: l10n.follower),
+            Tab(text: l10n.following),
           ],
         ),
       ),
@@ -128,10 +130,10 @@ class _FollowListState extends State<_FollowList> {
                 .maybeSingle();
             isFollowing = check != null;
           }
-
+          final l10n = AppLocalizations.of(context)!;
           loadedUsers.add({
             'id': profile['id'],
-            'nickname': profile['nickname'] ?? '알 수 없음',
+            'nickname': profile['nickname'] ?? l10n.unknownUser,
             'profile_image_url': profile['profile_image_url'],
             'introduction': profile['introduction'] ?? '',
             'isFollowing': isFollowing, // 내 팔로우 상태
@@ -154,10 +156,11 @@ class _FollowListState extends State<_FollowList> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator(color: Color(0xFF8A2BE2)));
+    final l10n = AppLocalizations.of(context)!;
     if (_users.isEmpty) {
       return Center(
         child: Text(
-          widget.type == 'follower' ? "아직 팔로워가 없습니다." : "팔로잉하는 유저가 없습니다.",
+          widget.type == 'follower' ? l10n.noFollowers : l10n.noFollowings,
           style: const TextStyle(color: Colors.grey),
         ),
       );
@@ -267,6 +270,7 @@ class _FollowButtonState extends State<_FollowButton> {
     final newState = !widget.isFollowing;
     widget.onToggle(newState); // UI 즉시 업데이트
 
+    final l10n = AppLocalizations.of(context)!;
     try {
       if (newState) {
         // 팔로우 하기
@@ -277,7 +281,7 @@ class _FollowButtonState extends State<_FollowButton> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("${widget.nickname}님을 팔로우합니다."),
+            content: Text(l10n.followMessage(widget.nickname)),
             duration: const Duration(seconds: 1),
           ));
         }
@@ -289,7 +293,7 @@ class _FollowButtonState extends State<_FollowButton> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("${widget.nickname}님 팔로우를 취소합니다."),
+            content: Text(l10n.unfollowMessage(widget.nickname)),
             duration: const Duration(seconds: 1),
           ));
         }
@@ -297,12 +301,13 @@ class _FollowButtonState extends State<_FollowButton> {
     } catch (e) {
       // 에러 시 롤백
       widget.onToggle(!newState);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("오류가 발생했습니다.")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.errorOccurred)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       height: 32,
       child: widget.isFollowing
@@ -313,7 +318,7 @@ class _FollowButtonState extends State<_FollowButton> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
-        child: const Text("팔로잉", style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
+        child: Text(l10n.following, style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
       )
           : ElevatedButton(
         onPressed: _toggleFollow,
@@ -323,7 +328,7 @@ class _FollowButtonState extends State<_FollowButton> {
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
-        child: const Text("팔로우", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+        child: Text(l10n.follow, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
       ),
     );
   }

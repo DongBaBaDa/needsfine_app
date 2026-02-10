@@ -3,6 +3,7 @@ import 'package:needsfine_app/main.dart'; // appLocaleNotifier 사용을 위해 
 
 // ✅ 다국어 패키지 임포트
 import 'package:needsfine_app/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LanguageSettingsScreen extends StatefulWidget {
   const LanguageSettingsScreen({super.key});
@@ -35,10 +36,15 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
     _selectedLocale = appLocaleNotifier.value ?? const Locale('ko', 'KR');
   }
 
-  void _applyLanguage() {
+  Future<void> _applyLanguage() async {
     // ✅ 전역 변수 업데이트 -> 앱 전체 언어 변경
     appLocaleNotifier.value = _selectedLocale;
-    Navigator.pop(context); // 화면 닫기
+    
+    // ✅ 저장 (Persistence)
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('language_code', _selectedLocale.languageCode);
+
+    if (mounted) Navigator.pop(context); // 화면 닫기
   }
 
   @override

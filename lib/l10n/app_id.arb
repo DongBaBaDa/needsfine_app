@@ -110,16 +110,20 @@
       "name": {}
     }
   },
-  "startFollowingMessage": "Mulai follow {name}.",
-  "@startFollowingMessage": {
-    "placeholders": {
-      "name": {}
-    }
-  },
   "unfollowMessage": "Unfollow {name}.",
   "@unfollowMessage": {
     "placeholders": {
       "name": {}
+    }
+  },
+  "deleteAction": "Hapus",
+  "unknownStore": "Toko Anon",
+  "notices": "Info",
+  "writeNotice": "Tulis",
+  "followMessage": "Mengikuti {nickname}",
+  "@followMessage": {
+    "placeholders": {
+      "nickname": {}
     }
   },
 

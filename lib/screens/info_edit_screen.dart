@@ -8,6 +8,11 @@ import 'package:needsfine_app/screens/terms_screen.dart';
 import 'package:needsfine_app/screens/language_settings_screen.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
 
+// ✅ Added imports
+import 'package:permission_handler/permission_handler.dart';
+import 'package:app_settings/app_settings.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+
 class InfoEditScreen extends StatefulWidget {
   const InfoEditScreen({super.key});
 
@@ -15,7 +20,7 @@ class InfoEditScreen extends StatefulWidget {
   State<InfoEditScreen> createState() => _InfoEditScreenState();
 }
 
-class _InfoEditScreenState extends State<InfoEditScreen> {
+class _InfoEditScreenState extends State<InfoEditScreen> with WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
 
@@ -23,7 +28,10 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
   String _email = '';
   String _gender = '미설정';
   String _birthDate = '미설정';
-  bool _isNotificationOn = true;
+  
+  // ✅ Notification & Version state
+  bool _isNotificationEnabled = false;
+  String _appVersion = '';
 
   // DB에 이미 저장되어 있는지 여부
   bool _isGenderSet = false;
@@ -32,10 +40,84 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetchUserInfo();
+    _checkNotificationPermission();
+    _loadAppVersion();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkNotificationPermission();
+    }
+  }
+
+  Future<void> _checkNotificationPermission() async {
+    final status = await Permission.notification.status;
+    if (mounted) {
+      setState(() {
+        _isNotificationEnabled = status.isGranted;
+      });
+    }
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _appVersion = info.version;
+      });
+    }
+  }
+
+  Future<void> _toggleNotification(bool value) async {
+    if (value) {
+      // User wants to enable
+      final status = await Permission.notification.request();
+      if (status.isGranted) {
+        setState(() => _isNotificationEnabled = true);
+      } else if (status.isPermanentlyDenied || status.isDenied) {
+        _showPermissionDialog('알림 권한 필요', '알림을 받으려면 설정에서 권한을 허용해야 합니다.');
+      }
+    } else {
+      // User wants to disable
+      _showPermissionDialog('알림 끄기', '알림을 끄려면 설정에서 권한을 해제해야 합니다.');
+    }
+  }
+
+  void _showPermissionDialog(String title, String content) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              openAppSettings();
+            },
+            child: const Text('설정으로 이동'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _fetchUserInfo() async {
+    // ... (existing code: _fetchUserInfo implementation)
     if (!mounted) return;
     setState(() => _isLoading = true);
 
@@ -89,6 +171,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
   }
 
   Future<void> _logout() async {
+    // ... (existing code: _logout implementation)
     await _supabase.auth.signOut();
     if (mounted) {
       Navigator.pushAndRemoveUntil(
@@ -100,6 +183,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
   }
 
   Future<void> _deleteAccount() async {
+    // ... (existing code: _deleteAccount implementation)
     final l10n = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
@@ -126,26 +210,19 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
           throw Exception("로그인 상태가 아닙니다.");
         }
 
-        // 1. profiles 테이블에서 유저 데이터 삭제
         await _supabase.from('profiles').delete().eq('id', userId);
 
-        // 2. auth.users에서 유저 삭제 (RPC 함수 호출)
-        // ⚠️ Supabase에 'delete_user' RPC 함수가 설정되어 있어야 합니다.
         try {
           await _supabase.rpc('delete_user');
         } catch (rpcError) {
           debugPrint("RPC delete_user failed (may not exist): $rpcError");
-          // RPC가 없으면 로그아웃만 진행
         }
 
-        // 3. 로그아웃
         await _supabase.auth.signOut();
 
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(const SnackBar(content: Text("회원 탈퇴 처리가 완료되었습니다.")));
-          
-          // 로그인 화면으로 이동
           Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
         }
       } catch (e) {
@@ -157,11 +234,12 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
     }
   }
 
-  // ✅ [수정됨] 성별 설정 (저장 확인 로직 추가)
   Future<void> _updateGender() async {
+    // ... (existing code)
+    final l10n = AppLocalizations.of(context)!;
     if (_isGenderSet) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("성별은 한 번만 설정할 수 있습니다.")),
+        SnackBar(content: Text(l10n.genderOneTime)),
       );
       return;
     }
@@ -169,15 +247,15 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
     String? selected = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: const Text("성별 선택"),
+        title: Text(l10n.genderSet),
         children: [
           SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, "남성"),
-            child: const Text("남성"),
+            onPressed: () => Navigator.pop(context, l10n.male),
+            child: Text(l10n.male),
           ),
           SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, "여성"),
-            child: const Text("여성"),
+            onPressed: () => Navigator.pop(context, l10n.female),
+            child: Text(l10n.female),
           ),
         ],
       ),
@@ -188,7 +266,6 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
       if (user == null) return;
 
       try {
-        // .select()를 추가하여 업데이트가 실제로 성공했는지 확인
         await _supabase
             .from('profiles')
             .update({'gender': selected})
@@ -202,21 +279,22 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
 
         if (mounted) {
           ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text("성별이 저장되었습니다.")));
+              .showSnackBar(SnackBar(content: Text(l10n.saved)));
         }
       } catch (e) {
         if (mounted)
           ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text("저장 실패: $e")));
+              .showSnackBar(SnackBar(content: Text("${l10n.saveError} $e")));
       }
     }
   }
 
-  // ✅ [수정됨] 생년월일 설정 (저장 확인 로직 추가)
   Future<void> _updateBirthDate() async {
+    // ... (existing code)
+    final l10n = AppLocalizations.of(context)!;
     if (_isBirthDateSet) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("생년월일은 한 번만 설정할 수 있습니다.")),
+        SnackBar(content: Text(l10n.birthDateOneTime)),
       );
       return;
     }
@@ -227,7 +305,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
       initialDate: DateTime(2000, 1, 1),
       firstDate: DateTime(1900),
       lastDate: now,
-      helpText: "생년월일 선택 (한 번만 설정 가능)",
+      helpText: l10n.birthDateSelect,
     );
 
     if (picked != null) {
@@ -237,7 +315,6 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
       try {
         final int age = now.year - picked.year + 1;
 
-        // .select()를 추가하여 업데이트가 실제로 성공했는지 확인
         await _supabase.from('profiles').update({
           'birth_date': picked.toIso8601String(),
           'age': age,
@@ -250,17 +327,18 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
 
         if (mounted) {
           ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text("생년월일이 저장되었습니다.")));
+              .showSnackBar(SnackBar(content: Text(l10n.saved)));
         }
       } catch (e) {
         if (mounted)
           ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text("저장 실패: $e")));
+              .showSnackBar(SnackBar(content: Text("${l10n.saveError} $e")));
       }
     }
   }
 
   void _showPhoneAuthDialog() {
+   // ... (existing code)
     final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
@@ -295,6 +373,8 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
   }
 
   void _showCommunityGuidelines() {
+     // ... (existing code)
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) {
@@ -302,37 +382,32 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
           backgroundColor: Colors.white,
           shape:
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: const Text("커뮤니티 가이드라인",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          content: const SingleChildScrollView(
+          title: Text(l10n.communityGuidelines,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "안전한 커뮤니티를 위해 아래 정책을 준수합니다.",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  l10n.communityGuidelinesContent, 
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
-                SizedBox(height: 12),
-                Text("1. 부적절한 콘텐츠 금지\n"
-                    "- 욕설, 비방, 혐오 발언, 성적 콘텐츠, 폭력적인 내용은 엄격히 금지되며 필터링됩니다."),
-                SizedBox(height: 8),
-                Text("2. 사용자 신고 및 차단\n"
-                    "- 불쾌한 유저는 프로필 또는 리뷰에서 즉시 '신고' 및 '차단'할 수 있습니다.\n"
-                    "- 차단 시 해당 유저의 모든 콘텐츠가 숨김 처리됩니다."),
-                SizedBox(height: 8),
-                Text("3. 신고 처리 정책 (24시간 내 조치)\n"
-                    "- 접수된 신고는 운영팀이 24시간 이내에 검토합니다.\n"
-                    "- 가이드라인 위반이 확인될 경우, 해당 콘텐츠 삭제 및 작성자 이용 제재 조치가 취해집니다.",
-                    style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                Text("${l10n.cgItem1Title}\n- ${l10n.cgItem1Desc}"),
+                const SizedBox(height: 8),
+                Text("${l10n.cgItem2Title}\n- ${l10n.cgItem2Desc}"),
+                const SizedBox(height: 8),
+                Text("${l10n.cgItem3Title}\n- ${l10n.cgItem3Desc}",
+                    style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("확인",
-                  style: TextStyle(
+              child: Text(l10n.confirm,
+                  style: const TextStyle(
                       color: Color(0xFF8A2BE2), fontWeight: FontWeight.bold)),
             ),
           ],
@@ -377,16 +452,6 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
           const SizedBox(height: 10),
           _buildSectionHeader(l10n.accountInfo),
           _buildSectionContainer([
-            // ✅ [주석 처리] 휴대폰 번호 설정 (미구현)
-            /*
-                  _buildSettingsItem(
-                    icon: Icons.phone_iphone,
-                    label: l10n.phoneNumber,
-                    value: _phone.isEmpty ? l10n.verificationNeeded : _phone,
-                    onTap: _showPhoneAuthDialog,
-                  ),
-                  _buildDivider(),
-                  */
             _buildSettingsItem(
               icon: Icons.email_outlined,
               label: l10n.email,
@@ -398,7 +463,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
             _buildSettingsItem(
               icon: Icons.wc,
               label: l10n.gender,
-              value: _gender == '미설정' ? "설정하기 (클릭)" : _gender,
+              value: _gender == '미설정' ? l10n.genderSet : _gender,
               isSet: _isGenderSet,
               onTap: _updateGender,
               showArrow: !_isGenderSet,
@@ -407,8 +472,8 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
             // 생년월일
             _buildSettingsItem(
               icon: Icons.calendar_today,
-              label: "생년월일",
-              value: _birthDate == '미설정' ? "설정하기 (클릭)" : _birthDate,
+              label: l10n.birthDate,
+              value: _birthDate == '미설정' ? l10n.birthDateSet : _birthDate,
               isSet: _isBirthDateSet,
               onTap: _updateBirthDate,
               showArrow: !_isBirthDateSet,
@@ -446,35 +511,28 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
             _buildDivider(),
             _buildSettingsItem(
               icon: Icons.block,
-              label: "차단한 사용자 관리",
+              label: l10n.blockedUserManagement,
               value: "",
               onTap: _showBlockedUsers,
             ),
-            // ✅ [주석 처리] 알림 설정 (미구현)
-            /*
-                  _buildDivider(),
-                  Padding(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.notifications_outlined,
-                            size: 22, color: Colors.black87),
-                        const SizedBox(width: 12),
-                        Text(l10n.notificationSettings,
-                            style: const TextStyle(
-                                fontSize: 16, color: Colors.black87)),
-                        const Spacer(),
-                        Switch(
-                          value: _isNotificationOn,
-                          activeColor: const Color(0xFF8A2BE2),
-                          onChanged: (val) =>
-                              setState(() => _isNotificationOn = val),
-                        ),
-                      ],
-                    ),
+            // ✅ [Implemented] Notification Settings
+            _buildDivider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_outlined, size: 22, color: Colors.black87),
+                  const SizedBox(width: 12),
+                  Text(l10n.notificationSettings, style: const TextStyle(fontSize: 16, color: Colors.black87)),
+                  const Spacer(),
+                  Switch(
+                    value: _isNotificationEnabled,
+                    activeColor: const Color(0xFF8A2BE2),
+                    onChanged: _toggleNotification,
                   ),
-                  */
+                ],
+              ),
+            ),
           ]),
 
           const SizedBox(height: 24),
@@ -492,7 +550,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
             _buildDivider(),
             _buildSettingsItem(
               icon: Icons.shield_outlined,
-              label: "커뮤니티 가이드라인 (신고 정책)",
+              label: l10n.cgTitle,
               value: "",
               onTap: _showCommunityGuidelines,
             ),
@@ -520,10 +578,12 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
           ),
 
           const SizedBox(height: 20),
-          Center(
-              child: Text("${l10n.currentVersion} 1.0.0",
-                  style:
-                  const TextStyle(color: Colors.grey, fontSize: 12))),
+          // ✅ [Updated] Show only version number
+          if (_appVersion.isNotEmpty)
+            Center(
+                child: Text("${l10n.currentVersion} $_appVersion",
+                    style:
+                    const TextStyle(color: Colors.grey, fontSize: 12))),
           const SizedBox(height: 10),
 
           Center(
@@ -544,6 +604,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
     );
   }
 
+  // ... (rest of the widgets: _buildSectionHeader, _buildSectionContainer, _buildSettingsItem, _buildDivider, BlockedUsersView)
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(left: 12, bottom: 8),
@@ -606,6 +667,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> {
       height: 1, indent: 50, endIndent: 0, color: Color(0xFFEEEEEE));
 }
 
+// BlockedUsersView remains unchanged
 class BlockedUsersView extends StatefulWidget {
   const BlockedUsersView({super.key});
 
@@ -692,27 +754,29 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
 
   @override
   Widget build(BuildContext context) {
+    // ... (existing code: BlockedUsersView build implementation)
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("차단한 사용자 관리",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(l10n.blockedUserManagement,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _blockedUsers.isEmpty
-                ? const Center(
+                ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.block, size: 48, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text("차단한 사용자가 없습니다.",
-                      style: TextStyle(color: Colors.grey)),
+                  const Icon(Icons.block, size: 48, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  Text(l10n.noBlockedUsers,
+                      style: const TextStyle(color: Colors.grey)),
                 ],
               ),
             )
@@ -720,7 +784,7 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
               itemCount: _blockedUsers.length,
               itemBuilder: (context, index) {
                 final user = _blockedUsers[index];
-                final String nickname = user['nickname'] ?? '알 수 없음';
+                final String nickname = user['nickname'] ?? l10n.noName;
                 final String? profileUrl = user['profile_image_url'];
 
                 return ListTile(
@@ -745,7 +809,7 @@ class _BlockedUsersViewState extends State<BlockedUsersView> {
                       padding:
                       const EdgeInsets.symmetric(horizontal: 12),
                     ),
-                    child: const Text("해제"),
+                    child: Text(l10n.unblock),
                   ),
                 );
               },

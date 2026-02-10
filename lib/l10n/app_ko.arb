@@ -10,7 +10,7 @@
   "snackFood": "분식",
   "weeklyRanking": "주간 랭킹",
   "more": "더보기",
-  "needsFine": "니즈파인",
+  "needsFine": "니즈파인 점수",
   "appName": "니즈파인",
   "appTagline": "진짜가 필요해",
   "appSubtitle": "경험과 데이터가 만나는 곳",
@@ -102,16 +102,9 @@
   "viewAllNotices": "공지사항 전체보기",
   "deletedReview": "삭제된 리뷰입니다.",
   "deletedComment": "삭제된 댓글입니다.",
-  "unknownUser": "알 수 없는 유저",
   "loading": "로딩 중...",
   "followNotification": "{name}님이 팔로우 했어요",
   "@followNotification": {
-    "placeholders": {
-      "name": {}
-    }
-  },
-  "startFollowingMessage": "{name}님을 팔로우합니다.",
-  "@startFollowingMessage": {
     "placeholders": {
       "name": {}
     }
@@ -179,7 +172,7 @@
   "signup": "회원가입",
   "searchPlaceholder": "맛집, 지역, 키워드 검색",
   "realTimeBestReviews": "실시간 베스트 리뷰 🏆",
-  "imagePreparing": "이미지 준비중",
+  "imagePreparing": "등록된 이미지가 없음",
   "rank": "위",
   "trustScore": "신뢰도",
   "passwordRequirement": "8자 이상, 영문 대/소문자, 특수문자 포함",
@@ -234,5 +227,433 @@
   
   "welcome": "환영합니다!",
   "signupCompleteMessage": "NeedsFine 회원가입이 완료되었습니다.",
-  "getStarted": "시작하기"
+  "getStarted": "시작하기",
+  "feed": "피드",
+  "birthDate": "생년월일",
+  "birthDateSet": "생년월일 설정",
+  "blockedUserManagement": "차단한 사용자 관리",
+  "communityGuidelines": "커뮤니티 가이드라인",
+  "communityGuidelinesContent": "커뮤니티 가이드라인 내용",
+  "genderSet": "성별 설정",
+  "myTasteSummary": "내 취향 요약",
+  "analyzeAgain": "다시 분석하기",
+  "adminDashboard": "관리자 대시보드",
+  "bannerManagement": "배너 관리",
+  "reportManagement": "신고 관리",
+  "recalculateReviews": "리뷰 점수 재산정",
+  "myReviews": "내가 쓴 리뷰",
+  "helpfulReviews": "도움이 됐어요",
+  "commentedReviews": "댓글 단 리뷰",
+  "noReviewsWritten": "작성한 리뷰가 없습니다.",
+  "experienceQuestion": "어떤 점이 좋았나요?",
+  "chooseFeatures": "매장의 특징을 선택해주세요.",
+  "findRestaurant": "방문한 맛집을 찾아주세요",
+  "submitReview": "리뷰 등록",
+  "editComplete": "수정 완료",
+  "locationNotFound": "위치를 찾을 수 없습니다.",
+  "saveError": "저장 중 오류가 발생했습니다.",
+  "calculating": "계산 중...",
+  "markAllRead": "모두 읽음으로 표시",
+  "noNotifications": "새로운 알림이 없습니다.",
+  "notificationComment": "{name}님이 회원님의 리뷰에 댓글을 남겼습니다.",
+  "@notificationComment": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "notificationHelpful": "{name}님이 회원님의 리뷰를 좋아합니다.",
+  "@notificationHelpful": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "editNotice": "공지사항 수정",
+  "title": "제목",
+  "content": "내용",
+  "enterTitle": "제목을 입력하세요",
+  "male": "남성",
+  "female": "여성",
+  "genderOneTime": "성별은 한 번만 설정할 수 있습니다.",
+  "birthDateOneTime": "생년월일은 한 번만 설정할 수 있습니다.",
+  "birthDateSelect": "생년월일 선택 (한 번만 설정 가능)",
+  "saved": "저장되었습니다.",
+  "unblock": "해제",
+  "noBlockedUsers": "차단한 사용자가 없습니다.",
+  "noLikedReviews": "도움이 됐어요 표시한 리뷰가 없습니다.",
+  "noCommentedReviews": "댓글을 작성한 리뷰가 없습니다.",
+  "addedToList": "리스트에 추가했습니다.",
+  "addFailed": "추가에 실패했습니다.",
+  "noSavedStores": "저장한 매장이 없습니다.",
+  "noReviewsForStore": "추가할 수 있는 리뷰가 없는 매장입니다.",
+  "addSavedStore": "저장한 매장 추가",
+  "added": "추가됨",
+  "selectItemsToAdd": "추가할 항목을 선택하세요",
+  "addNItems": "{count}개 추가하기",
+  "@addNItems": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "emptyListHint": "아직 리스트에 담긴 매장이 없습니다.\n우측 상단 +로 저장한 매장을 추가해보세요.",
+  "removeFromList": "리스트에서 제거",
+  "noSavedStoresHint": "저장한 매장이 없습니다.\n마음에 드는 매장을 저장해보세요!",
+  "tasteSurveyTitle": "당신은 뭘 좋아하나요?",
+  "tasteSurveySubtitle": "취향을 알려주시면 딱 맞는 맛집을 추천해드려요.\n(30초면 충분해요!)",
+  "doItLater": "나중에 하기",
+  "start": "시작하기",
+  "tasteKorean": "한식 파",
+  "tasteChinese": "중식 러버",
+  "tasteJapanese": "일식 매니아",
+  "tasteWestern": "양식 선호",
+  "tasteSpicyLover": "매운맛 고수",
+  "tasteSpicyHater": "맵찔이",
+  "tasteCostEffective": "가성비 중시",
+  "tasteAtmosphere": "분위기 깡패",
+  "tasteSolo": "혼밥족",
+  "tasteDate": "데이트 맛집",
+  "tasteDessert": "디저트 필수",
+  "tasteOldGen": "노포 감성",
+  "loadFailed": "정보를 불러오지 못했습니다.",
+  "noNotices": "아직 등록된 공지사항이 없어요.",
+  "follower": "팔로워",
+  "following": "팔로잉",
+  "noFollowers": "아직 팔로워가 없습니다.",
+  "noFollowings": "팔로잉하는 유저가 없습니다.",
+  "follow": "팔로우",
+  "followMessage": "{nickname}님을 팔로우합니다.",
+  "@followMessage": {
+    "placeholders": {
+      "nickname": {}
+    }
+  },
+  "errorOccurred": "오류가 발생했습니다.",
+  "unknownUser": "알 수 없음",
+  "reviewCount": "리뷰",
+  "followerCount": "팔로워",
+  "followingCount": "팔로잉",
+  "noIntroduction": "소개글이 없습니다.",
+  "tasteAnalysis": "취향 분석",
+  "scoreDistribution": "평점 분포",
+  "userLists": "유저 리스트",
+  "noUserLists": "생성된 리스트가 없습니다.",
+  "sortLatest": "최신순",
+  "sortHighRating": "높은점수",
+  "sortReliability": "신뢰도순",
+  "sortBitter": "쓴소리",
+  "noReviews": "작성한 리뷰가 없습니다.",
+  "blockUserTitle": "차단하기",
+  "blockUserContent": "{nickname}를 차단하시겠습니까?\n차단하면 서로의 게시물을 볼 수 없습니다.",
+  "@blockUserContent": {
+    "placeholders": {
+      "nickname": {}
+    }
+  },
+  "block": "차단",
+  "userBlocked": "사용자를 차단했습니다.",
+  "blockFailed": "차단 처리 중 오류가 발생했습니다.",
+  "unblocked": "차단이 해제되었습니다.",
+  "blockedUserTitle": "차단한 사용자입니다.",
+  "blockedUserContent": "차단을 해제해야 프로필을 볼 수 있습니다.",
+  "blockedByTitle": "차단 당한 사용자입니다.",
+  "blockedByContent": "이 사용자의 프로필을 볼 수 없습니다.",
+  "userNotFound": "유저 정보를 찾을 수 없습니다.",
+  "usersLists": "{nickname}님의 리스트",
+  "@usersLists": {
+    "placeholders": {
+      "nickname": {}
+    }
+  },
+  "savedStoresCount": "저장된 매장 {count}개",
+  "@savedStoresCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "reviewList": "리뷰 목록",
+  "storeRanking": "매장 랭킹",
+  "totalReviews": "전체 리뷰",
+  "avgNeedsFineScore": "평균 점수",
+  "avgReliability": "평균 신뢰도",
+  "noListGenerated": "생성된 리스트가 없습니다.",
+  "noInfo": "정보가 없습니다.",
+  "movingToMap": "(으)로 이동합니다.",
+  "weeklyNeedsFineRanking": "주간 니즈파인 랭킹",
+  "noRankingData": "랭킹 데이터가 없습니다.",
+  "all": "전체",
+  "nearMe": "내주변",
+  "whatIsScore": "니즈파인 점수란?",
+  "scoreDesc": "단순 평점이 아닌, 신뢰도와 리뷰어 성향까지 반영된 진짜 맛집 점수입니다.",
+  "waitingSpot": "웨이팅 필수! 검증된 맛집",
+  "localSpot": "동네 주민이 사랑하는 찐맛집",
+  "goodSpot": "실패 없는 선택",
+  "polarizingSpot": "호불호가 갈릴 수 있어요",
+  "whatIsReliability": "신뢰도란?",
+  "searchPlaceholder": "맛집, 지역, 음식 등으로 검색해보세요",
+  "realTimeBestReviews": "실시간 베스트 리뷰",
+  "noImages": "이미지가 없습니다",
+  "deleteConfirmTitle": "삭제 확인",
+  "deleteConfirmContent": "정말로 삭제하시겠습니까? 복구할 수 없습니다.",
+  "deleteAction": "삭제",
+  "edit": "수정",
+  "userRating": "사용자 별점",
+  "helpful": "도움돼요",
+  "save": "저장하기",
+  "report": "신고",
+  "comments": "댓글",
+  "noComments": "아직 댓글이 없습니다.\n첫 댓글을 남겨보세요!",
+  "loginRequired": "로그인이 필요합니다.",
+  "reportReason1": "비방 및 불건전한 내용",
+  "reportReason2": "부적절한 게시물",
+  "reportReason3": "개인정보 및 광고",
+  "reportReason4": "불법 행위",
+  "reportReason5": "서비스 관련",
+  "reportSubmitted": "신고가 접수되었습니다.",
+  "alreadyReported": "이미 신고한 리뷰입니다.",
+  "unknownUser": "알 수 없는 사용자",
+  "unknownStore": "알 수 없는 가게",
+  "notices": "공지사항",
+  "writeNotice": "공지사항 작성",
+  
+  "searchStoreHint": "매장 검색",
+  
+  "writeReviewTitle": "리뷰 작성",
+  "editReviewTitle": "리뷰 수정",
+  "findStoreTitle": "방문한 맛집을 찾아주세요",
+  "findStoreSubtitle": "정확한 장소 선택이 신뢰도의 시작입니다",
+  "ratingTitle": "전반적인 경험은 어떠셨나요?",
+  "featureTitle": "이곳의 특징을 선택해주세요",
+  "reviewHint": "메뉴의 맛, 매장의 분위기, 직원 서비스 등\\n솔직한 경험을 공유해주세요.",
+  "submitReviewTitle": "리뷰 등록하기",
+  "editReviewComplete": "수정 완료",
+  
+  "guideTitle": "커뮤니티 가이드라인",
+  "guide1Title": "부적절한 콘텐츠 금지",
+  "guide1Desc": "욕설, 비방, 혐오 발언, 성적 콘텐츠, 폭력적인 내용은 엄격히 금지되며 필터링됩니다.",
+  "guide2Title": "사용자 신고 및 차단",
+  "guide2Desc": "불쾌한 유저는 프로필 또는 리뷰에서 즉시 '신고' 및 '차단'할 수 있습니다.",
+  "guide3Title": "신고 처리 정책",
+  "guide3Desc": "접수된 신고는 운영팀이 24시간 이내에 검토하며, 위반 시 제재 조치가 취해집니다.",
+  
+  "visitPurposeSolo": "혼자서 👤",
+  "visitPurposeCouple": "둘이서 👩‍❤️‍👨",
+  "visitPurposeGroup": "여럿이 👨‍👩‍👧‍👦",
+  "tagSoloEating": "혼밥",
+  "tagHealing": "힐링",
+  "tagCostEffective": "가성비",
+  "tagBrunch": "브런치",
+  "tagTakeout": "포장가능",
+  "tagDelivery": "배달",
+  "tagQuiet": "조용한",
+  "tagSimple": "간편한",
+  
+  "tagDate": "데이트",
+  "tagAnniversary": "기념일",
+  "tagAtmosphere": "분위기맛집",
+  "tagView": "뷰맛집",
+  "tagExotic": "이색요리",
+  "tagWine": "와인",
+  "tagCourse": "코스요리",
+  
+  "tagCompanyDinner": "회식",
+  "tagFamily": "가족모임",
+  "tagFriends": "친구모임",
+  "tagParking": "주차가능",
+  "tagPrivateRoom": "룸있음",
+  "tagConversation": "대화하기좋은",
+  "tagSpacious": "넓은좌석",
+
+  "notificationsTitle": "알림",
+  "markAllRead": "모두 읽음처리",
+  "tabAll": "전체",
+  "tabFollow": "팔로우",
+  "tabActivity": "활동",
+  "commentNotification": "{user}님이 당신의 {store} 리뷰에 댓글을 달았습니다",
+  "@commentNotification": {
+    "placeholders": {
+      "user": {},
+      "store": {}
+    }
+  },
+  "likeNotification": "당신의 {store}의 리뷰가 {user}님에게 도움이 되었습니다",
+  "@likeNotification": {
+    "placeholders": {
+      "store": {},
+      "user": {}
+    }
+  },
+  
+  "customerCenter": "고객센터",
+  "sendSuggestionTitle": "건의사항 보내기",
+  "suggestionGuide": "니즈파인 발전을 위한 의견을 남겨주세요.\\n관리자가 직접 확인 후 반영하겠습니다.",
+  "suggestionHint": "내용을 입력해주세요...",
+  "sendAction": "보내기",
+  
+  "inquiryTitle": "1:1 문의하기",
+  "inquiryGuide": "궁금한 점이나 불편한 점을 남겨주세요. 입력하신 이메일로 답변을 보내드립니다.",
+  "emailLabel": "답변 받을 이메일",
+  "inquiryHint": "문의 내용을 자세히 적어주세요...",
+  "inquiryAction": "문의하기",
+  
+  "selectStore": "가게를 선택해주세요",
+  "selectRating": "별점을 선택해주세요",
+  "profanityError": "부적절한 단어가 포함되어 있습니다",
+  "reviewUpdated": "리뷰가 수정되었습니다",
+  "reviewSubmitted": "리뷰가 등록되었습니다",
+  "processFailed": "처리 실패: {error}",
+  "photoLimit": "최대 5장까지 첨부 가능합니다",
+  
+  "noReviewsYet": "아직 등록된 리뷰가 없습니다",
+  "firstReviewWaiting": "첫 번째 리뷰를 기다리고 있어요",
+  "savedCount": "저장됨",
+  "loadingError": "로딩 중 오류가 발생했습니다",
+  "totalReviews": "총 리뷰",
+  "avgNeedsFineScore": "평균 니즈파인",
+  
+  "editProfileTitle": "프로필 수정",
+  "nicknameLabel": "닉네임",
+  "introLabel": "소개",
+  "activityZoneLabel": "활동 지역",
+  "introHint": "자신을 알릴 수 있는 소개글을 작성해 주세요.",
+  "nicknameRequired": "닉네임을 입력해주세요",
+  "nicknameAvailable": "사용 가능한 닉네임입니다",
+  "nicknameTaken": "이미 사용 중인 닉네임입니다",
+  "nicknameRule": "2자 이상 10자 이내 (한글/영문/숫자)",
+  "selectSido": "시/도 선택",
+  "selectSigungu": "시/군/구 선택",
+  "saveAction": "저장",
+  
+  "recalcWarningTitle": "⚠️ 전체 재계산 경고",
+  "recalcWarningContent": "서버 부하가 발생할 수 있습니다.\n정말 모든 리뷰의 점수를 재계산하시겠습니까?",
+  "finalConfirmTitle": "🛑 최종 확인",
+  "finalConfirmContent": "이 작업은 되돌릴 수 없습니다.\n정말로 진행하시겠습니까?",
+  "cancelAction": "취소",
+  "continueAction": "계속",
+  "confirmAction": "확인",
+  "executeAction": "실행!",
+  "recalcRequesting": "재계산 요청 중...",
+  "recalcCompleteTitle": "✅ 재계산 완료",
+  "recalcCompleteContent": "총 {count} 개의 리뷰가 업데이트되었습니다.\n\n적용된 로직 버전:\n👉 {version}",
+  
+  "@recalcCompleteContent": {
+    "placeholders": {
+      "count": {},
+      "version": {}
+    }
+  },
+  
+  "checkDuplicate": "중복확인",
+  "checked": "확인됨",
+  "nicknameUnavailable": "해당 닉네임은 사용할 수 없습니다",
+  "nicknameCurrent": "현재 사용 중인 닉네임입니다",
+  "completionAction": "완료",
+  
+  "customerCenter": "고객센터",
+  "myFine": "마이파인",
+  "loadError": "데이터를 불러올 수 없습니다",
+  
+  "satisfactionHigh": "만족도 높음",
+  "exaggeratedExpression": "과장된 표현",
+  "anonymousUser": "익명 사용자",
+  "predictedNeedsFineScore": "예상 니즈파인 점수",
+  "whereDidYouGo": "어디를 다녀오셨나요?",
+  "searchStoreName": "가게 이름 검색",
+  "noSearchResults": "검색 결과가 없습니다.",
+  "points": "점",
+  "overallExperience": "전반적인 경험은 어떠셨나요?",
+  "selectFeatures": "이곳의 특징을 선택해주세요",
+  "mostMemorableTaste": "가장 기억에 남는 맛은 무엇이었나요?",
+  
+  "cgTitle": "커뮤니티 가이드라인 (신고 정책)",
+  "cgItem1Title": "1. 부적절한 콘텐츠 금지",
+  "cgItem1Desc": "욕설, 비방, 혐오 발언, 성적 콘텐츠, 폭력적인 내용은 엄격히 금지되며 필터링됩니다.",
+  "cgItem2Title": "2. 사용자 신고 및 차단",
+  "cgItem2Desc": "불쾌한 유저는 프로필 또는 리뷰에서 즉시 '신고' 및 '차단'할 수 있습니다.\n차단 시 해당 유저의 모든 콘텐츠가 숨김 처리됩니다.",
+  "cgItem3Title": "3. 신고 처리 정책 (24시간 내 조치)",
+  "cgItem3Desc": "접수된 신고는 운영팀이 24시간 이내에 검토합니다.\n가이드라인 위반이 확인될 경우, 해당 콘텐츠 삭제 및 작성자 이용 제재 조치가 취해집니다.",
+  "preciseLocationNotFound": "정확한 좌표를 찾을 수 없습니다.",
+  "verifyingAddress": "주소를 확인 중입니다. 잠시 후 다시 시도해주세요.",
+  "photoLimit": "최대 5장까지 첨부 가능합니다",
+  "enterContent": "내용을 입력해주세요",
+  "selectStoreRequired": "맛집을 추천하려면 가게를 선택해주세요",
+  "emptyVoteOption": "빈 투표 항목이 있습니다",
+  "postCreated": "게시물이 등록되었습니다!",
+  "postUpdated": "게시물이 수정되었습니다!",
+  "editPost": "게시물 수정",
+  "newPost": "새 게시물",
+  "tabStore": "맛집 정보",
+  "tabQuestion": "질문",
+  "tabVote": "투표",
+  "hintReview": "이 맛집의 어떤 점이 좋았나요?",
+  "hintQuestion": "궁금한 점을 자유롭게 물어보세요!",
+  "hintVote": "투표 주제를 입력해주세요.",
+  "voteOption": "선택지",
+  "addOption": "선택지 추가",
+  "voteEditWarning": "* 투표 항목은 수정할 수 없습니다.",
+  "selectStoreHint": "추천할 맛집을 선택해주세요 (필수)",
+  "editAction": "수정하기",
+  "postAction": "게시하기",
+  "deletePost": "게시물 삭제",
+  "deletePostConfirm": "이 게시물을 삭제하시겠습니까?",
+  "saved": "저장되었습니다.",
+  "delete": "삭제",
+  "viewCount": "조회수",
+  "topTastes": "리뷰 기반 상위 취향",
+  "inquirySuccess": "문의가 접수되었습니다. 최대한 빨리 답변 드리겠습니다.",
+  
+  "suggestions": "건의사항",
+  "noSuggestions": "등록된 건의사항이 없습니다.",
+  "noInquiries": "등록된 문의가 없습니다.",
+  "noNoticesAdmin": "등록된 공지사항이 없습니다.",
+  "noTitle": "제목 없음",
+  "anonymous": "익명",
+  "completed": "답변완료",
+  "pending": "대기중",
+  "sender": "보낸사람",
+  "close": "닫기",
+  "deleteNotice": "공지사항 삭제",
+  "deleteConfirm": "정말로 삭제하시겠습니까?",
+
+  "notificationFollowTitle": "팔로우 알림",
+  "notificationFollowContent": "{name}님이 회원님을 팔로우하기 시작했습니다.",
+  "@notificationFollowContent": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+
+  "notificationLikeTitle": "도움됨 알림",
+  "notificationLikeContent": "{name}님이 {storeName} 리뷰를 좋아합니다.",
+  "@notificationLikeContent": {
+    "placeholders": {
+      "name": {},
+      "storeName": {}
+    }
+  },
+
+  "notificationCommentTitle": "댓글 알림",
+  "notificationCommentContent": "{name}님이 댓글을 남겼습니다: {text}",
+  "@notificationCommentContent": {
+    "placeholders": {
+      "name": {},
+      "text": {}
+    }
+  },
+
+  "markAllReadSuccess": "모든 알림을 읽음 처리했습니다.",
+
+  "noBitterReviews": "쓴소리 리뷰가 없습니다.",
+  "inquiryHistory": "나의 문의 내역",
+  "totalViewCount": "총 조회수",
+
+  "termsAndPolicy": "약관 및 정책",
+  "serviceTerms": "서비스 이용약관",
+  "privacyPolicy": "개인정보 처리방침",
+  "locationTerms": "위치기반 서비스 이용약관",
+
+  "noPhotos": "사진 없음",
+  "viewReview": "리뷰 보기",
+  "writeReview": "리뷰 쓰기",
+  "noStoreInfo": "매장 정보가 없습니다.",
+  "shareExperience": "당신의 경험을 공유해주세요",
+  "writeFirstReview": "첫 리뷰 작성하기"
 }

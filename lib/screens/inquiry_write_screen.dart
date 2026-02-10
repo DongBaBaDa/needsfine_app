@@ -1,6 +1,7 @@
 // lib/screens/inquiry_write_screen.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
 // ✅ 비속어 필터 임포트
 import 'package:needsfine_app/core/profanity_filter.dart';
@@ -37,8 +38,8 @@ class _InquiryWriteScreenState extends State<InquiryWriteScreen> {
     // ✅ [비속어 필터 적용]
     if (ProfanityFilter.hasProfanity(_contentController.text)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("문의 내용에 부적절한 단어가 포함되어 있습니다."),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.profanityError),
           backgroundColor: Colors.red,
         ),
       );
@@ -57,8 +58,22 @@ class _InquiryWriteScreenState extends State<InquiryWriteScreen> {
         'message': _contentController.text,  // 기존 message 컬럼도 함께 저장 (NOT NULL 대응)
       });
 
+      // ✅ [추가] 관리자에게 이메일 알림 전송 (Edge Function 호출)
+      try {
+        await _supabase.functions.invoke(
+          'make-server-26899706/send-inquiry',
+          body: {
+            'email': _emailController.text,
+            'content': _contentController.text,
+            'userId': userId,
+          },
+        );
+      } catch (emailError) {
+        debugPrint("이메일 알림 전송 실패(하지만 DB 저장은 완료): $emailError");
+      }
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("고객님의 소중한 문의가 접수되었습니다. 빠르게 확인하겠습니다.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.inquirySuccess)));
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("전송 실패: $e")));
@@ -71,61 +86,64 @@ class _InquiryWriteScreenState extends State<InquiryWriteScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFFDF9),
-      appBar: AppBar(title: const Text("1:1 문의하기")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const Text(
-              "궁금한 점이나 불편한 점을 남겨주세요. 입력하신 이메일로 답변을 보내드립니다.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 13),
-            ),
-            const SizedBox(height: 20),
-
-            // 답변 받을 이메일 입력 필드
-            TextField(
-              controller: _emailController,
-              decoration: InputDecoration(
-                labelText: "답변 받을 이메일",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.white,
-                prefixIcon: const Icon(Icons.email_outlined),
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.inquiryTitle)),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              Text(
+                AppLocalizations.of(context)!.inquiryGuide,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // 문의 내용 입력 필드
-            Expanded(
-              child: TextField(
+              const SizedBox(height: 20),
+  
+              /* 
+              // 답변 받을 이메일 입력 필드 제거 (앱 내 확인으로 변경)
+              TextField(
+                controller: _emailController,
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.emailLabel,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: Colors.white,
+                  prefixIcon: const Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 16),
+              */
+  
+              // 문의 내용 입력 필드
+              TextField(
                 controller: _contentController,
                 maxLines: 10,
                 decoration: InputDecoration(
-                  hintText: "문의 내용을 자세히 적어주세요...",
+                  hintText: AppLocalizations.of(context)!.inquiryHint,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   filled: true,
                   fillColor: Colors.white,
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isSending ? null : _submitInquiry,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kNeedsFinePurple,
-                  foregroundColor: Colors.white,
+              const SizedBox(height: 24), // 간격 소폭 증가
+  
+              SizedBox(
+                width: double.infinity,
+                height: 54, // 높이 소폭 증가
+                child: ElevatedButton(
+                  onPressed: _isSending ? null : _submitInquiry,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kNeedsFinePurple,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _isSending
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(AppLocalizations.of(context)!.inquiryAction, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
-                child: _isSending
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("문의하기", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

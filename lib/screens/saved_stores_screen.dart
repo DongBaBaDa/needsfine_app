@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class SavedStoresScreen extends StatefulWidget {
   const SavedStoresScreen({super.key});
@@ -77,12 +78,13 @@ class _SavedStoresScreenState extends State<SavedStoresScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
-        title: const Text(
-          "저장한 매장",
-          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black),
+        title: Text(
+          l10n.savedStores,
+          style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
@@ -103,14 +105,14 @@ class _SavedStoresScreenState extends State<SavedStoresScreen> {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
-                children: const [
-                  Icon(Icons.bookmark_border_rounded,
+                children: [
+                  const Icon(Icons.bookmark_border_rounded,
                       size: 48, color: Color(0xFFD1D1D6)),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
-                    "저장한 매장이 없습니다.\n마음에 드는 매장을 저장해보세요!",
+                    l10n.noSavedStoresHint,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF8E8E93)),
+                    style: const TextStyle(color: Color(0xFF8E8E93)),
                   ),
                 ],
               ),

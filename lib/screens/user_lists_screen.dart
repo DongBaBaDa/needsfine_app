@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/screens/my_list_detail_screen.dart'; // 상세 화면 연결
 
 class UserListsScreen extends StatefulWidget {
@@ -31,11 +32,18 @@ class _UserListsScreenState extends State<UserListsScreen> {
   Future<void> _fetchUserLists() async {
     try {
       // 1. 해당 유저의 리스트 가져오기
-      final res = await _supabase
+      final myId = _supabase.auth.currentUser?.id;
+      final isMe = widget.userId == myId;
+
+      var query = _supabase
           .from('user_lists')
           .select()
-          .eq('user_id', widget.userId)
-          .order('created_at', ascending: false);
+          .eq('user_id', widget.userId);
+
+      // 유저 피드 화면에서는 본인이라도 '공유한(공개된) 리스트'만 보여지도록 요청됨.
+      query = query.eq('is_public', true);
+          
+      final res = await query.order('created_at', ascending: false);
 
       if (!mounted) return;
 
@@ -81,11 +89,12 @@ class _UserListsScreenState extends State<UserListsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
         title: Text(
-          "${widget.nickname}님의 리스트",
+          l10n.usersLists(widget.nickname),
           style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black, fontSize: 18),
         ),
         backgroundColor: Colors.white,
@@ -97,7 +106,7 @@ class _UserListsScreenState extends State<UserListsScreen> {
           : _lists.isEmpty
           ? Center(
         child: Text(
-          "생성된 리스트가 없습니다.",
+          l10n.noUserLists,
           style: TextStyle(color: Colors.grey[500]),
         ),
       )
@@ -108,7 +117,7 @@ class _UserListsScreenState extends State<UserListsScreen> {
         itemBuilder: (context, index) {
           final list = _lists[index];
           final id = list['id'].toString();
-          final name = list['name'] ?? '이름 없음';
+          final name = list['name'] ?? l10n.noName;
           final count = _listCounts[id] ?? 0;
 
           return GestureDetector(
@@ -162,7 +171,7 @@ class _UserListsScreenState extends State<UserListsScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          "저장된 매장 $count개",
+                          l10n.savedStoresCount(count),
                           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                         ),
                       ],

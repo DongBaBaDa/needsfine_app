@@ -100,8 +100,12 @@
   "unknownUser": "အမည်မသိ",
   "loading": "ခဏစောင့်...",
   "followNotification": "{name} Follow လုပ်သည်။",
-  "startFollowingMessage": "{name} ကို Follow လုပ်သည်။",
   "unfollowMessage": "{name} ကို Unfollow လုပ်သည်။",
+  "deleteAction": "ဖျက်",
+  "unknownStore": "ဆိုင်အမည်မသိ",
+  "notices": "အသိပေးချက်",
+  "writeNotice": "ရေး",
+  "followMessage": "{nickname} ကို Follow",
 
   "emailLogin": "အီးမေးလ် Login",
   "welcomeBack": "ကြိုဆိုပါတယ်!\nအီးမေးလ်နဲ့ Login လုပ်ပါ။",

@@ -11,6 +11,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/config/supabase_config.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // ✅ 저장 기능
+import 'package:firebase_core/firebase_core.dart'; // ✅ Firebase
+import 'package:needsfine_app/services/notification_service.dart'; // ✅ 푸시 알림
 
 // ✅ 다국어 자동 생성 패키지
 import 'package:needsfine_app/l10n/app_localizations.dart';
@@ -25,6 +27,13 @@ final ValueNotifier<Locale?> appLocaleNotifier = ValueNotifier(null);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 0. Firebase 초기화
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    print("Firebase 초기화 실패: $e");
+  }
 
   // 1. 저장된 언어 불러오기 (SharedPreferences)
   try {
@@ -42,6 +51,13 @@ void main() async {
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.anonKey,
   );
+
+  // 2-1. 푸시 알림 서비스 초기화 (Supabase 초기화 후)
+  try {
+    NotificationService().initialize();
+  } catch (e) {
+    print("NotificationService 초기화 실패: $e");
+  }
 
   // 3. 네이버 지도 SDK 초기화
   await FlutterNaverMap().init(
@@ -87,6 +103,14 @@ class MyApp extends StatelessWidget {
 
           // ✅ 전역 변수에 저장된 언어 적용 (null이면 기기 언어 따름)
           locale: locale,
+          
+          // ✅ 아랍어 등 RTL 언어에서도 UI 반전 방지 (강제 LTR)
+          builder: (context, child) {
+            return Directionality(
+              textDirection: TextDirection.ltr,
+              child: child!,
+            );
+          },
 
           home: const SplashScreen(),
 

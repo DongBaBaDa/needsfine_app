@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart'; // NLatLng 사용
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class AddressSearchScreen extends StatefulWidget {
   const AddressSearchScreen({super.key});
@@ -140,8 +141,9 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
           });
         } else {
            setState(() => _searchResults = []);
+           final l10n = AppLocalizations.of(context)!;
            ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("검색 결과가 없습니다.")),
+            SnackBar(content: Text(l10n.noSearchResults)),
           );
         }
       } else {
@@ -169,8 +171,9 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
       }
     } catch (e) {
       print('Search Error: $e');
+      final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("검색 중 오류가 발생했습니다.")),
+        SnackBar(content: Text(l10n.searchError)),
       );
     } finally {
       setState(() {
@@ -190,8 +193,9 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
         Navigator.pop(context, NLatLng(position.latitude, position.longitude));
       }
     } catch (e) {
+      final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("현재 위치를 가져오는 데 실패했습니다.")),
+        SnackBar(content: Text(l10n.locationFetchFail)),
       );
     }
   }
@@ -200,40 +204,40 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
       final lat = result.y;
       final lng = result.x;
       
+      final l10n = AppLocalizations.of(context)!;
       showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("위치 확인"),
-        content: Text("${result.roadAddress}\n이 위치로 이동하시겠습니까?"),
+        title: Text(l10n.checkLocation),
+        content: Text(l10n.moveLocationConfirm(result.roadAddress)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx); // 닫기
               Navigator.pop(context, NLatLng(lat, lng)); // 결과 반환
             },
-            child: const Text("확인"),
+            child: Text(l10n.confirm),
           ),
         ],
       ),
     );
   }
 
-  // 저장된 주소 클릭 시 확인 다이얼로그 표시
-  void _showSetAddressDialog(SavedAddress address) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("주소 설정"),
-        content: const Text("해당 위치로 주소를 설정하시겠습니까?"),
+        title: Text(l10n.addressSetting),
+        content: Text(l10n.setAddressConfirm),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("아니오")),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.no)), // Assuming 'no' exists or generic 'cancel'
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               Navigator.pop(context, NLatLng(address.lat, address.lng));
             },
-            child: const Text("확인"),
+            child: Text(l10n.confirm),
           ),
         ],
       ),
@@ -243,28 +247,29 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
   // 집/회사 추가 다이얼로그
   void _showAddAddressDialog(String type) {
     final textController = TextEditingController();
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-              title: Text(type == 'HOME' ? '집 주소 추가' : '회사 주소 추가'),
+              title: Text(type == 'HOME' ? l10n.addHomeAddress : l10n.addWorkAddress),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                   const Text("주소를 검색하여 좌표를 저장하는 것이 정확합니다.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                   Text(l10n.addAddressHint, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                    TextField(
                       controller: textController,
-                      decoration: const InputDecoration(hintText: '별칭 입력 (예: 우리집)'), 
+                      decoration: InputDecoration(hintText: l10n.aliasHint), 
                   ),
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("취소")),
+                TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
                 TextButton(
                   onPressed: () {
                       Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("상단 검색창을 이용해 주소를 검색해주세요.")));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.useSearchBox)));
                   },
-                  child: const Text("검색하러 가기"),
+                  child: Text(l10n.searchGo),
                 ),
               ],
             ));
@@ -273,11 +278,12 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: const Text('주소 설정', style: TextStyle(color: Colors.black)),
+        title: Text(l10n.addressSetting, style: const TextStyle(color: Colors.black)),
         leading: const BackButton(color: Colors.black),
       ),
       body: Column(
@@ -287,7 +293,7 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: "도로명, 건물명 또는 지번으로 검색",
+                hintText: l10n.searchAddressHint,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.send), 
@@ -327,19 +333,19 @@ class _AddressSearchScreenState extends State<AddressSearchScreen> {
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.my_location),
-                    title: const Text('현재 위치로 주소 찾기'),
+                    title: Text(l10n.findCurrentLocation),
                     onTap: _findAndReturnCurrentLocation,
                   ),
                   const Divider(height: 1, indent: 16, endIndent: 16),
                   ListTile(
                     leading: const Icon(Icons.home_outlined),
-                    title: const Text('집 추가'),
+                    title: Text(l10n.addHomeAddress),
                     onTap: () => _showAddAddressDialog('HOME'),
                   ),
                   const Divider(height: 1, indent: 16, endIndent: 16),
                   ListTile(
                     leading: const Icon(Icons.work_outline),
-                    title: const Text('회사 추가'),
+                    title: Text(l10n.addWorkAddress),
                     onTap: () => _showAddAddressDialog('WORK'),
                   ),
                   Container(height: 8, color: Colors.grey[200]),

@@ -1,99 +1,133 @@
+import 'dart:io';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/notification_model.dart';
+import 'package:flutter/foundation.dart';
 
 class NotificationService {
-  static final _supabase = Supabase.instance.client;
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
 
-  // 1. 알림 보내기 (문의, 팔로우 등)
-  static Future<void> sendNotification({
-    required String receiverId,
-    required NotificationType type,
-    required String title,
-    required String content,
-    String? referenceId,
-  }) async {
-    await _supabase.from('notifications').insert({
-      'receiver_id': receiverId,
-      'type': type.name,
-      'title': title,
-      'content': content,
-      'reference_id': referenceId,
+  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  final FlutterLocalNotificationsPlugin _localNoti = FlutterLocalNotificationsPlugin();
+  // SupabaseClient는 initialize 시점에, 혹은 접근 시점에 가져옵니다.
+  SupabaseClient get _supabase => Supabase.instance.client;
+  
+  bool _isInitialized = false;
+
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+    // 0. 로그인 상태 변경 리스너 등록 (로그인 시 토큰 저장)
+    _supabase.auth.onAuthStateChange.listen((data) {
+      if (data.session != null && data.event == AuthChangeEvent.signedIn) {
+        _refreshAndSaveToken();
+      }
+    });
+
+    // 1. 권한 요청
+    NotificationSettings settings = await _fcm.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+
+    if (kDebugMode) {
+      print('🔔 푸시 알림 권한 상태: ${settings.authorizationStatus}');
+    }
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      if (kDebugMode) print('🔔 푸시 알림 권한 승인됨');
+    }
+
+    // 2. 로컬 알림 초기화
+    // ✅ 앱 아이콘으로 설정 (@mipmap/launcher_icon)
+    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
+    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
+    const InitializationSettings initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+    
+    await _localNoti.initialize(initSettings);
+
+    // ✅ 안드로이드 알림 채널 생성 (Android 8.0+)
+    if (Platform.isAndroid) {
+      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+          _localNoti.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      
+      await androidImplementation?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'high_importance_channel', // id
+          'High Importance Notifications', // name
+          description: 'This channel is used for important notifications.',
+          importance: Importance.max,
+        ),
+      );
+    }
+
+    // 3. 포그라운드 메시지 핸들링
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (kDebugMode) print('🔔 포그라운드 메시지 수신: ${message.notification?.title}');
+      
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
+
+      if (notification != null && android != null) {
+        _localNoti.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'high_importance_channel',
+              'High Importance Notifications',
+              importance: Importance.max,
+              priority: Priority.high,
+              icon: '@mipmap/launcher_icon', // ✅ 알림 아이콘 명시
+            ),
+          ),
+        );
+      }
+    });
+
+    // 4. 초기 토큰 저장 시도
+    await _refreshAndSaveToken();
+
+    // 5. 토큰 리프레시 리스너
+    _fcm.onTokenRefresh.listen((newToken) {
+      _saveTokenToSupabase(newToken);
     });
   }
 
-  // 2. 전체 공지/이벤트 보내기 (관리자용)
-  static Future<void> sendBroadcast({
-    required NotificationType type,
-    required String title,
-    required String content,
-  }) async {
-    // 모든 사용자에게 보내는 로직 (Edge Function 사용 권장이나, 간단하게는 공용 receiver_id 사용)
-    await _supabase.from('notifications').insert({
-      'receiver_id': null, // null을 전체 공지로 약속
-      'type': type.name,
-      'title': title,
-      'content': content,
-    });
-  }
-
-  // 3. 댓글 알림 생성
-  static Future<void> createCommentNotification({
-    required String reviewOwnerId,
-    required String commentId,
-    required String commenterNickname,
-  }) async {
+  Future<void> _refreshAndSaveToken() async {
     try {
-      final currentUserId = _supabase.auth.currentUser?.id;
-      // 자기 자신의 리뷰에 댓글을 단 경우 알림 생성하지 않음
-      if (currentUserId == reviewOwnerId) return;
-
-      await _supabase.from('notifications').insert({
-        'receiver_id': reviewOwnerId,
-        'type': 'comment',
-        'reference_id': commentId, // 댓글 ID를 reference_id에 저장
-      });
+      String? token = await _fcm.getToken();
+      if (token != null) {
+        await _saveTokenToSupabase(token);
+      }
     } catch (e) {
-      print('댓글 알림 생성 실패: $e');
+      if (kDebugMode) print('❌ FCM 토큰 가져오기 실패: $e');
     }
   }
 
-  // 4. 팔로우 알림 생성
-  static Future<void> createFollowNotification({
-    required String followedUserId,
-    required String followerNickname,
-  }) async {
-    try {
-      final currentUserId = _supabase.auth.currentUser?.id;
-      if (currentUserId == null) return;
-
-      await _supabase.from('notifications').insert({
-        'receiver_id': followedUserId,
-        'type': 'follow',
-        'reference_id': currentUserId, // 팔로우한 사람의 ID를 reference_id에 저장
-      });
-    } catch (e) {
-      print('팔로우 알림 생성 실패: $e');
+  Future<void> _saveTokenToSupabase(String token) async {
+    final user = _supabase.auth.currentUser;
+    // 유저가 없으면 저장 불가 (나중에 로그인 시 저장됨)
+    if (user == null) {
+      if (kDebugMode) print('⚠️ 유저 로그아웃 상태라 토큰 저장 보류');
+      return;
     }
-  }
 
-  // 5. 실시간 알림 리스너 (Stream)
-  static Stream<List<AppNotification>> getNotificationStream() {
-    final myId = _supabase.auth.currentUser?.id;
-    return _supabase
-        .from('notifications')
-        .stream(primaryKey: ['id'])
-        .order('created_at')
-        .map((data) => data
-        .where((json) => json['receiver_id'] == myId || json['receiver_id'] == null)
-        .map((json) => AppNotification(
-      id: json['id'],
-      title: json['title'],
-      content: json['content'],
-      createdAt: DateTime.parse(json['created_at']),
-      type: NotificationType.values.byName(json['type']),
-      referenceId: json['reference_id'],
-      isRead: json['is_read'],
-    ))
-        .toList());
+    try {
+      await _supabase.from('fcm_tokens').upsert({
+        'user_id': user.id,
+        'token': token,
+        'device_type': Platform.isIOS ? 'ios' : 'android',
+        'last_updated_at': DateTime.now().toIso8601String(),
+      });
+      if (kDebugMode) print('🔔 FCM 토큰 저장 성공 (User: ${user.id})');
+    } catch (e) {
+      if (kDebugMode) print('❌ FCM 토큰 저장 실패: $e');
+    }
   }
 }

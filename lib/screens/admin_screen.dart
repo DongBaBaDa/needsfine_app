@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart'; // 테마 import
 import 'package:needsfine_app/models/app_data.dart';
+import 'package:needsfine_app/screens/admin_stats_screen.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -14,13 +16,14 @@ class _AdminScreenState extends State<AdminScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   void _login() {
+    final l10n = AppLocalizations.of(context)!;
     if (_passwordController.text == 'needsfine2953') {
       setState(() {
         _isLoggedIn = true;
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('비밀번호가 일치하지 않습니다.')),
+        SnackBar(content: Text(l10n.passwordMismatch)),
       );
     }
     _passwordController.clear();
@@ -28,13 +31,15 @@ class _AdminScreenState extends State<AdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('관리자 페이지')),
+      appBar: AppBar(title: Text(l10n.adminPage)),
       body: _isLoggedIn ? _buildAdminDashboard() : _buildLoginScreen(),
     );
   }
 
   Widget _buildLoginScreen() {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -43,9 +48,9 @@ class _AdminScreenState extends State<AdminScreen> {
           TextField(
             controller: _passwordController,
             obscureText: true,
-            decoration: const InputDecoration(
-              labelText: '비밀번호',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.password,
+              border: const OutlineInputBorder(),
             ),
             onSubmitted: (_) => _login(),
           ),
@@ -60,7 +65,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              child: const Text('로그인'),
+              child: Text(l10n.loginButton),
             ),
           ),
         ],
@@ -69,13 +74,32 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _buildAdminDashboard() {
+    final l10n = AppLocalizations.of(context)!;
     final reviews = List.generate(5, (i) => Review(userName: 'User $i', content: '관리자 테스트 리뷰 $i', rating: 4.0, date: '2024-05-2$i'));
 
     return ListView(
       children: [
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Text("리뷰 관리", style: Theme.of(context).textTheme.titleLarge),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.analytics_outlined),
+                label: Text(l10n.viewAdminStats),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: () {
+                   Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminStatsScreen()));
+                },
+              ),
+              const SizedBox(height: 24),
+              Text(l10n.reviewManagement, style: Theme.of(context).textTheme.titleLarge),
+            ],
+          ),
         ),
         ...reviews.map((review) => ListTile(
               title: Text(review.content),
@@ -84,7 +108,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 icon: const Icon(Icons.delete_outline, color: Colors.red),
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('"${review.content}" 리뷰가 삭제되었습니다.')),
+                    SnackBar(content: Text(l10n.deleteReviewConfirm(review.content))),
                   );
                 },
               ),

@@ -100,10 +100,18 @@
   "loading": "جارٍ...",
   "followNotification": "{name} تابعك",
   "@followNotification": {"placeholders": {"name": {}}},
-  "startFollowingMessage": "تتابع {name}",
-  "@startFollowingMessage": {"placeholders": {"name": {}}},
-  "unfollowMessage": "ألغيت {name}",
+  "unfollowMessage": "أُلغيت {name}",
   "@unfollowMessage": {"placeholders": {"name": {}}},
+  "deleteAction": "حذف",
+  "unknownStore": "متجر مجهول",
+  "notices": "إشعارات",
+  "writeNotice": "نشر",
+  "followMessage": "تتابع {nickname}",
+  "@followMessage": {
+    "placeholders": {
+      "nickname": {}
+    }
+  },
   "emailLogin": "دخول",
   "welcomeBack": "مرحباً!",
   "emailAddress": "البريد",

@@ -1,5 +1,5 @@
 // 파일 이름: lib/models/ranking_models.dart
-import 'package:needsfine_app/services/score_calculator.dart';
+// import 'package:needsfine_app/services/score_calculator.dart'; // Removed
 
 class Review {
   final String id;
@@ -17,8 +17,9 @@ class Review {
   final int likeCount;
   final int commentCount;
 
-  // ✅ [추가] 저장(스크랩) 수 필드 추가
+  // ✅ [추가] 저장(스크랩) 수 및 조회수 필드 추가
   final int saveCount;
+  final int viewCount;
 
   final String? userEmail;
   final String? myCommentText;
@@ -45,7 +46,8 @@ class Review {
     required this.createdAt,
     required this.likeCount,
     this.commentCount = 0,
-    this.saveCount = 0, // ✅ 기본값
+    this.saveCount = 0,
+    this.viewCount = 0, // ✅ 기본값
     this.userEmail,
     this.myCommentText,
     this.myCommentCreatedAt,
@@ -56,28 +58,14 @@ class Review {
     List<String>? tags,
     List<String>? dbTags,
   }) {
-    final scoreData = ScoreCalculator.calculateNeedsFineScore(
-        reviewText,
-        userRating,
-        photoUrls.isNotEmpty
-    );
+    // ✅ [수정] ScoreCalculator 제거. 서버에서 계산된 값(needsfineScore 등)을 그대로 사용하거나 기본값 0 처리
+    this.needsfineScore = needsfineScore ?? 0.0;
+    this.trustLevel = trustLevel ?? 0;
+    this.isCritical = isCritical ?? false;
+    this.isHidden = isHidden ?? false;
 
-    final dynamic calcNeedsfine = scoreData['needsfine_score'];
-    final dynamic calcTrust = scoreData['trust_level'];
-    final dynamic calcCritical = scoreData['is_critical'];
-
-    this.needsfineScore = needsfineScore ??
-        ((calcNeedsfine is num) ? calcNeedsfine.toDouble() : 0.0);
-
-    this.trustLevel = trustLevel ??
-        ((calcTrust is num) ? calcTrust.toInt() : 0);
-
-    this.isCritical = isCritical ?? (calcCritical == true);
-    this.isHidden = isHidden ?? (this.trustLevel < 20);
-
-    final calculatedTags = List<String>.from(scoreData['tags'] ?? []);
-    final savedTags = dbTags ?? tags ?? [];
-    this.tags = {...savedTags, ...calculatedTags}.toList();
+    // 태그 병합 로직 간소화 (DB태그 우선)
+    this.tags = dbTags ?? tags ?? [];
   }
 
   factory Review.fromJson(Map<String, dynamic> json) {
@@ -142,6 +130,7 @@ class Review {
       likeCount: (json['like_count'] as int?) ?? parseCount(json['review_votes']),
       commentCount: (json['comment_count'] as int?) ?? parseCount(json['comments']),
       saveCount: (json['save_count'] as int?) ?? parseCount(json['review_saves']),
+      viewCount: (json['view_count'] as int?) ?? 0, // ✅ 조회수 파싱
 
       myCommentText: json['comment_content']?.toString(),
       myCommentCreatedAt: json['comment_created_at'] != null

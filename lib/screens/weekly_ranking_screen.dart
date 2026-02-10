@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/widgets/store_ranking_card.dart'; // ✅ 공통 위젯 사용
 import 'package:needsfine_app/core/search_trigger.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class WeeklyRankingScreen extends StatelessWidget {
   final List<StoreRanking> rankings;
@@ -23,6 +24,7 @@ class WeeklyRankingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
@@ -33,17 +35,17 @@ class WeeklyRankingScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          '주간 니즈파인 랭킹',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800),
+        title: Text(
+          l10n.weeklyNeedsFineRanking,
+          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w800),
         ),
       ),
       // ✅ 데이터가 없을 때 빈 화면 처리 추가
       body: rankings.isEmpty
-          ? const Center(
+          ? Center(
         child: Text(
-          '랭킹 데이터가 없습니다.',
-          style: TextStyle(color: Colors.grey),
+          l10n.noRankingData,
+          style: const TextStyle(color: Colors.grey),
         ),
       )
           : ListView.builder(
@@ -58,7 +60,7 @@ class WeeklyRankingScreen extends StatelessWidget {
             // ✅ [핵심] StoreRankingCard 재사용으로 디자인 통일 & 오류 방지
             child: StoreRankingCard(
               ranking: ranking,
-              sortOption: '니즈파인 순',
+              sortOption: l10n.sortByScore,
               imageUrl: imageUrl, // 이미지 전달
             ),
           );

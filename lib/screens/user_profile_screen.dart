@@ -10,6 +10,9 @@ import 'package:needsfine_app/screens/review_detail_screen.dart';
 import 'package:needsfine_app/screens/my_list_detail_screen.dart';
 // ✅ 유저 리스트 목록 화면 임포트
 import 'package:needsfine_app/screens/user_lists_screen.dart';
+import 'package:needsfine_app/utils/number_utils.dart';
+
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -41,7 +44,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   Map<int, int> _scoreDistribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
 
   int _selectedFilterIndex = 0;
-  final List<String> _filters = ['최신순', '높은점수', '신뢰도순', '쓴소리'];
+  // _filters removed, will use l10n in build
 
   @override
   void initState() {
@@ -163,20 +166,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
     }
   }
 
+
+// ...
   void _applyFilter(int index) {
     setState(() {
       _selectedFilterIndex = index;
       switch (index) {
-        case 0:
+        case 0: // Latest
           _filteredReviews = List.from(_allReviews)..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           break;
-        case 1:
+        case 1: // High Rating
           _filteredReviews = List.from(_allReviews)..sort((a, b) => b.userRating.compareTo(a.userRating));
           break;
-        case 2:
+        case 2: // Reliability
           _filteredReviews = List.from(_allReviews)..sort((a, b) => b.trustLevel.compareTo(a.trustLevel));
           break;
-        case 3:
+        case 3: // Critical (Bitter)
           _filteredReviews = _allReviews.where((r) => r.userRating < 3.0).toList()
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
           break;
@@ -200,10 +205,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
 
         // 팔로우 알림 생성 (실패해도 팔로우 상태는 유지)
         try {
+          // 내 닉네임 가져오기
+          final myProfile = await _supabase.from('profiles').select('nickname').eq('id', myId).single();
+          final myNickname = myProfile['nickname'] as String;
+          final l10n = AppLocalizations.of(context)!;
+
           await _supabase.from('notifications').insert({
             'receiver_id': widget.userId,
             'type': 'follow',
             'reference_id': myId,
+            'title': l10n.notificationFollowTitle,
+            'content': l10n.notificationFollowContent(myNickname),
           });
         } catch (e) {
           debugPrint('팔로우 알림 전송 실패: $e');
@@ -223,17 +235,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   Future<void> _blockUser() async {
     final myId = _supabase.auth.currentUser?.id;
     if (myId == null) return;
+    final l10n = AppLocalizations.of(context)!;
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("차단하기"),
-        content: Text("${_userProfile?.nickname ?? '이 사용자'}를 차단하시겠습니까?\n차단하면 서로의 게시물을 볼 수 없습니다."),
+        title: Text(l10n.blockUserTitle),
+        content: Text(l10n.blockUserContent(_userProfile?.nickname ?? l10n.unknownUser)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("취소")),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("차단", style: TextStyle(color: Colors.red)),
+            child: Text(l10n.block, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -248,14 +261,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("사용자를 차단했습니다.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.userBlocked)));
         // 차단 후 즉시 화면 갱신 (차단 화면으로 전환)
         _checkBlockStatusAndFetchData();
       }
     } catch (e) {
       debugPrint("차단 실패: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("차단 처리 중 오류가 발생했습니다.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.blockFailed)));
       }
     }
   }
@@ -264,6 +277,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   Future<void> _unblockUser() async {
     final myId = _supabase.auth.currentUser?.id;
     if (myId == null) return;
+    final l10n = AppLocalizations.of(context)!;
 
     try {
       await _supabase.from('blocks').delete()
@@ -271,7 +285,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
           .eq('blocked_id', widget.userId);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("차단이 해제되었습니다.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.unblocked)));
         // 해제 후 데이터 다시 로드
         _checkBlockStatusAndFetchData();
       }
@@ -283,6 +297,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final l10n = AppLocalizations.of(context)!;
 
     // ✅ 1. 내가 차단한 경우
     if (_iBlockedThem) {
@@ -294,14 +309,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
             children: [
               const Icon(Icons.block, size: 64, color: Colors.grey),
               const SizedBox(height: 16),
-              const Text("차단한 사용자입니다.", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(l10n.blockedUserTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text("차단을 해제해야 프로필을 볼 수 있습니다.", style: TextStyle(color: Colors.grey)),
+              Text(l10n.blockedUserContent, style: const TextStyle(color: Colors.grey)),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _unblockUser,
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-                child: const Text("차단 해제", style: TextStyle(color: Colors.white)),
+                child: Text(l10n.unblock, style: const TextStyle(color: Colors.white)), 
               )
             ],
           ),
@@ -313,15 +328,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
     if (_theyBlockedMe) {
       return Scaffold(
         appBar: AppBar(backgroundColor: Colors.white, elevation: 0, iconTheme: const IconThemeData(color: Colors.black)),
-        body: const Center(
+        body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.person_off_rounded, size: 64, color: Colors.grey),
-              SizedBox(height: 16),
-              Text("차단 당한 사용자입니다.", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              SizedBox(height: 8),
-              Text("이 사용자의 프로필을 볼 수 없습니다.", style: TextStyle(color: Colors.grey)),
+              const Icon(Icons.person_off_rounded, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text(l10n.blockedByTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(l10n.blockedByContent, style: const TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -329,7 +344,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
     }
 
     // ✅ 3. 정상 프로필 화면 (기존 로직)
-    if (_userProfile == null) return const Scaffold(body: Center(child: Text("유저 정보를 찾을 수 없습니다.")));
+    if (_userProfile == null) return Scaffold(body: Center(child: Text(l10n.userNotFound)));
 
     final myId = _supabase.auth.currentUser?.id;
     final isMe = myId == widget.userId;
@@ -348,9 +363,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                 if (value == 'block') _blockUser();
               },
               itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                const PopupMenuItem<String>(
+                PopupMenuItem<String>(
                   value: 'block',
-                  child: Text('차단하기', style: TextStyle(color: Colors.red)),
+                  child: Text(l10n.blockUserTitle, style: const TextStyle(color: Colors.red)), // Using title as button text "차단하기"
                 ),
               ],
             ),
@@ -360,13 +375,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
         slivers: [
           SliverToBoxAdapter(child: _buildProfileHeader()),
 
-          // 1. Taste Identity
+          // 1. Taste Identity (요청에 의해 주석 처리)
+          /*
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
               child: _buildTasteIdentityCard(),
             ),
           ),
+          */
 
           // 2. Score History
           SliverToBoxAdapter(
@@ -390,7 +407,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
           SliverPersistentHeader(
             pinned: true,
             delegate: _StickyFilterDelegate(
-              filters: _filters,
+              filters: [
+                l10n.sortLatest,
+                l10n.sortHighRating,
+                l10n.sortReliability,
+                l10n.sortBitter,
+              ],
               selectedIndex: _selectedFilterIndex,
               onTap: _applyFilter,
             ),
@@ -399,7 +421,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
               ? SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(40.0),
-              child: Center(child: Text("작성한 리뷰가 없습니다.", style: TextStyle(color: Colors.grey[500]))),
+              child: Center(
+                child: Text(
+                  _selectedFilterIndex == 3 ? l10n.noBitterReviews : l10n.noReviews,
+                  style: TextStyle(color: Colors.grey[500]),
+                ),
+              ),
             ),
           )
               : SliverList(
@@ -425,6 +452,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
 
   // User Lists 카드 위젯
   Widget _buildUserListsCard() {
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: () {
         // 전체 보기 화면(UserListsScreen)으로 이동
@@ -446,9 +474,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text("유저 리스트", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+              children: [
+                Text(l10n.userLists, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
               ],
             ),
             const SizedBox(height: 16),
@@ -457,7 +485,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Center(
                   child: Text(
-                    "생성된 리스트가 없습니다.",
+                    l10n.noUserLists,
                     style: TextStyle(color: Colors.grey[500], fontSize: 13),
                   ),
                 ),
@@ -472,7 +500,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                         MaterialPageRoute(
                           builder: (_) => MyListDetailScreen(
                             listId: list['id'].toString(),
-                            listName: list['name'] ?? '이름 없음',
+                            listName: list['name'] ?? l10n.noName,
                           ),
                         ),
                       );
@@ -492,7 +520,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              list['name'] ?? '이름 없음',
+                              list['name'] ?? l10n.noName,
                               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -515,6 +543,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
     if (_userProfile!.profileImageUrl.isNotEmpty) {
       profileImage = NetworkImage(_userProfile!.profileImageUrl);
     }
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
       color: Colors.white,
@@ -543,9 +572,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildStatItem("리뷰", "${_allReviews.length}"),
-                        _buildStatItem("팔로워", "${_userProfile!.followerCount}"),
-                        _buildStatItem("팔로잉", "${_userProfile!.followingCount}"),
+                        _buildStatItem(l10n.reviewCount, NumberUtils.format(_allReviews.length)),
+                        // ✅ [New] 총 조회수 추가
+                        _buildStatItem(l10n.viewCount, NumberUtils.format(_allReviews.fold(0, (sum, item) => sum + item.viewCount))),
+                        _buildStatItem(l10n.followerCount, NumberUtils.format(_userProfile!.followerCount)),
+                        _buildStatItem(l10n.followingCount, NumberUtils.format(_userProfile!.followingCount)),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -561,7 +592,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
                             elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
-                          child: Text(_isFollowing ? "팔로잉" : "팔로우", style: const TextStyle(fontWeight: FontWeight.bold)),
+                          child: Text(_isFollowing ? l10n.following : l10n.follow, style: const TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ),
                   ],
@@ -577,7 +608,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
               children: [
                 Text(_userProfile!.nickname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                 const SizedBox(height: 4),
-                Text(_userProfile!.introduction.isNotEmpty ? _userProfile!.introduction : "소개글이 없습니다.",
+                Text(_userProfile!.introduction.isNotEmpty ? _userProfile!.introduction : l10n.noIntroduction,
                     style: TextStyle(color: Colors.grey[600], fontSize: 14)),
               ],
             ),
@@ -597,7 +628,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   }
 
   Widget _buildTasteIdentityCard() {
-    String topCategory = "정보 없음";
+    final l10n = AppLocalizations.of(context)!;
+    String topCategory = l10n.unknownUser; // Reusing "Unknown" or add proper "No info" key. 'unknownUser' is 'Unknown'
+    if (_categoryStats.isEmpty) topCategory = l10n.unknownUser;
+    
     int maxCount = 0;
     _categoryStats.forEach((key, value) {
       if (value > maxCount) {
@@ -638,7 +672,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("취향 분석", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(l10n.tasteAnalysis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -693,13 +727,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> with SingleTicker
   }
 
   Widget _buildScoreDistributionCard() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("평점 분포", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(l10n.scoreDistribution, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 24),
           SizedBox(
             height: 120,

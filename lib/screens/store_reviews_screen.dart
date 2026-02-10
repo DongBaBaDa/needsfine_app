@@ -115,7 +115,7 @@ class _StoreReviewsScreenState extends State<StoreReviewsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("리뷰 로딩 중 오류가 발생했습니다.")),
+          SnackBar(content: Text(AppLocalizations.of(context)!.loadingError)),
         );
       }
     } finally {
@@ -301,16 +301,17 @@ class _StoreReviewsScreenState extends State<StoreReviewsScreen> {
     );
   }
 
-  String _filterLabel(StoreReviewFilter f) {
+  String _filterLabel(BuildContext context, StoreReviewFilter f) {
+    final l10n = AppLocalizations.of(context)!;
     switch (f) {
       case StoreReviewFilter.latest:
-        return "최신순";
+        return l10n.latestOrder;
       case StoreReviewFilter.needsfineHigh:
-        return "니즈파인 점수순";
+        return l10n.sortByScore;
       case StoreReviewFilter.trustHigh:
-        return "신뢰도순";
+        return l10n.sortByReliability;
       case StoreReviewFilter.bitter:
-        return "쓴소리";
+        return l10n.bitterCriticism;
     }
   }
 
@@ -368,7 +369,7 @@ class _StoreReviewsScreenState extends State<StoreReviewsScreen> {
                     setState(() => _filter = next);
                     await _reload();
                   },
-                  labelBuilder: _filterLabel,
+                  labelBuilder: (f) => _filterLabel(context, f),
                 ),
               ),
               const SizedBox(height: 6),
@@ -392,10 +393,17 @@ class _StoreReviewsScreenState extends State<StoreReviewsScreen> {
                     children: [
                       const Icon(Icons.rate_review_outlined, size: 48, color: Colors.grey),
                       const SizedBox(height: 12),
-                      Text("아직 등록된 ${l10n.review}가 없습니다.",
+                      Text(
+                          _filter == StoreReviewFilter.bitter
+                              ? l10n.noBitterReviews
+                              : l10n.noReviewsYet,
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(height: 6),
-                      const Text("첫 번째 리뷰를 기다리고 있어요.", style: TextStyle(color: Colors.grey)),
+                      Text(
+                          _filter == StoreReviewFilter.bitter
+                              ? ""
+                              : l10n.firstReviewWaiting,
+                          style: const TextStyle(color: Colors.grey)),
                     ],
                   ),
                 )
@@ -457,12 +465,12 @@ class _HeaderSummaryCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(child: _MetricTile(label: "총 리뷰", value: "$totalReviews", valueColor: Colors.black87)),
+          Expanded(child: _MetricTile(label: AppLocalizations.of(context)!.totalReviews, value: "$totalReviews", valueColor: Colors.black87)),
           const SizedBox(width: 10),
-          Expanded(child: _MetricTile(label: "저장됨", value: "$storeSaves", valueColor: const Color(0xFF7C4DFF))),
+          Expanded(child: _MetricTile(label: AppLocalizations.of(context)!.savedCount, value: "$storeSaves", valueColor: const Color(0xFF7C4DFF))),
           const SizedBox(width: 10),
           // ✅ 요청: 평균 NF → 평균 니즈파인
-          Expanded(child: _MetricTile(label: "평균 니즈파인", value: avgNeedsFine.toStringAsFixed(1), valueColor: const Color(0xFF7C4DFF))),
+          Expanded(child: _MetricTile(label: AppLocalizations.of(context)!.avgNeedsFineScore, value: avgNeedsFine.toStringAsFixed(1), valueColor: const Color(0xFF7C4DFF))),
         ],
       ),
     );

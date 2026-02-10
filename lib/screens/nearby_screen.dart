@@ -258,7 +258,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         final controller = await _controller.future;
         controller.updateCamera(NCameraUpdate.scrollAndZoomTo(target: position, zoom: 16));
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("위치를 찾을 수 없습니다.")));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.locationNotFound)));
       }
     } catch (_) {}
   }
@@ -356,7 +356,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         final position = NLatLng(double.parse(addr.y), double.parse(addr.x));
         _updateUI(place, position);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("정확한 좌표를 찾을 수 없습니다.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.preciseLocationNotFound)));
       }
     } catch (e) {
       debugPrint("Select Place Error: $e");
@@ -564,7 +564,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.loginRequired)));
       }
       return;
     }
@@ -581,7 +581,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     if (addr.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("주소를 확인 중입니다. 잠시 후 다시 시도해주세요.")),
+          SnackBar(content: Text(AppLocalizations.of(context)!.verifyingAddress)),
         );
       }
       return;
@@ -871,11 +871,11 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                       child: TextField(
                         controller: _searchController,
                         onChanged: _onSearchChanged,
-                        decoration: const InputDecoration(
-                          hintText: '매장 검색',
-                          prefixIcon: Icon(Icons.search, color: Color(0xFF9C7CFF)),
+                        decoration: InputDecoration(
+                          hintText: AppLocalizations.of(context)!.searchStoreHint,
+                          prefixIcon: const Icon(Icons.search, color: Color(0xFF9C7CFF)),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         ),
                         onSubmitted: (val) => _handleManualSearch(val),
                       ),
@@ -1006,7 +1006,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        _isStoreSaved ? "저장됨" : "저장하기",
+                        _isStoreSaved ? l10n.saved : l10n.save,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: _isStoreSaved ? Colors.white : const Color(0xFF9C7CFF),
@@ -1032,7 +1032,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
               children: [
                 // 니즈파인 점수 (상태 변수 사용)
                 _buildScoreBox(
-                    l10n.avgNeedsFineScore,
+                    l10n.avgNeedsFineScore, // NeedsFine Score
                     _displayScore.toStringAsFixed(1),
                     const Color(0xFF9C7CFF)
                 ),
@@ -1073,7 +1073,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             ],
 
             const SizedBox(height: 16),
-            Text("${l10n.review} $reviewCount개", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text("${l10n.review} $reviewCount", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 10),
 
             Row(
@@ -1145,7 +1145,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                 height: 80,
                 width: double.infinity,
                 decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
-                child: const Center(child: Text("등록된 사진이 없습니다", style: TextStyle(color: Colors.grey))),
+                child: Center(child: Text(l10n.noPhotos, style: const TextStyle(color: Colors.grey))),
               ),
 
             const SizedBox(height: 20),
@@ -1164,7 +1164,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                       side: const BorderSide(color: Color(0xFF9C7CFF)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text("리뷰 보기", style: TextStyle(color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)),
+                    child: Text(l10n.viewReview, style: const TextStyle(color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1176,7 +1176,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text("리뷰 쓰기", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: Text(l10n.writeReview, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -1194,9 +1194,9 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                 children: [
                   const Icon(Icons.rate_review_outlined, color: Colors.grey, size: 48),
                   const SizedBox(height: 12),
-                  const Text("아직 등록된 정보가 없습니다.", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(l10n.noStoreInfo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  const Text("'당신의 경험을 공유해주세요!'", style: TextStyle(color: Color(0xFF9C7CFF))),
+                  Text(l10n.shareExperience, style: const TextStyle(color: Color(0xFF9C7CFF))),
                 ],
               ),
             ),
@@ -1208,7 +1208,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                 minimumSize: const Size(double.infinity, 54),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text("첫 번째 리뷰 작성하기", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              child: Text(l10n.writeFirstReview, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ],
 

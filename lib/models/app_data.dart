@@ -1,4 +1,4 @@
-import 'package:needsfine_app/services/score_calculator.dart';
+// import 'package:needsfine_app/services/score_calculator.dart'; // Removed
 
 // -----------------------------------------------------------------------------
 // 1. Review 모델
@@ -35,16 +35,14 @@ class Review {
     this.longitude,
     this.photoUrls = const [], // 기본값 빈 리스트
   }) {
-    // 사진 유무에 따라 가산점 로직 적용
-    final scoreResult = ScoreCalculator.calculateNeedsFineScore(content, rating, photoUrls.isNotEmpty);
 
-    needsfineScore = (scoreResult['needsfine_score'] as num).toDouble();
-    trustLevel = scoreResult['trust_level'] as int;
-    tags = List<String>.from(scoreResult['tags'] ?? []);
-
-    authenticity = trustLevel >= 70;
-    isCritical = (needsfineScore < 3.0 && trustLevel >= 50);
-    isHidden = (trustLevel < 20);
+    // ✅ [수정] ScoreCalculator 대신 기본값 할당 (서버 계산 전 임시 데이터)
+    needsfineScore = 0.0;
+    trustLevel = 0;
+    tags = [];
+    authenticity = false;
+    isCritical = false;
+    isHidden = false;
   }
 }
 

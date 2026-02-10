@@ -5,6 +5,7 @@ plugins {
     id "com.android.application"
     id "org.jetbrains.kotlin.android"
     id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"
 }
 
 def localProperties = new Properties()
@@ -37,10 +38,12 @@ android {
         targetSdk 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        multiDexEnabled true
     }
 
     // 경고 없애려면 17 권장(AGP 8.x 환경과도 잘 맞음)
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
@@ -58,7 +61,7 @@ android {
             // ✅ storeFile은 "android/" 기준으로 해석되게 rootProject.file 사용
             def ks = rootProject.file(keystoreProperties["storeFile"])
             if (!ks.exists()) {
-                throw new GradleException("Keystore not found at: ${ks.absolutePath}")
+                throw new IllegalStateException("Keystore not found at: ${ks.absolutePath}")
             }
 
             storeFile ks
@@ -71,8 +74,8 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
@@ -80,4 +83,10 @@ android {
 
 flutter {
     source "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.2'
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-analytics'
 }

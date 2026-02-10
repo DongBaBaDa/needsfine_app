@@ -110,16 +110,20 @@
       "name": {}
     }
   },
-  "startFollowingMessage": "Siguiendo a {name}",
-  "@startFollowingMessage": {
-    "placeholders": {
-      "name": {}
-    }
-  },
   "unfollowMessage": "Dejaste de seguir a {name}",
   "@unfollowMessage": {
     "placeholders": {
       "name": {}
+    }
+  },
+  "deleteAction": "Borrar",
+  "unknownStore": "Tienda desc.",
+  "notices": "Avisos",
+  "writeNotice": "Crear",
+  "followMessage": "Siguiendo a {nickname}",
+  "@followMessage": {
+    "placeholders": {
+      "nickname": {}
     }
   },
 

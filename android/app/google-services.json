@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "197198961843",
+    "project_id": "needsfine-bbf7e",
+    "storage_bucket": "needsfine-bbf7e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:197198961843:android:b07156605b1afeec3ce4c6",
+        "android_client_info": {
+          "package_name": "com.needsfine.needsfine_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "197198961843-u83rfkl7a00v1hooskodgjv88ijrknhs.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrYhMQvDaNvsIenT9uN4YX1cLNvGhP_dc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "197198961843-jmni2uqlh5qub15s8i43eva41v62js8c.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

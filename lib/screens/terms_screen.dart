@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class TermsScreen extends StatelessWidget {
   const TermsScreen({super.key});
@@ -13,10 +14,11 @@ class TermsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('약관 및 정책', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: Text(l10n.termsAndPolicy, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
@@ -24,11 +26,11 @@ class TermsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _buildTermItem("서비스 이용약관", "https://needsfine.com/term.html"),
+          _buildTermItem(l10n.serviceTerms, "https://needsfine.com/term.html"),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
-          _buildTermItem("개인정보 처리방침", "https://needsfine.com/privacy.html"),
+          _buildTermItem(l10n.privacyPolicy, "https://needsfine.com/privacy.html"),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
-          _buildTermItem("위치정보 이용약관", "https://needsfine.com/location.html"),
+          _buildTermItem(l10n.locationTerms, "https://needsfine.com/location.html"),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
         ],
       ),

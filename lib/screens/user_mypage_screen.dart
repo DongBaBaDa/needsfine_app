@@ -9,6 +9,7 @@ import '../models/user_model.dart';
 import 'package:needsfine_app/screens/taste_selection_screen.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart';
 import 'package:needsfine_app/screens/review_collection_screen.dart';
+import 'package:needsfine_app/screens/feed/feed_collection_screen.dart'; // ✅ Added
 import 'package:needsfine_app/screens/profile_edit_screen.dart';
 import 'package:needsfine_app/screens/info_edit_screen.dart';
 import 'package:needsfine_app/screens/notice_screen.dart';
@@ -19,6 +20,8 @@ import 'package:needsfine_app/screens/my_lists_screen.dart';
 import 'package:needsfine_app/screens/banner_management_screen.dart';
 import 'package:needsfine_app/screens/report_management_screen.dart';
 import 'package:needsfine_app/screens/follow_list_screen.dart'; // ✅ 팔로우 리스트 추가
+import 'package:needsfine_app/screens/onboarding/taste_survey_modal.dart';
+import 'package:needsfine_app/screens/user_inquiry_history_screen.dart'; // ✅ 문의 내역 추가
 
 import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
@@ -39,6 +42,8 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   bool _isAdmin = false;
   double _avgNeedsFineScore = 0.0;
   int _avgTrustLevel = 0;
+  int _totalHelpfulCount = 0; // ✅ [추가] 총 받은 도움 수
+  bool _isSuperAdmin = false; // ✅ 슈퍼 관리자 확인
 
   final Color _backgroundColor = const Color(0xFFF2F2F7);
   final Color _cardColor = Colors.white;
@@ -70,28 +75,61 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       if (rawList.isNotEmpty) {
         double totalScore = 0.0;
         int totalTrust = 0;
+        int totalLikes = 0;
+        final Map<String, int> tagCounts = {}; // ✅ 태그 카운트용 맵 추가
+
         for (final item in rawList) {
           final review = (item is Map) ? Map<String, dynamic>.from(item as Map) : <String, dynamic>{};
           totalScore += ((review['needsfine_score'] as num?) ?? 0).toDouble();
           final double trustScore = (review['trust_level'] as num?)?.toDouble() ?? 50.0;
           totalTrust += trustScore.round();
+          
+          // ✅ like_count 합산 (물리적 컬럼 or Relation Count)
+          int likeCount = (review['like_count'] as int?) ?? 
+              ((review['review_votes'] is List && (review['review_votes'] as List).isNotEmpty) 
+                  ? ((review['review_votes'] as List)[0]['count'] as int? ?? 0) 
+                  : 0);
+          totalLikes += likeCount;
         }
-        _avgNeedsFineScore = totalScore / rawList.length;
-        _avgTrustLevel = (totalTrust / rawList.length).round();
+        if (mounted) {
+          setState(() {
+            _avgNeedsFineScore = totalScore / rawList.length;
+            _avgTrustLevel = (totalTrust / rawList.length).round();
+            _totalHelpfulCount = totalLikes; // ✅ 값 할당
+          });
+        }
       } else {
-        _avgNeedsFineScore = 0.0;
-        _avgTrustLevel = 0;
+        if (mounted) {
+          setState(() {
+            _avgNeedsFineScore = 0.0;
+            _avgTrustLevel = 0;
+            _totalHelpfulCount = 0;
+          });
+        }
       }
 
       final List<Review> reviewObjects = rawList.whereType<Map>().map((m) => Review.fromJson(Map<String, dynamic>.from(m))).toList();
+      
+      final currentUser = _supabase.auth.currentUser;
+      final email = currentUser?.email;
+      // ✅ [Fix] 오타 방지를 위해 두 가지 경우 모두 허용
+      final isSuperAdminCheck = (email?.trim().toLowerCase() ?? '') == 'ineedsdfine@gmail.com' || 
+                                (email?.trim().toLowerCase() ?? '') == 'ineedsfine@gmail.com';
+
+      if (mounted) {
+        setState(() {
+           _isSuperAdmin = isSuperAdminCheck;
+        });
+      }
 
       if (profileData != null && mounted) {
         final l10n = AppLocalizations.of(context)!;
-
+        
         setState(() {
           _isAdmin = profileData['is_admin'] ?? false;
           _myTags = List<String>.from(profileData['taste_tags'] ?? []);
           _myReviews = reviewObjects;
+          // ... (rest of simple assignment)
           _userProfile = UserProfile(
             nickname: profileData['nickname'] ?? l10n.noName,
             introduction: profileData['introduction'] ?? l10n.noIntro,
@@ -107,6 +145,76 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       debugPrint("데이터 로드 에러: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ✅ [New] 리뷰 재계산 (Double Confirmation)
+  Future<void> _recalculateReviews() async {
+    // 1차 경고
+    final confirm1 = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppLocalizations.of(context)!.recalcWarningTitle),
+        content: Text(AppLocalizations.of(context)!.recalcWarningContent),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancelAction)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.continueAction, style: const TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm1 != true) return;
+
+    // 2차 경고
+    if (!mounted) return;
+    final confirm2 = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppLocalizations.of(context)!.finalConfirmTitle),
+        content: Text(AppLocalizations.of(context)!.finalConfirmContent),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancelAction)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.executeAction, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+
+    if (confirm2 != true) return;
+
+    // API 호출
+    try {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.recalcRequesting)));
+
+      final response = await _supabase.functions.invoke(
+        'make-server-26899706/recalculate-all',
+        headers: {
+          'X-Admin-Password': 'needsfine2953', // 하드코딩된 어드민 키 (서버 코드와 일치)
+        },
+      );
+
+      final data = response.data;
+      if (data != null && data['success'] == true) {
+        final version = data['version'] ?? "Unknown";
+        final count = data['count'] ?? 0;
+        
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(AppLocalizations.of(context)!.recalcCompleteTitle),
+            content: Text(AppLocalizations.of(context)!.recalcCompleteContent(count, version)),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.of(context)!.confirmAction)),
+            ],
+          ),
+        );
+      } else {
+        throw Exception(data?['error'] ?? "Unknown Error");
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.processFailed(e.toString())), backgroundColor: Colors.red));
     }
   }
 
@@ -132,13 +240,22 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                   children: [
                     const Icon(Icons.headset_mic_rounded, color: Color(0xFF8A2BE2), size: 28),
                     const SizedBox(width: 10),
-                    Text(l10n.customerCenter, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                    Text(AppLocalizations.of(context)!.customerCenter, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
                   ],
                 ),
                 const SizedBox(height: 24),
                 _ModalButton(
+                  icon: Icons.email_outlined,
+                  text: AppLocalizations.of(context)!.inquiry,
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const InquiryWriteScreen()));
+                  },
+                ),
+                const SizedBox(height: 12),
+                _ModalButton(
                   icon: Icons.rate_review_outlined,
-                  text: l10n.sendSuggestion,
+                  text: AppLocalizations.of(context)!.sendSuggestion,
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const SuggestionWriteScreen()));
@@ -146,11 +263,11 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                 ),
                 const SizedBox(height: 12),
                 _ModalButton(
-                  icon: Icons.email_outlined,
-                  text: l10n.inquiry,
+                  icon: Icons.history_rounded,
+                  text: l10n.inquiryHistory,
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const InquiryWriteScreen()));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const UserInquiryHistoryScreen()));
                   },
                 ),
                 const SizedBox(height: 12),
@@ -204,6 +321,67 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 child: _buildProfileHeader(context, l10n)
             ),
+            
+            /*
+            // ✅ [New] Taste Summary Section
+            if (_myTags.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(l10n.myTasteSummary, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        TextButton(
+                          onPressed: () {
+                             showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (context) => TasteSurveyModal(onCompleted: () {
+                                  Navigator.pop(context);
+                                  _fetchUserData(); // Refresh data
+                                }),
+                              );
+                          }, 
+                          child: Text(l10n.analyzeAgain, style: const TextStyle(fontSize: 12, color: Color(0xFFC87CFF))),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _myTags.map((tag) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF2F2F7),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text("#$tag", style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                      )).toList(),
+                    ),
+                  ],
+                ),
+              ),
+              */
+              
+
+
             _buildMenuSection(l10n),
           ],
         ),
@@ -212,47 +390,59 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
   }
 
   Widget _buildProfileHeader(BuildContext context, AppLocalizations l10n) {
-    ImageProvider profileImage = _userProfile!.profileImageUrl.isNotEmpty
-        ? CachedNetworkImageProvider(_userProfile!.profileImageUrl)
-        : const AssetImage('assets/images/default_profile.png') as ImageProvider;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
         children: [
           const SizedBox(height: 10),
-          Stack(
-            children: [
-              CircleAvatar(radius: 48, backgroundImage: profileImage, backgroundColor: Colors.grey[100]),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.grey[200]!)),
-                  child: const Icon(Icons.camera_alt, size: 16, color: Colors.grey),
-                ),
-              )
-            ],
-          ),
+              _userProfile!.profileImageUrl.isNotEmpty
+                  ? CircleAvatar(
+                      radius: 48,
+                      backgroundImage: CachedNetworkImageProvider(_userProfile!.profileImageUrl),
+                      backgroundColor: Colors.grey[100],
+                    )
+                  : CircleAvatar(
+                      radius: 48,
+                      backgroundColor: Colors.grey[200],
+                      child: const Icon(Icons.person, size: 48, color: Colors.grey),
+                    ),
           const SizedBox(height: 16),
           Text(_userProfile!.nickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.black, letterSpacing: -0.5)),
           const SizedBox(height: 6),
           Text(_userProfile!.introduction, style: TextStyle(fontSize: 14, color: Colors.grey[600]), textAlign: TextAlign.center),
           const SizedBox(height: 18),
 
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          // ✅ [Restore] NeedsFine Score & Trust Score
+          Column(
             children: [
-              _StatBadge(
-                  label: "니즈파인 점수 ${_avgNeedsFineScore.toStringAsFixed(1)}",
-                  color: const Color(0xFF8A2BE2)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _StatBadge(
+                      label: "${l10n.needsFineScore} ${_avgNeedsFineScore.toStringAsFixed(1)}",
+                      color: const Color(0xFF8A2BE2)
+                  ),
+                  const SizedBox(width: 10),
+                  _StatBadge(
+                      label: "${l10n.trustScore} $_avgTrustLevel%",
+                      color: Colors.blueAccent
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              _StatBadge(
-                  label: "신뢰도 $_avgTrustLevel%",
-                  color: Colors.blueAccent
-              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // ✅ Stats Row (Review / Total Views / Helpful)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly, 
+            children: [
+              _buildSimpleStat(l10n.myReviews, "${_myReviews.length}"),
+              Container(width: 1, height: 24, color: Colors.grey[300]),
+              // ✅ [New Order] 총 조회수 (Total View Count)
+              _buildSimpleStat(l10n.totalViewCount, "${_myReviews.fold(0, (sum, item) => sum + item.viewCount)}"),
+              Container(width: 1, height: 24, color: Colors.grey[300]),
+              _buildSimpleStat(l10n.helpfulReviews, "$_totalHelpfulCount"),
             ],
           ),
           const SizedBox(height: 24),
@@ -340,13 +530,23 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     );
   }
 
+  Widget _buildSimpleStat(String label, String count) {
+    return Column(
+      children: [
+        Text(count, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      ],
+    );
+  }
+
   Widget _buildMenuSection(AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
           _MenuSectionCard(
-            title: "나의 활동",
+            title: l10n.myActivity,
             children: [
               _MenuItem(
                   icon: Icons.bookmark_rounded,
@@ -354,28 +554,26 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                   title: l10n.reviewCollection,
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReviewCollectionScreen()))
               ),
+              // ✅ [추가] 피드 모아보기
+              _MenuItem(
+                  icon: Icons.dynamic_feed_rounded,
+                  iconColor: const Color(0xFF9C7CFF),
+                  title: l10n.myFeed,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FeedCollectionScreen()))
+              ),
               _MenuItem(
                   icon: Icons.list_alt_rounded,
                   iconColor: const Color(0xFF4ECDC4),
                   title: l10n.myOwnList,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListsScreen()))
-              ),
-              _MenuItem(
-                  icon: Icons.restaurant_menu_rounded,
-                  iconColor: const Color(0xFFFFBE0B),
-                  title: l10n.myTaste,
                   isLast: true,
-                  onTap: () async {
-                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const TasteSelectionScreen()));
-                    _fetchUserData();
-                  }
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyListsScreen()))
               ),
             ],
           ),
           const SizedBox(height: 20),
 
           _MenuSectionCard(
-            title: "고객 지원",
+            title: l10n.customerSupport,
             children: [
               _MenuItem(
                   icon: Icons.headset_mic_rounded,
@@ -398,26 +596,34 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
             _MenuSectionCard(
               title: l10n.adminMenu,
               borderColor: Colors.red.withOpacity(0.3),
-              children: [
+            children: [
                 _MenuItem(
                     icon: Icons.dashboard_rounded,
                     iconColor: Colors.blueGrey,
-                    title: "관리자 대시보드",
+                    title: l10n.adminDashboard,
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()))
                 ),
                 _MenuItem(
                     icon: Icons.view_carousel_rounded,
                     iconColor: Colors.orange,
-                    title: "배너 관리",
+                    title: l10n.bannerManagement,
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BannerManagementScreen()))
                 ),
                 _MenuItem(
                     icon: Icons.gavel_rounded,
                     iconColor: Colors.redAccent,
-                    title: "신고 관리",
-                    isLast: true,
+                    title: l10n.reportManagement,
+                    isLast: !_isSuperAdmin, // 슈퍼 관리자가 아니면 여기가 마지막
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportManagementScreen()))
                 ),
+                if (_isSuperAdmin) 
+                   _MenuItem(
+                    icon: Icons.calculate_outlined,
+                    iconColor: Colors.deepPurple,
+                    title: l10n.recalculateReviews,
+                    isLast: true, // 여기가 진짜 마지막
+                    onTap: _recalculateReviews,
+                  ),
               ],
             ),
         ],

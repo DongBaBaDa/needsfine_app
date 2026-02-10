@@ -129,10 +129,11 @@ class _MyListsScreenState extends State<MyListsScreen> {
   }
 
   Future<void> _createList() async {
+    final l10n = AppLocalizations.of(context)!;
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
+          .showSnackBar(const SnackBar(content: Text("로그인이 필요합니다."))); // Keep simple or add key if needed
       return;
     }
 
@@ -152,19 +153,19 @@ class _MyListsScreenState extends State<MyListsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("새 리스트 만들기",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(l10n.newListTitle,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              const Text(
-                "리스트를 만든 후 저장한 매장을 담을 수 있어요.",
-                style: TextStyle(fontSize: 13, color: Colors.grey),
+              Text(
+                l10n.newListHint,
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: controller,
                 autofocus: true,
                 decoration: InputDecoration(
-                  hintText: "예: 데이트 맛집, 회식 장소",
+                  hintText: l10n.listNamePlaceholder,
                   filled: true,
                   fillColor: const Color(0xFFF2F2F7),
                   border: OutlineInputBorder(
@@ -186,8 +187,8 @@ class _MyListsScreenState extends State<MyListsScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text("생성",
-                      style: TextStyle(
+                  child: Text(l10n.createButton,
+                      style: const TextStyle(
                           fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
               ),
@@ -215,7 +216,7 @@ class _MyListsScreenState extends State<MyListsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("리스트가 생성되었습니다. 매장을 추가해보세요!")),
+          SnackBar(content: Text(l10n.listCreated)),
         );
       }
     } catch (e) {
@@ -224,25 +225,26 @@ class _MyListsScreenState extends State<MyListsScreen> {
   }
 
   Future<void> _deleteList(String listId, String listName) async {
+    final l10n = AppLocalizations.of(context)!;
     // ✅ 삭제 확인 다이얼로그
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('리스트 삭제',
-            style: TextStyle(fontWeight: FontWeight.w800)),
-        content: Text('"$listName" 리스트를 삭제하시겠습니까?\n리스트 내 모든 항목이 함께 삭제됩니다.'),
+        title: Text(l10n.deleteList,
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(l10n.deleteListMessage(listName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소', style: TextStyle(color: Colors.grey)),
+            child: Text(l10n.cancel, style: const TextStyle(color: Colors.grey)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(
               foregroundColor: Colors.red,
             ),
-            child: const Text('삭제', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(l10n.deleteList, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -256,14 +258,14 @@ class _MyListsScreenState extends State<MyListsScreen> {
       await _fetchAllData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('리스트가 삭제되었습니다.')),
+          SnackBar(content: Text(l10n.listDeleted)),
         );
       }
     } catch (e) {
       debugPrint('리스트 삭제 실패: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('삭제에 실패했습니다.')),
+          SnackBar(content: Text(l10n.deleteFailed)),
         );
       }
     }
@@ -271,6 +273,7 @@ class _MyListsScreenState extends State<MyListsScreen> {
 
   // ✅ 리스트 공유 토글
   Future<void> _togglePublicState(String listId) async {
+    final l10n = AppLocalizations.of(context)!;
     final currentState = _publicStates[listId] ?? false;
     final newState = !currentState;
 
@@ -285,7 +288,7 @@ class _MyListsScreenState extends State<MyListsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(newState ? '리스트가 공개로 설정되었습니다.' : '리스트가 비공개로 설정되었습니다.'),
+            content: Text(newState ? l10n.listShared : l10n.listPrivate),
           ),
         );
       }
@@ -293,7 +296,7 @@ class _MyListsScreenState extends State<MyListsScreen> {
       debugPrint('공개 설정 변경 실패: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('설정 변경에 실패했습니다.')),
+          SnackBar(content: Text(l10n.settingFailed)),
         );
       }
     }
@@ -355,9 +358,9 @@ class _MyListsScreenState extends State<MyListsScreen> {
           children: [
             // ✅ 1. '저장한 매장' 카드
             _ListCard(
-              title: "저장한 매장",
-              countText: _savedStoresCount > 0 ? "$_savedStoresCount개" : null,
-              subtitle: "내가 찜한 모든 매장",
+              title: l10n.savedStores,
+              countText: _savedStoresCount > 0 ? l10n.itemCount(_savedStoresCount) : null,
+              subtitle: l10n.allSavedStores,
               onTap: _openSavedStores,
               trailing: const Icon(Icons.chevron_right_rounded,
                   color: Color(0xFFAEAEB2)),
@@ -384,7 +387,7 @@ class _MyListsScreenState extends State<MyListsScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '내 리스트',
+                          l10n.myListsTab,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,
@@ -409,7 +412,7 @@ class _MyListsScreenState extends State<MyListsScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '공유한 리스트',
+                          l10n.sharedListsTab,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,
@@ -430,7 +433,7 @@ class _MyListsScreenState extends State<MyListsScreen> {
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 8),
               child: Text(
-                _currentTab == 0 ? "내 리스트" : "공유한 리스트",
+                _currentTab == 0 ? l10n.myListsTab : l10n.sharedListsTab,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -455,8 +458,8 @@ class _MyListsScreenState extends State<MyListsScreen> {
                     const SizedBox(height: 16),
                     Text(
                       _currentTab == 0
-                          ? "리스트가 없습니다.\n새로운 리스트를 만들어보세요!"
-                          : "공유한 리스트가 없습니다.",
+                          ? l10n.noListsYet
+                          : l10n.noSharedLists,
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: Color(0xFF8E8E93)),
                     ),
@@ -464,7 +467,7 @@ class _MyListsScreenState extends State<MyListsScreen> {
                       const SizedBox(height: 16),
                       OutlinedButton(
                         onPressed: _createList,
-                        child: const Text("리스트 만들기"),
+                        child: Text(l10n.createList),
                       ),
                     ],
                   ],
@@ -473,15 +476,15 @@ class _MyListsScreenState extends State<MyListsScreen> {
             ] else ...[
               ...filteredLists.map((item) {
                 final id = (item['id'] ?? '').toString();
-                final name = (item['name'] ?? '이름 없음').toString();
+                final name = (item['name'] ?? l10n.noName).toString();
                 final count = _listCounts[id] ?? 0;
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _ListCard(
                     title: name,
-                    countText: "$count개",
-                    subtitle: count == 0 ? "터치하여 매장 추가하기" : null,
+                    countText: l10n.itemCount(count),
+                    subtitle: count == 0 ? l10n.tapToAddStores : null,
                     onTap: () => _openListDetail(id, name),
                     trailing: PopupMenuButton<String>(
                       icon: const Icon(Icons.more_horiz,
@@ -509,19 +512,19 @@ class _MyListsScreenState extends State<MyListsScreen> {
                                   color: const Color(0xFF8A2BE2),
                                 ),
                                 const SizedBox(width: 12),
-                                Text(isPublic ? '비공개로 전환' : '공개로 전환'),
+                                Text(isPublic ? l10n.makePrivate : l10n.shareList),
                               ],
                             ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'delete',
                             child: Row(
                               children: [
-                                Icon(Icons.delete_outline,
+                                const Icon(Icons.delete_outline,
                                     size: 20, color: Colors.red),
-                                SizedBox(width: 12),
-                                Text('리스트 삭제',
-                                    style: TextStyle(color: Colors.red)),
+                                const SizedBox(width: 12),
+                                Text(l10n.deleteList,
+                                    style: const TextStyle(color: Colors.red)),
                               ],
                             ),
                           ),

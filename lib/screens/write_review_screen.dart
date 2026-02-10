@@ -9,28 +9,30 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:needsfine_app/services/review_service.dart';
 // ✅ ScoreCalculator 경로가 utils인지 services인지 파일 위치를 꼭 확인하세요.
-import 'package:needsfine_app/services/score_calculator.dart';
 import 'package:needsfine_app/services/naver_search_service.dart';
 import 'package:needsfine_app/services/naver_map_service.dart';
 import 'package:needsfine_app/models/ranking_models.dart' as model;
+import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/widgets/notification_badge.dart';
-import 'package:needsfine_app/core/search_trigger.dart';
-import 'package:needsfine_app/core/profanity_filter.dart';
+import 'package:needsfine_app/core/profanity_filter.dart'; // Correct path
+import 'package:needsfine_app/core/search_trigger.dart'; // searchTrigger & SearchTarget
+
+// ... (imports remain)
 
 class WriteReviewScreen extends StatefulWidget {
+  final model.Review? reviewToEdit;
   final String? initialStoreName;
   final String? initialAddress;
   final double? initialLat;
   final double? initialLng;
-  final model.Review? reviewToEdit;
 
   const WriteReviewScreen({
-    super.key,
+    super.key, 
+    this.reviewToEdit,
     this.initialStoreName,
     this.initialAddress,
     this.initialLat,
     this.initialLng,
-    this.reviewToEdit,
   });
 
   @override
@@ -57,23 +59,35 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   bool _isInitialData = false;
   bool _isEditMode = false;
 
-  // ✅ 태그 데이터 (홈 화면 검색과 일치)
-  final Map<String, List<String>> _tagCategories = {
-    '혼자서 👤': ['혼밥', '힐링', '가성비', '브런치', '포장가능', '배달', '조용한', '간편한'],
-    '둘이서 👩‍❤️‍👨': ['데이트', '기념일', '분위기맛집', '뷰맛집', '이색요리', '와인', '코스요리'],
-    '여럿이 👨‍👩‍👧‍👦': ['회식', '가족모임', '친구모임', '주차가능', '룸있음', '대화하기좋은', '넓은좌석'],
-  };
+  // ✅ 태그 데이터 (Localized Getter)
+  Map<String, List<String>> _getTagCategories(AppLocalizations l10n) {
+    return {
+      l10n.visitPurposeSolo: [
+        l10n.tagSoloEating, l10n.tagHealing, l10n.tagCostEffective, l10n.tagBrunch, 
+        l10n.tagTakeout, l10n.tagDelivery, l10n.tagQuiet, l10n.tagSimple
+      ],
+      l10n.visitPurposeCouple: [
+        l10n.tagDate, l10n.tagAnniversary, l10n.tagAtmosphere, l10n.tagView, 
+        l10n.tagExotic, l10n.tagWine, l10n.tagCourse, l10n.tagDelivery
+      ],
+      l10n.visitPurposeGroup: [
+        l10n.tagCompanyDinner, l10n.tagFamily, l10n.tagFriends, l10n.tagParking, 
+        l10n.tagPrivateRoom, l10n.tagConversation, l10n.tagSpacious, l10n.tagDelivery
+      ],
+    };
+  }
 
-  // ✅ 현재 선택된 태그 카테고리 (기본값: 혼자서)
-  String _currentTab = '혼자서 👤';
+  // ✅ 현재 선택된 태그 카테고리 인덱스
+  int _currentTabIndex = 0;
   final Set<String> _selectedTags = {};
 
   // ✅ 실시간 분석 상태
   double _predictedScore = 0.0;
   int _predictedTrust = 0;
-  String _feedbackMessage = "가장 기억에 남는 맛은 무엇이었나요?";
+  String _feedbackMessage = "";
   bool _isFeedbackWarning = false;
   bool _showAnalysis = false;
+  Timer? _debounce;
 
   // 디자인 토큰
   static const Color _brand = Color(0xFF8A2BE2);
@@ -122,40 +136,57 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_feedbackMessage.isEmpty) {
+      _feedbackMessage = AppLocalizations.of(context)!.mostMemorableTaste;
+    }
+  }
+
+  @override
   void dispose() {
     _reviewTextController.dispose();
     super.dispose();
   }
 
-  // ✅ [수정됨] 실시간 분석 및 피드백 생성
+  // ✅ [수정됨] 실시간 분석 및 피드백 생성 (Server-Side Debounce)
   void _analyzeRealTime() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+
     final text = _reviewTextController.text.trim();
-    bool hasImages = _newImages.isNotEmpty || _existingImageUrls.isNotEmpty;
-    double inputRating = _rating == 0 ? 3.0 : _rating;
-
-    try {
-      // 1. 점수 계산
-      final result = ScoreCalculator.calculateNeedsFineScore(text, inputRating, hasImages);
-
-      // 2. 피드백 메시지 생성
-      final feedback = ScoreCalculator.getFeedbackMessage(result);
-
-      setState(() {
-        _predictedScore = (result['needsfine_score'] as num).toDouble();
-        _predictedTrust = (result['trust_level'] as num).toInt();
-        _feedbackMessage = feedback['message'];
-        _isFeedbackWarning = feedback['is_warning'];
-
-        // ⚡ [수정 포인트] 글자가 1자라도 있으면 바로 보이게 변경 (기존: > 5)
-        _showAnalysis = text.isNotEmpty;
-      });
-
-      // 디버깅용: 콘솔에 찍히는지 확인하세요
-      print('실시간 분석 중: $_predictedScore점 / 신뢰도 $_predictedTrust%');
-
-    } catch (e) {
-      print('ScoreCalculator 오류 발생: $e');
+    if (text.isEmpty) {
+      if (mounted) setState(() => _showAnalysis = false);
+      return;
     }
+
+    // ⚡ 200ms Debounce: 더 빠른 반응 속도
+    _debounce = Timer(const Duration(milliseconds: 200), () async {
+      bool hasImages = _newImages.isNotEmpty || _existingImageUrls.isNotEmpty;
+      double inputRating = _rating == 0 ? 3.0 : _rating;
+
+      if (mounted) setState(() => _showAnalysis = true); // 분석 중 표시 (Optional: Loading indicator)
+
+      try {
+        final result = await ReviewService.analyzeReview(
+          text: text,
+          userRating: inputRating,
+          hasPhoto: hasImages,
+          tags: _selectedTags.toList(), // ✅ 선택된 태그 전달 (배달 등 확인용)
+        );
+
+        if (mounted) {
+          setState(() {
+            _predictedScore = result['needsfine_score'];
+            _predictedTrust = result['trust_level'];
+            _feedbackMessage = result['message'];
+            _isFeedbackWarning = result['is_warning'];
+            _showAnalysis = true;
+          });
+        }
+      } catch (e) {
+        debugPrint("분석 요청 실패: $e");
+      }
+    });
   }
 
   void _showStoreSearchSheet() {
@@ -220,7 +251,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
   Future<void> _pickImage() async {
     if ((_newImages.length + _existingImageUrls.length) >= 5) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('최대 5장까지 첨부 가능합니다')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.photoLimit)));
       return;
     }
     final ImagePicker picker = ImagePicker();
@@ -250,18 +281,18 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
   Future<void> _submitReview() async {
     if (_selectedPlace == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('가게를 검색해서 선택해주세요')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.selectStore)));
       return;
     }
     if (!_formKey.currentState!.validate()) return;
     if (_rating == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('별점을 선택해주세요')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.selectRating)));
       return;
     }
 
     if (ProfanityFilter.hasProfanity(_reviewTextController.text)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("부적절한 단어가 포함되어 있어 등록할 수 없습니다."), backgroundColor: Colors.red),
+        SnackBar(content: Text(AppLocalizations.of(context)!.profanityError), backgroundColor: Colors.red),
       );
       return;
     }
@@ -317,14 +348,14 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(_isEditMode ? '리뷰가 수정되었습니다!' : '리뷰가 등록되었습니다!'),
+            content: Text(_isEditMode ? AppLocalizations.of(context)!.reviewUpdated : AppLocalizations.of(context)!.reviewSubmitted),
             backgroundColor: const Color(0xFF9C7CFF)
         ),
       );
       Navigator.pop(context, true);
 
     } catch (e) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('처리 실패: $e')));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.processFailed(e.toString()))));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -332,17 +363,20 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
   // ✅ [수정] 태그 카테고리 탭 UI (횡스크롤)
   Widget _buildCategoryTabs() {
+    final l10n = AppLocalizations.of(context)!;
+    final categories = _getTagCategories(l10n);
+    
     return SizedBox(
       height: 40,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: _tagCategories.keys.length,
+        itemCount: categories.keys.length,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
-          final category = _tagCategories.keys.elementAt(index);
-          final isSelected = _currentTab == category;
+          final category = categories.keys.elementAt(index);
+          final isSelected = _currentTabIndex == index;
           return GestureDetector(
-            onTap: () => setState(() => _currentTab = category),
+            onTap: () => setState(() => _currentTabIndex = index),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -370,7 +404,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
 
   // ✅ [수정] 세부 태그 UI (횡스크롤 1줄)
   Widget _buildSubTags() {
-    final tags = _tagCategories[_currentTab] ?? [];
+    final l10n = AppLocalizations.of(context)!;
+    final tags = _getTagCategories(l10n).values.elementAt(_currentTabIndex);
+    
     return SizedBox(
       height: 40,
       child: ListView.separated(
@@ -422,7 +458,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
         elevation: 0,
         centerTitle: true,
         title: Text(
-          _isEditMode ? '리뷰 수정' : '리뷰 작성',
+          _isEditMode ? AppLocalizations.of(context)!.editReviewTitle : AppLocalizations.of(context)!.writeReviewTitle,
           style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black),
         ),
         iconTheme: const IconThemeData(color: Colors.black),
@@ -455,9 +491,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                       children: [
                         const Icon(Icons.search_rounded, size: 32, color: _brand),
                         const SizedBox(height: 12),
-                        const Text("방문한 맛집을 찾아주세요", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(AppLocalizations.of(context)!.findStoreTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 4),
-                        Text("정확한 장소 선택이 신뢰도의 시작입니다", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                        Text(AppLocalizations.of(context)!.findStoreSubtitle, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
                       ],
                     ),
                   ),
@@ -508,7 +544,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
               Center(
                 child: Column(
                   children: [
-                    const Text("전반적인 경험은 어떠셨나요?", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(AppLocalizations.of(context)!.ratingTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -536,7 +572,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0),
                         child: Text(
-                          '${_rating.toStringAsFixed(1)}점',
+                          '${_rating.toStringAsFixed(1)}${AppLocalizations.of(context)!.points}',
                           style: const TextStyle(fontSize: 18, color: Colors.black87, fontWeight: FontWeight.w800),
                         ),
                       ),
@@ -547,7 +583,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
               const SizedBox(height: 32),
 
               // ✅ 3. 방문 목적 태그 (수정됨: 횡스크롤 탭 + 횡스크롤 태그)
-              const Text("이곳의 특징을 선택해주세요", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(AppLocalizations.of(context)!.featureTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
 
               _buildCategoryTabs(), // 상단 카테고리
@@ -576,13 +612,13 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                             maxLength: 500,
                             style: const TextStyle(fontSize: 15, height: 1.6),
                             decoration: InputDecoration(
-                              hintText: '메뉴의 맛, 매장의 분위기, 직원 서비스 등\n솔직한 경험을 공유해주세요.',
+                              hintText: AppLocalizations.of(context)!.reviewHint,
                               hintStyle: TextStyle(color: Colors.grey[400]),
                               border: InputBorder.none,
                               counterText: "",
                             ),
                             onChanged: (_) => _analyzeRealTime(),
-                            validator: (value) => (value == null || value.trim().isEmpty) ? '내용을 입력해주세요' : null,
+                            validator: (value) => (value == null || value.trim().isEmpty) ? AppLocalizations.of(context)!.suggestionHint : null,
                           ),
                         ),
 
@@ -608,36 +644,43 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                                   children: [
-                                    _buildScoreMetric("예상 점수", _predictedScore.toStringAsFixed(1), true),
+                                    _buildScoreMetric(AppLocalizations.of(context)!.predictedNeedsFineScore, _predictedScore.toStringAsFixed(1), true),
                                     Container(width: 1, height: 30, color: Colors.white.withOpacity(0.3)),
-                                    _buildScoreMetric("신뢰도", "$_predictedTrust%", false),
+                                    _buildScoreMetric(AppLocalizations.of(context)!.reliability, "$_predictedTrust%", false),
                                   ],
                                 ),
-                                const SizedBox(height: 16),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.white.withOpacity(0.3)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                          _isFeedbackWarning ? Icons.warning_amber_rounded : Icons.auto_awesome,
-                                          color: Colors.white, size: 20
+                                    const SizedBox(height: 16),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: Colors.white.withOpacity(0.3)),
                                       ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          _feedbackMessage,
-                                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                      child: Row(
+                                      children: [
+                                        // Icon removed as per user request
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              // Message
+                                              Text(
+                                                _feedbackMessage,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  height: 1.3,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
                             ),
                           ),
                       ],
@@ -681,7 +724,9 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                 ),
               ),
 
-              const SizedBox(height: 40),
+              _buildGuidelines(),
+              
+              const SizedBox(height: 24),
 
               ElevatedButton(
                   onPressed: _isSubmitting ? null : _submitReview,
@@ -695,13 +740,55 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                   ),
                   child: _isSubmitting
                       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                      : Text(_isEditMode ? '수정 완료' : '리뷰 등록하기')
+                      : Text(_isEditMode ? AppLocalizations.of(context)!.editReviewComplete : AppLocalizations.of(context)!.submitReviewTitle)
               ),
               const SizedBox(height: 40),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGuidelines() {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      margin: const EdgeInsets.only(top: 32),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline_rounded, size: 16, color: Colors.grey[600]),
+              const SizedBox(width: 6),
+              Text(l10n.guideTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildGuidelineItem(l10n.guide1Title, l10n.guide1Desc),
+          const SizedBox(height: 8),
+          _buildGuidelineItem(l10n.guide2Title, l10n.guide2Desc), 
+          const SizedBox(height: 8),
+          _buildGuidelineItem(l10n.guide3Title, l10n.guide3Desc),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuidelineItem(String title, String content) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("• $title", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey[800])),
+        const SizedBox(height: 2),
+        Text(content, style: TextStyle(fontSize: 11, color: Colors.grey[600], height: 1.4)),
+      ],
     );
   }
 
@@ -815,7 +902,7 @@ class _StoreSearchContentState extends State<_StoreSearchContent> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("어디를 다녀오셨나요?", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
+              Text(AppLocalizations.of(context)!.whereDidYouGo, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
               const SizedBox(height: 16),
               Container(
                 decoration: BoxDecoration(
@@ -827,12 +914,12 @@ class _StoreSearchContentState extends State<_StoreSearchContent> {
                   controller: _controller,
                   autofocus: true,
                   onChanged: _onSearchChanged,
-                  decoration: const InputDecoration(
-                    hintText: '가게 이름 검색 (예: 스타벅스)',
-                    hintStyle: TextStyle(color: Colors.grey),
-                    prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF8A2BE2)),
+                  decoration: InputDecoration(
+                    hintText: AppLocalizations.of(context)!.searchStoreName,
+                    hintStyle: const TextStyle(color: Colors.grey),
+                    prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF8A2BE2)),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   ),
                 ),
               ),
@@ -847,10 +934,10 @@ class _StoreSearchContentState extends State<_StoreSearchContent> {
               ? Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.store_mall_directory_rounded, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text("검색 결과가 없습니다.", style: TextStyle(color: Colors.grey, fontSize: 16)),
+              children: [
+                const Icon(Icons.store_mall_directory_rounded, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(AppLocalizations.of(context)!.noSearchResults, style: const TextStyle(color: Colors.grey, fontSize: 16)),
               ],
             ),
           )

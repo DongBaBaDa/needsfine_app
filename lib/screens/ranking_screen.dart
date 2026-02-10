@@ -15,6 +15,7 @@ import 'package:needsfine_app/core/search_trigger.dart';
 
 // ✅ 다국어 패키지 임포트
 import 'package:needsfine_app/l10n/app_localizations.dart';
+import 'package:needsfine_app/widgets/draggable_fab.dart';
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
@@ -350,52 +351,63 @@ class _RankingScreenState extends State<RankingScreen> {
           )
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9C7CFF))))
-          : Column(
-        children: [
-          if (_stats != null) _buildStatsHeader(l10n),
-          _buildSortControls(l10n),
-          const Divider(height: 1),
-          Expanded(
-            child: DefaultTabController(
-              length: 2,
-              child: Builder(builder: (context) {
-                final tabController = DefaultTabController.of(context);
-                tabController.addListener(() {
-                  if (!tabController.indexIsChanging) {
-                    setState(() => _tabIndex = tabController.index);
-                  }
-                });
-                return Column(
-                  children: [
-                    TabBar(
-                      labelColor: const Color(0xFF9C7CFF),
-                      unselectedLabelColor: Colors.grey,
-                      indicatorColor: const Color(0xFF9C7CFF),
-                      tabs: [
-                        Tab(text: l10n.reviewList),
-                        Tab(text: l10n.storeRanking)
-                      ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9C7CFF))))
+                  : Column(
+                children: [
+                  if (_stats != null) _buildStatsHeader(l10n),
+                  _buildSortControls(l10n),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: DefaultTabController(
+                      length: 2,
+                      child: Builder(builder: (context) {
+                        final tabController = DefaultTabController.of(context);
+                        tabController.addListener(() {
+                          if (!tabController.indexIsChanging) {
+                            setState(() => _tabIndex = tabController.index);
+                          }
+                        });
+                        return Column(
+                          children: [
+                            TabBar(
+                              labelColor: const Color(0xFF9C7CFF),
+                              unselectedLabelColor: Colors.grey,
+                              indicatorColor: const Color(0xFF9C7CFF),
+                              tabs: [
+                                Tab(text: l10n.reviewList),
+                                Tab(text: l10n.storeRanking)
+                              ],
+                            ),
+                            Expanded(
+                              child: TabBarView(children: [_buildReviewList(l10n), _buildStoreRankingList(l10n)]),
+                            ),
+                          ],
+                        );
+                      }),
                     ),
-                    Expanded(
-                      child: TabBarView(children: [_buildReviewList(l10n), _buildStoreRankingList(l10n)]),
-                    ),
-                  ],
-                );
-              }),
-            ),
-          ),
-        ],
+                  ),
+                ],
+              ),
+              DraggableFloatingActionButton(
+                heroTag: 'ranking_write_fab',
+                initialOffset: Offset(constraints.maxWidth - 80, constraints.maxHeight - 100),
+                parentHeight: constraints.maxHeight,
+                onPressed: () async {
+                  final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const WriteReviewScreen()));
+                  if (result == true) _loadInitialData(isRefresh: true);
+                },
+                child: const Icon(Icons.edit, color: Colors.white),
+              ),
+            ],
+          );
+        }
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const WriteReviewScreen()));
-          if (result == true) _loadInitialData(isRefresh: true);
-        },
-        backgroundColor: const Color(0xFF9C7CFF),
-        child: const Icon(Icons.edit, color: Colors.white),
-      ),
+      // floatingActionButton: Removed
     );
   }
 
@@ -463,7 +475,9 @@ class _RankingScreenState extends State<RankingScreen> {
             child: Container(
               height: constraints.maxHeight,
               alignment: Alignment.center,
-              child: Text(l10n.noListGenerated),
+              child: Text(
+                _reviewSortOption == '쓴소리' ? l10n.noBitterReviews : l10n.noListGenerated,
+              ),
             ),
           ),
         ),

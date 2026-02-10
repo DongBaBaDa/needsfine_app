@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
+import 'package:needsfine_app/screens/admin/admin_inquiry_detail_screen.dart';
 import 'notice_write_screen.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -30,12 +32,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text("관리자 대시보드", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: Text(l10n.adminDashboard, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black),
         bottom: TabBar(
@@ -45,10 +48,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
           indicatorColor: _brand,
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          tabs: const [
-            Tab(text: "건의사항"),
-            Tab(text: "1:1 문의"),
-            Tab(text: "공지사항"),
+          tabs: [
+            Tab(text: l10n.suggestions),
+            Tab(text: l10n.inquiry),
+            Tab(text: l10n.notices),
           ],
         ),
       ),
@@ -83,17 +86,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     return FutureBuilder(
       future: _supabase.from('suggestions').select('*, profiles(nickname)').order('created_at', ascending: false),
       builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text("오류 발생: ${snapshot.error}")); // 에러 표시
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final list = snapshot.data as List<dynamic>;
+        final l10n = AppLocalizations.of(context)!;
 
         if (list.isEmpty) {
-          return _buildEmptyState("받은 건의사항이 없습니다.", Icons.inbox_outlined);
+          return _buildEmptyState(l10n.noSuggestions, Icons.inbox_outlined);
         }
 
         return RefreshIndicator(
           onRefresh: () async => setState(() {}),
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 100), // Add bottom padding
             itemCount: list.length,
             separatorBuilder: (_, __) => const Divider(height: 1, indent: 72, endIndent: 16),
             itemBuilder: (context, index) => _buildItemTile(
@@ -116,15 +121,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final list = snapshot.data as List<dynamic>;
+        final l10n = AppLocalizations.of(context)!;
 
         if (list.isEmpty) {
-          return _buildEmptyState("받은 1:1 문의가 없습니다.", Icons.mail_outline);
+          return _buildEmptyState(l10n.noInquiries, Icons.mail_outline);
         }
 
         return RefreshIndicator(
           onRefresh: () async => setState(() {}),
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 100), // Add bottom padding
             itemCount: list.length,
             separatorBuilder: (_, __) => const Divider(height: 1, indent: 72, endIndent: 16),
             itemBuilder: (context, index) => _buildItemTile(
@@ -147,9 +153,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final list = snapshot.data as List<dynamic>;
+        final l10n = AppLocalizations.of(context)!;
 
         if (list.isEmpty) {
-          return _buildEmptyState("등록된 공지사항이 없습니다.\n+ 버튼을 눌러 작성하세요.", Icons.campaign_outlined);
+          return _buildEmptyState(l10n.noNoticesAdmin, Icons.campaign_outlined);
         }
 
         return RefreshIndicator(
@@ -172,7 +179,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   ),
                   child: const Icon(Icons.campaign, color: _brand),
                 ),
-                title: Text(item['title'] ?? '제목 없음',
+                title: Text(item['title'] ?? l10n.noTitle,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                 subtitle: Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -183,7 +190,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
                   onPressed: () => _deleteNotice(item['id']),
                 ),
                 onTap: () => _showDetailDialog(
-                  title: item['title'] ?? '공지사항',
+                  title: item['title'] ?? l10n.notice,
                   content: item['content'] ?? '',
                   date: date,
                 ),
@@ -204,7 +211,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     required String contentKey,
   }) {
     final date = DateFormat('MM.dd HH:mm').format(DateTime.parse(item['created_at']));
-    final nickname = item['profiles']?['nickname'] ?? '익명';
+    final l10n = AppLocalizations.of(context)!;
+    final nickname = item['profiles']?['nickname'] ?? l10n.anonymous;
     final content = item[contentKey] ?? '';
     final email = item['email'] ?? '';
 
@@ -236,16 +244,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             Text(nickname, style: TextStyle(color: Colors.grey[600], fontSize: 12, fontWeight: FontWeight.w500)),
             Text(" · ", style: TextStyle(color: Colors.grey[400])),
             Text(date, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+            if (type == 'feedback') ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: item['answer'] != null ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  item['answer'] != null ? l10n.completed : l10n.pending,
+                  style: TextStyle(
+                    color: item['answer'] != null ? Colors.green : Colors.red,
+                    fontSize: 10, 
+                    fontWeight: FontWeight.bold
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
-      onTap: () => _showDetailDialog(
-        title: type == 'suggestion' ? '건의사항' : '1:1 문의',
-        content: content,
-        date: date,
-        sender: nickname,
-        email: email,
-      ),
+      onTap: () async {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AdminInquiryDetailScreen(
+              data: item,
+              type: type,
+            ),
+          ),
+        );
+        if (result == true) setState(() {});
+      },
     );
   }
 
@@ -275,6 +306,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
     String? sender,
     String? email,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -291,11 +323,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
             mainAxisSize: MainAxisSize.min,
             children: [
               if (sender != null) ...[
-                Text("보낸 사람: $sender", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                Text("${l10n.sender}: $sender", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                 const SizedBox(height: 4),
               ],
               if (email != null && email.isNotEmpty) ...[
-                Text("이메일: $email", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                Text("Email: $email", style: TextStyle(color: Colors.grey[600], fontSize: 13)), // Email is mostly universal
                 const SizedBox(height: 12),
               ],
               Container(
@@ -312,7 +344,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("닫기"),
+            child: Text(AppLocalizations.of(context)!.close),
           ),
         ],
       ),
@@ -323,16 +355,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
   // 공지사항 삭제
   // ───────────────────────────────────────────────────────────────
   Future<void> _deleteNotice(String id) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("공지사항 삭제"),
-        content: const Text("정말 삭제하시겠습니까?"),
+        title: Text(l10n.deleteNotice),
+        content: Text(l10n.deleteConfirm),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("취소")),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("삭제", style: TextStyle(color: Colors.red)),
+            child: Text(l10n.delete, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class MyListDetailScreen extends StatefulWidget {
   final String listId;
@@ -55,7 +56,6 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
       final rows = await _supabase
           .from('user_list_items')
           .select('review_id, created_at')
-          .eq('user_id', userId)
           .eq('list_id', widget.listId)
           .order('created_at', ascending: false);
 
@@ -220,13 +220,15 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
       );
 
       await _fetchListItems();
+  // ... inside _addReviewsToList ...
+      await _fetchListItems();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("리스트에 추가했습니다.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.addedToList)));
       }
     } catch (e) {
       debugPrint('리스트 추가 실패: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("추가에 실패했습니다.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.addFailed)));
       }
     }
   }
@@ -247,12 +249,13 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
     } catch (e) {
       debugPrint('리스트 항목 삭제 실패: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("삭제에 실패했습니다.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.deleteFailed)));
       }
     }
   }
 
   Future<void> _openAddBottomSheet() async {
+    final l10n = AppLocalizations.of(context)!;
     // ✅ 이미 리스트에 들어있는 "매장"을 (storeName+address 정규화) 기준으로 집합화
     final existingStorePairs = _items
         .map((e) => _pairKey(e.storeName, e.storeAddress))
@@ -264,7 +267,7 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
     if (!mounted) return;
 
     if (savedStores.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("저장한 매장이 없습니다.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.noSavedStores)));
       return;
     }
 
@@ -292,9 +295,9 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                       decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(99)),
                     ),
                     const SizedBox(height: 12),
-                    const Align(
+                    Align(
                       alignment: Alignment.centerLeft,
-                      child: Text("저장한 매장 추가", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                      child: Text(l10n.addSavedStore, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -345,7 +348,7 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(color: already ? Colors.grey : Colors.grey[600], fontSize: 12),
                             ),
-                            trailing: already ? const Text("추가됨", style: TextStyle(color: Colors.grey, fontSize: 12)) : null,
+                            trailing: already ? Text(l10n.added, style: const TextStyle(color: Colors.grey, fontSize: 12)) : null,
                           );
                         },
                       ),
@@ -371,7 +374,7 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                           if (reviewIds.isEmpty) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("추가할 수 있는 리뷰가 없는 매장입니다.")),
+                                SnackBar(content: Text(l10n.noReviewsForStore)),
                               );
                             }
                             return;
@@ -387,7 +390,7 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         child: Text(
-                          selectedStoreKeys.isEmpty ? "추가할 항목을 선택하세요" : "${selectedStoreKeys.length}개 추가하기",
+                          selectedStoreKeys.isEmpty ? l10n.selectItemsToAdd : l10n.addNItems(selectedStoreKeys.length),
                           style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                       ),
@@ -404,6 +407,7 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
@@ -415,18 +419,18 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
           IconButton(
             onPressed: _openAddBottomSheet, // ✅ (요청 1) 리스트에서 +로 저장한 매장 추가
             icon: const Icon(Icons.add, color: Colors.black),
-            tooltip: "저장한 매장 추가",
+            tooltip: l10n.addSavedStore,
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
-          ? const Center(
+          ? Center(
         child: Text(
-          "아직 리스트에 담긴 매장이 없습니다.\n우측 상단 +로 저장한 매장을 추가해보세요.",
+          l10n.emptyListHint,
           textAlign: TextAlign.center,
-          style: TextStyle(color: Color(0xFF6B6B6F), height: 1.4),
+          style: const TextStyle(color: Color(0xFF6B6B6F), height: 1.4),
         ),
       )
           : ListView.separated(
@@ -455,7 +459,7 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
               subtitle: Text(r.storeAddress ?? "", maxLines: 1, overflow: TextOverflow.ellipsis),
               trailing: IconButton(
                 icon: const Icon(Icons.close_rounded, color: Colors.grey),
-                tooltip: "리스트에서 제거",
+                tooltip: l10n.removeFromList,
                 onPressed: () => _removeFromList(rid),
               ),
             ),

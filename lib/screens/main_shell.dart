@@ -6,6 +6,7 @@ import 'package:needsfine_app/screens/home_screen.dart';
 import 'package:needsfine_app/screens/ranking_screen.dart' as ranking;
 import 'package:needsfine_app/screens/nearby_screen.dart';
 import 'package:needsfine_app/screens/user_mypage_screen.dart';
+import 'package:needsfine_app/screens/feed_screen.dart';
 
 // ✅ SearchTarget이 정의된 파일 임포트
 import 'package:needsfine_app/core/search_trigger.dart';
@@ -28,8 +29,9 @@ class _MainShellState extends State<MainShell> {
   final List<Widget> _widgetOptions = const <Widget>[
     HomeScreen(),                 // 0: 홈
     ranking.RankingScreen(),      // 1: 랭킹 (리뷰)
-    NearbyScreen(),               // 2: 내 주변
-    UserMyPageScreen(),           // 3: 마이파인
+    FeedScreen(),                 // 2: 피드
+    NearbyScreen(),               // 3: 내 주변
+    UserMyPageScreen(),           // 4: 마이파인
   ];
 
   @override
@@ -49,7 +51,7 @@ class _MainShellState extends State<MainShell> {
     // ✅ [수정] SearchTarget 객체의 query 필드를 확인
     if (target != null && target.query.isNotEmpty) {
       if (mounted) {
-        setState(() => _selectedIndex = 2); // 내 주변 탭으로 이동
+        setState(() => _selectedIndex = 3); // 내 주변 탭으로 이동 (이제 인덱스 3)
       }
     }
   }
@@ -94,8 +96,7 @@ class _MainShellState extends State<MainShell> {
             fontWeight: FontWeight.w500,
             fontFamily: 'NotoSansKR',
           ),
-          // ✅ [수정] 라벨을 l10n 변수로 교체
-          items: [
+            items: [
             BottomNavigationBarItem(
               icon: const Icon(Icons.home_rounded),
               label: l10n.home, // "홈"
@@ -103,6 +104,17 @@ class _MainShellState extends State<MainShell> {
             BottomNavigationBarItem(
               icon: const Icon(Icons.emoji_events_rounded),
               label: l10n.review, // "리뷰"
+            ),
+            BottomNavigationBarItem(
+              icon: Container(
+                padding: const EdgeInsets.all(8.0),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFC87CFF), // Primary color
+                ),
+                child: const Icon(Icons.add, color: Colors.white),
+              ),
+              label: l10n.feed, // "피드"
             ),
             BottomNavigationBarItem(
               icon: const Icon(Icons.location_on_rounded),

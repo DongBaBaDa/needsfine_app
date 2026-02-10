@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
 
 class SuggestionWriteScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _SuggestionWriteScreenState extends State<SuggestionWriteScreen> {
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("소중한 의견이 전달되었습니다.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.saved)));
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("전송 실패: $e")));
@@ -42,45 +43,46 @@ class _SuggestionWriteScreenState extends State<SuggestionWriteScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFFDF9),
-      appBar: AppBar(title: const Text("건의사항 보내기")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const Text(
-              "니즈파인 발전을 위한 의견을 남겨주세요.\n관리자가 직접 확인 후 반영하겠습니다.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: TextField(
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.sendSuggestionTitle)),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              Text(
+                AppLocalizations.of(context)!.suggestionGuide,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 20),
+              TextField(
                 controller: _controller,
-                maxLines: 10,
+                maxLines: 12, // 높이 소폭 조정
                 decoration: InputDecoration(
-                  hintText: "내용을 입력해주세요...",
+                  hintText: AppLocalizations.of(context)!.suggestionHint,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   filled: true,
                   fillColor: Colors.white,
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isSending ? null : _submitSuggestion,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kNeedsFinePurple,
-                  foregroundColor: Colors.white,
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: _isSending ? null : _submitSuggestion,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kNeedsFinePurple,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _isSending
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(AppLocalizations.of(context)!.sendAction, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
-                child: _isSending
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("보내기", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

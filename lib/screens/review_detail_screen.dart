@@ -10,6 +10,7 @@ import 'package:needsfine_app/screens/write_review_screen.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart';
 // ✅ 비속어 필터 임포트
 import 'package:needsfine_app/core/profanity_filter.dart';
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 class ReviewDetailScreen extends StatefulWidget {
   final Review review;
@@ -33,18 +34,11 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   // ✅ 유저 프로필 상태 관리 (홈에서 안 넘어왔을 경우 대비)
   late String _nickname;
   String? _userProfileUrl;
+  String? _myNickname; // ✅ 내 닉네임 (알림용)
 
   // 디자인 토큰
   static const Color _brand = Color(0xFF8A2BE2);
   static const Color _bg = Color(0xFFF2F2F7);
-
-  final List<String> _reportReasons = [
-    "비방 및 불건전한 내용 (욕설, 비방, 비하, 선정성, 음담패설)",
-    "부적절한 게시물 (도배, 허위사실 유포, 명예훼손, 저작권 침해)",
-    "개인정보 및 광고 (개인정보 노출, 광고/영업/홍보)",
-    "불법 행위 (불법 매크로, 사기, 관련 법령 위반, 대리 행위)",
-    "서비스 관련 (카테고리 오선택, 유효하지 않은 정보)",
-  ];
 
   @override
   void initState() {
@@ -59,6 +53,16 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     _checkSaveStatus();
     _checkReportStatus();
     _checkAndFetchProfile(); // ✅ 프로필 누락 확인 및 로드
+    _fetchMyProfile(); // ✅ 내 정보 로드
+    _incrementViewCount();
+  }
+
+  Future<void> _incrementViewCount() async {
+    try {
+      await ReviewService.incrementViewCount(widget.review.id);
+    } catch (e) {
+      debugPrint("조회수 증가 실패: $e");
+    }
   }
 
   @override
@@ -93,6 +97,20 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     final currentUserId = _supabase.auth.currentUser?.id;
     if (currentUserId != null && widget.review.userId == currentUserId) {
       if (mounted) setState(() => _isOwner = true);
+    }
+  }
+
+  // ✅ 내 닉네임 가져오기
+  Future<void> _fetchMyProfile() async {
+    final myId = _supabase.auth.currentUser?.id;
+    if (myId == null) return;
+    try {
+      final data = await _supabase.from('profiles').select('nickname').eq('id', myId).maybeSingle();
+      if (data != null) {
+        _myNickname = data['nickname'];
+      }
+    } catch (e) {
+      debugPrint("내 프로필 로드 실패: $e");
     }
   }
 
@@ -229,6 +247,22 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
           },
           onConflict: 'user_id,review_id', // DB의 Unique Key 제약조건 컬럼
         );
+
+        // ✅ 좋아요 알림 전송 (내가 쓴 글이 아닐 때만)
+        if (widget.review.userId != null && widget.review.userId != userId && _myNickname != null) {
+           try {
+             final l10n = AppLocalizations.of(context)!;
+             await _supabase.from('notifications').insert({
+               'receiver_id': widget.review.userId,
+               'type': 'like',
+               'reference_id': widget.review.id.toString(), // review ID
+               'title': l10n.notificationLikeTitle,
+               'content': l10n.notificationLikeContent(_myNickname!, widget.review.storeName),
+             });
+           } catch (e) {
+             debugPrint("알림 전송 실패: $e");
+           }
+        }
       }
     } catch (e) {
       // 4. 실패 시 롤백
@@ -240,17 +274,28 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     }
   }
 
+  // ... inside _ReviewDetailScreenState
+
   void _onReportPressed() {
+    final l10n = AppLocalizations.of(context)!;
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.loginRequired)));
       return;
     }
 
     if (_isReported) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("이미 신고한 리뷰입니다.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.alreadyReported)));
       return;
     }
+
+    final reasonList = [
+      l10n.reportReason1,
+      l10n.reportReason2,
+      l10n.reportReason3,
+      l10n.reportReason4,
+      l10n.reportReason5,
+    ];
 
     showModalBottomSheet(
       context: context,
@@ -262,16 +307,16 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 24, 20, 10),
-                child: Text("신고 사유 선택", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
+                child: Text(l10n.report, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Text("신고 사유에 해당하는 항목을 선택해주세요.", style: TextStyle(fontSize: 13, color: Colors.grey)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text("신고 사유에 해당하는 항목을 선택해주세요.", style: TextStyle(fontSize: 13, color: Colors.grey)), // TODO: Localize this description if needed
               ),
               const SizedBox(height: 10),
-              ..._reportReasons.map((reason) => ListTile(
+              ...reasonList.map((reason) => ListTile(
                 title: Text(reason, style: const TextStyle(fontSize: 14)),
                 onTap: () {
                   Navigator.pop(context);
@@ -291,6 +336,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     if (userId == null) return;
 
     setState(() => _isReported = true);
+    final l10n = AppLocalizations.of(context)!;
 
     try {
       await _supabase.from('reports').insert({
@@ -302,7 +348,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("신고가 접수되었습니다. 24시간 내에 검토됩니다.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.reportSubmitted)));
       }
     } catch (e) {
       debugPrint("신고 전송 실패: $e");
@@ -327,53 +373,73 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("로그인이 필요합니다.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.loginRequired)));
       return;
     }
 
     try {
-      // 1. 댓글 생성
-      final response = await _supabase.from('comments').insert({
+      await _supabase.from('comments').insert({
         'review_id': widget.review.id,
         'user_id': userId,
         'content': text,
-      }).select().single();
+      });
 
-      // 2. 댓글 알림 생성 (DB Trigger 'tr_comment_notification'에서 자동 처리됨)
-      // 중복 방지를 위해 앱 내 수동 생성 로직 삭제함
+      // ✅ 댓글 알림 전송 (내가 쓴 글이 아닐 때만)
+      if (widget.review.userId != null && widget.review.userId != userId && _myNickname != null) {
+          try {
+            await _supabase.from('notifications').insert({
+              'receiver_id': widget.review.userId,
+              'type': 'comment',
+              'reference_id': widget.review.id.toString(), // review ID
+              'title': l10n.notificationCommentTitle,
+              'content': l10n.notificationCommentContent(_myNickname!, text),
+            });
+          } catch (e) {
+             debugPrint("댓글 알림 전송 실패: $e");
+          }
+      }
 
       _commentController.clear();
       FocusScope.of(context).unfocus();
       _fetchComments();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("댓글 등록 실패: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("댓글 등록 실패: $e")));
     }
   }
 
   Future<void> _onDeletePressed() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("삭제 확인"),
-        content: const Text("정말로 리뷰를 삭제하시겠습니까? 복구할 수 없습니다."),
+        title: Text(l10n.deleteConfirmTitle),
+        content: Text(l10n.deleteConfirmContent),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("취소")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("삭제", style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel, style: const TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.deleteAction, style: const TextStyle(color: Colors.red)),
+          ),
         ],
       ),
     );
 
-    if (confirm == true) {
-      try {
-        await ReviewService.deleteReview(widget.review.id);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("리뷰가 삭제되었습니다.")));
-          Navigator.pop(context, true);
-        }
-      } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("삭제 실패: $e")));
+    if (confirm != true) return;
+
+    try {
+      await ReviewService.deleteReview(widget.review.id);
+      if (mounted) {
+        Navigator.pop(context, true); // 삭제 후 true 반환
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("삭제 실패: $e")));
       }
     }
   }
@@ -404,6 +470,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.white, // ✅ 전체 배경을 흰색으로 통일하여 분절감 제거
       appBar: AppBar(
@@ -443,7 +510,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                   // 3. 유저 정보 & 별점
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _buildUserInfo(),
+                    child: _buildUserInfo(l10n),
                   ),
 
                   const SizedBox(height: 20),
@@ -455,7 +522,15 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // 니즈파인 배지
-                        _buildBadges(),
+                        _buildBadges(l10n),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(Icons.remove_red_eye_outlined, size: 14, color: Colors.grey[400]),
+                            const SizedBox(width: 4),
+                            Text("${l10n.viewCount} ${widget.review.viewCount}", style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                          ],
+                        ),
                         const SizedBox(height: 20),
 
                         // 본문 텍스트
@@ -490,21 +565,21 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         _buildActionButton(
-                          label: "도움돼요",
+                          label: l10n.helpful,
                           isActive: _isLiked,
                           icon: _isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined,
                           activeColor: _brand,
                           onTap: _toggleLike,
                         ),
                         _buildActionButton(
-                          label: "저장하기",
+                          label: l10n.save,
                           isActive: _isSaved,
                           icon: _isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
                           activeColor: _brand,
                           onTap: _toggleSave,
                         ),
                         _buildActionButton(
-                          label: "신고",
+                          label: l10n.report,
                           isActive: _isReported,
                           icon: Icons.campaign_rounded,
                           activeColor: Colors.red,
@@ -525,14 +600,14 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("댓글 ${_comments.length}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                        Text("${l10n.comments} ${_comments.length}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 16),
                         _isLoadingComments
                             ? const Center(child: CircularProgressIndicator(color: _brand))
                             : _comments.isEmpty
-                            ? const Padding(
-                          padding: EdgeInsets.all(32.0),
-                          child: Center(child: Text("아직 댓글이 없습니다.\n첫 댓글을 남겨보세요!", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey))),
+                            ? Padding(
+                          padding: const EdgeInsets.all(32.0),
+                          child: Center(child: Text(l10n.noComments, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey))),
                         )
                             : ListView.separated(
                           physics: const NeverScrollableScrollPhysics(),
@@ -546,7 +621,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                             final text = comment['content'] ?? '';
                             final profileUrl = profile['profile_image_url'];
                             final userId = comment['user_id'];
-                            final commentId = comment['id'];
+                            final commentId = comment['id'].toString();
                             final isMine = userId != null && userId == _supabase.auth.currentUser?.id;
 
                             return _buildCommentItem(commentId, user, text, profileUrl, userId, isMine);
@@ -566,55 +641,47 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     );
   }
 
-  // ✅ [수정] 박스 제거하고 타이틀 형태로 변경
   Widget _buildStoreHeader() {
-    return GestureDetector(
-      onTap: _navigateToMap,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        widget.review.storeName,
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.black, height: 1.2),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.black54),
-                  ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: _navigateToMap,
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  widget.review.storeName,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.black, height: 1.2),
                 ),
-                const SizedBox(height: 8),
-                if (widget.review.storeAddress != null)
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_rounded, size: 14, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          widget.review.storeAddress!,
-                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              if (widget.review.storeName.isNotEmpty)
+                const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.black54),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        if (widget.review.storeAddress != null)
+          Row(
+            children: [
+              const Icon(Icons.location_on_rounded, size: 14, color: Colors.grey),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  widget.review.storeAddress!,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+      ],
     );
   }
 
-  // ✅ [수정] 별점 표기 변경 및 로컬 상태 변수 사용
-  Widget _buildUserInfo() {
+  Widget _buildUserInfo(AppLocalizations l10n) {
     return Row(
       children: [
         InkWell(
@@ -651,7 +718,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const Text("사용자 별점", style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)), // ✅ 라벨 추가
+            Text(l10n.userRating, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)), // ✅ 라벨 추가
             const SizedBox(height: 2),
             StarRating(rating: widget.review.userRating, size: 18),
           ],
@@ -660,14 +727,13 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
     );
   }
 
-  // ✅ [수정] 니즈파인 한글 표기 적용
-  Widget _buildBadges() {
+  Widget _buildBadges(AppLocalizations l10n) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        _buildBadgeTag('니즈파인', widget.review.needsfineScore.toStringAsFixed(1), _brand),
-        _buildBadgeTag('신뢰도', '${widget.review.trustLevel}%', Colors.blueGrey),
+        _buildBadgeTag(l10n.needsFine, widget.review.needsfineScore.toStringAsFixed(1), _brand),
+        _buildBadgeTag(l10n.trustScore, '${widget.review.trustLevel}%', Colors.blueGrey),
       ],
     );
   }
@@ -757,6 +823,7 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
   }
 
   Widget _buildCommentItem(String commentId, String user, String text, String? profileUrl, String? userId, bool isMine) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -768,9 +835,13 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
           },
           child: CircleAvatar(
             radius: 16,
-            backgroundColor: Colors.grey[100],
-            backgroundImage: profileUrl != null ? NetworkImage(profileUrl) : null,
-            child: profileUrl == null ? const Icon(Icons.person, size: 18, color: Colors.grey) : null,
+            backgroundColor: Colors.grey[200],
+            backgroundImage: (profileUrl != null && profileUrl.isNotEmpty)
+                ? CachedNetworkImageProvider(profileUrl)
+                : null,
+            child: (profileUrl == null || profileUrl.isEmpty)
+                ? const Icon(Icons.person, size: 16, color: Colors.grey)
+                : null,
           ),
         ),
         const SizedBox(width: 12),
@@ -779,7 +850,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   InkWell(
                     onTap: () {
@@ -787,8 +857,9 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(userId: userId)));
                       }
                     },
-                    child: Text(user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    child: Text(user.isEmpty ? l10n.unknownUser : user, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
+                  const Spacer(),
                   if (isMine)
                     SizedBox(
                       height: 24,
@@ -800,19 +871,25 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                           if (value == 'edit') _editComment(commentId, text);
                           if (value == 'delete') _deleteComment(commentId);
                         },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(value: 'edit', height: 32, child: Text('수정', style: TextStyle(fontSize: 13))),
-                          const PopupMenuItem(value: 'delete', height: 32, child: Text('삭제', style: TextStyle(fontSize: 13, color: Colors.red))),
+                        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                          PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Text(l10n.edit),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Text(l10n.deleteAction, style: const TextStyle(color: Colors.red)),
+                          ),
                         ],
                       ),
                     ),
                 ],
               ),
-              const SizedBox(height: 2),
-              Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4)),
+              const SizedBox(height: 4),
+              Text(text, style: const TextStyle(fontSize: 14, height: 1.4)),
             ],
           ),
-        )
+        ),
       ],
     );
   }

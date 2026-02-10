@@ -100,10 +100,18 @@
   "loading": "Carregando...",
   "followNotification": "{name} te seguiu",
   "@followNotification": {"placeholders": {"name": {}}},
-  "startFollowingMessage": "Seguindo {name}",
-  "@startFollowingMessage": {"placeholders": {"name": {}}},
   "unfollowMessage": "Deixou de seguir {name}",
   "@unfollowMessage": {"placeholders": {"name": {}}},
+  "deleteAction": "Excluir",
+  "unknownStore": "Loja desc.",
+  "notices": "Avisos",
+  "writeNotice": "Criar",
+  "followMessage": "Seguindo {nickname}",
+  "@followMessage": {
+    "placeholders": {
+      "nickname": {}
+    }
+  },
   "emailLogin": "Login Email",
   "welcomeBack": "Bem-vindo!\nFaça login com seu email.",
   "emailAddress": "Email",

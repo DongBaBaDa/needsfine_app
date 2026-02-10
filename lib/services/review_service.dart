@@ -4,6 +4,9 @@ import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/config/supabase_config.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:needsfine_app/services/genius_feedback_service.dart';
+import 'package:flutter/foundation.dart';
+
 
 class ReviewService {
   static final _supabase = Supabase.instance.client;
@@ -183,6 +186,18 @@ class ReviewService {
     }
   }
 
+  // 조회수 증가
+  static Future<void> incrementViewCount(String reviewId) async {
+    try {
+      // ✅ [Fix] Use dedicated RPC for review view count
+      await _supabase.rpc('increment_review_view_count', params: {
+        'row_id': reviewId
+      });
+    } catch (e) {
+      debugPrint("❌ 조회수 증가 실패: $e");
+    }
+  }
+
   // --- 좋아요 (Toggle Like) ---
   static Future<bool> toggleLike(String reviewId) async {
     try {
@@ -230,6 +245,54 @@ class ReviewService {
     } catch (e) {
       print('❌ 좋아요 처리 에러: $e');
       rethrow;
+    }
+  }
+
+
+
+  // ✅ [New] 실시간 리뷰 분석 (Server Only)
+  static Future<Map<String, dynamic>> analyzeReview({
+    required String text,
+    required double userRating,
+    required bool hasPhoto,
+    required List<String> tags, // ✅ 태그 파라미터 추가
+  }) async {
+    try {
+      // 1. 서버 시도 (Edge Function, 10초 타임아웃)
+      final response = await _supabase.functions.invoke(
+        'make-server-26899706/analyze',
+        body: {
+          'reviewText': text,
+          'userRating': userRating,
+          'hasPhoto': hasPhoto,
+        },
+      ).timeout(const Duration(milliseconds: 10000));
+
+      final data = response.data;
+      if (data == null) throw Exception("분석 결과 없음");
+
+      // ✅ [Fix] Genius Feedback 적용 (태그 전달)
+      final genius = GeniusFeedbackService.generateFeedback(text, userRating, tags);
+
+      return {
+        'needsfine_score': (data['needsfine_score'] as num?)?.toDouble() ?? 0.0,
+        'trust_level': (data['trust_level'] as num?)?.toInt() ?? 0,
+        'message': genius.message, // Genius 메시지 사용
+        'is_warning': data['is_warning'] ?? false,
+      };
+
+    } catch (e) {
+      print("❌ 서버 분석 실패: $e");
+      
+      // 에러 시에도 Genius Feedback은 작동하도록 (오프라인/에러 대응)
+      final genius = GeniusFeedbackService.generateFeedback(text, userRating, tags);
+
+      return {
+        'needsfine_score': 0.0,
+        'trust_level': 0,
+        'message': genius.message, // "서버 에러" 대신 분석 메시지라도 보여줌
+        'is_warning': true,
+      };
     }
   }
 

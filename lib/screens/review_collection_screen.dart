@@ -7,6 +7,8 @@ import 'package:needsfine_app/widgets/review_card.dart';
 import 'package:needsfine_app/screens/review_detail_screen.dart';
 import 'package:needsfine_app/screens/user_profile_screen.dart';
 
+import 'package:needsfine_app/l10n/app_localizations.dart';
+
 class ReviewCollectionScreen extends StatefulWidget {
   const ReviewCollectionScreen({super.key});
 
@@ -95,19 +97,20 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7), // Light Grey Background
       appBar: AppBar(
-        title: const Text("리뷰 모음"),
+        title: Text(l10n.reviewCollection),
         bottom: TabBar(
           controller: _tabController,
           labelColor: kNeedsFinePurple,
           unselectedLabelColor: Colors.grey,
           indicatorColor: kNeedsFinePurple,
-          tabs: const [
-            Tab(text: "내가 쓴 리뷰"),
-            Tab(text: "도움이 됐어요"),
-            Tab(text: "댓글 단 리뷰"),
+          tabs: [
+            Tab(text: l10n.myReviews),
+            Tab(text: l10n.helpfulReviews),
+            Tab(text: l10n.commentedReviews),
           ],
         ),
       ),
@@ -116,9 +119,9 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
           : TabBarView(
         controller: _tabController,
         children: [
-          _buildReviewList(_myReviews, "작성한 리뷰가 없습니다.", false),
-          _buildReviewList(_likedReviews, "도움이 됐어요 표시한 리뷰가 없습니다.", false),
-          _buildReviewList(_commentedReviews, "댓글을 작성한 리뷰가 없습니다.", true),
+          _buildReviewList(_myReviews, l10n.noReviewsWritten, false),
+          _buildReviewList(_likedReviews, l10n.noLikedReviews, false),
+          _buildReviewList(_commentedReviews, l10n.noCommentedReviews, true),
         ],
       ),
     );

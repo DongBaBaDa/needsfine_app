@@ -143,7 +143,7 @@ class StoreRankingCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                '니즈파인 점수',
+                l10n.needsFineScore,
                 style: const TextStyle(
                   fontSize: 11,
                   color: Color(0xFF9C7CFF),

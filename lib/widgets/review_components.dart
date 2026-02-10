@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart'; // 테마 컬러 참조
 import 'package:needsfine_app/models/ranking_models.dart'; // 기존 모델 사용
 import 'package:needsfine_app/screens/ranking_screen.dart'; // searchTrigger 접근용
+import 'package:needsfine_app/l10n/app_localizations.dart';
 
 // ==========================================
 // 1. Review Card Widget (The Core UI)
@@ -23,6 +24,8 @@ class ReviewCard extends StatelessWidget {
     const Color kPrimary = Color(0xFFC87CFF);
     const Color kTextMain = Colors.black87;
     final Color kTextSub = Colors.grey[600]!;
+    final l10n = AppLocalizations.of(context)!;
+
 
     return Container(
       color: kBackground, // Warm White 배경
@@ -89,7 +92,7 @@ class ReviewCard extends StatelessWidget {
                 children: [
                   // 닉네임 (ID 뒷자리 가림 처리 등)
                   Text(
-                    review.userId?.substring(0, 5) ?? '익명 사용자', // 임시 닉네임 로직
+                    review.userId?.substring(0, 5) ?? l10n.anonymousUser, // 임시 닉네임 로직
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
@@ -120,7 +123,7 @@ class ReviewCard extends StatelessWidget {
               const Spacer(),
 
               // 3. ★ Insight Logic (Quiet Advisor)
-              _buildInsightChip(review, kPrimary),
+              _buildInsightChip(context, review, kPrimary),
             ],
           ),
 
@@ -195,18 +198,24 @@ class ReviewCard extends StatelessWidget {
           // [Section E] Footer (Actions) - Quiet Style
           // -------------------------------------------------------
           const Divider(height: 24, thickness: 0.5, color: Color(0xFFEEEEEE)),
+          const Divider(height: 24, thickness: 0.5, color: Color(0xFFEEEEEE)),
           Row(
+            mainAxisAlignment: MainAxisAlignment.end, // ✅ 우측 정렬
             children: [
-              _buildFooterButton(Icons.thumb_up_alt_outlined, "도움이 돼요 ${review.likeCount}"),
+              _buildFooterButton(Icons.thumb_up_alt_outlined, "${l10n.helpful} ${review.likeCount}"),
               const SizedBox(width: 16),
-              _buildFooterButton(Icons.chat_bubble_outline_rounded, "댓글 0"),
+              _buildFooterButton(Icons.chat_bubble_outline_rounded, "${l10n.comments} 0"),
+              const SizedBox(width: 16),
+              _buildFooterButton(Icons.remove_red_eye_outlined, "${l10n.viewCount} ${review.viewCount}"),
+              /* 
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.share_outlined, size: 20, color: Colors.grey),
-                onPressed: () {}, // 공유 기능 추후 구현
+                onPressed: () {},
                 constraints: const BoxConstraints(),
                 padding: EdgeInsets.zero,
               ),
+              */
             ],
           ),
         ],
@@ -215,7 +224,8 @@ class ReviewCard extends StatelessWidget {
   }
 
   // Helper: Insight Chip Builder
-  Widget _buildInsightChip(Review review, Color primaryColor) {
+  Widget _buildInsightChip(BuildContext context, Review review, Color primaryColor) {
+    final l10n = AppLocalizations.of(context)!;
     // 100점 만점을 5점 만점으로 변환하여 비교
     final double normalizedNeedsFineScore = review.needsfineScore > 5.0
         ? review.needsfineScore / 20.0
@@ -236,7 +246,7 @@ class ReviewCard extends StatelessWidget {
             Icon(Icons.auto_awesome, size: 12, color: primaryColor),
             const SizedBox(width: 4),
             Text(
-              "만족도 높음",
+              l10n.satisfactionHigh,
               style: TextStyle(
                 color: primaryColor,
                 fontSize: 11,
@@ -259,7 +269,7 @@ class ReviewCard extends StatelessWidget {
             Icon(Icons.trending_down, size: 14, color: Colors.grey[600]),
             const SizedBox(width: 4),
             Text(
-              "과장된 표현",
+              l10n.exaggeratedExpression,
               style: TextStyle(
                 color: Colors.grey[600],
                 fontSize: 11,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart'; // kNeedsFinePurple 사용
+import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/data/korean_regions.dart'; // 지역 데이터
 import '../models/user_model.dart';
 
@@ -33,9 +34,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   final ImagePicker _picker = ImagePicker();
 
-  // 디자인용 상수
-  final Color _inputFillColor = const Color(0xFFF5F5F5);
-  final Color _primaryColor = const Color(0xFF8A2BE2); // kNeedsFinePurple 대응
+  // ✅ 더 밝고 화사한 니즈파인 대표 컬러 적용 (0xFFC87CFF)
+  // 기존 0xFF8A2BE2(BlueViolet)보다 밝은 톤
+  final Color _primaryColor = const Color(0xFFC87CFF);
 
   @override
   void initState() {
@@ -57,7 +58,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
     _nicknameController = TextEditingController(text: _updatedProfile.nickname);
 
-    // 힌트 텍스트 처리 로직 유지
     _introController = TextEditingController(
         text: (_updatedProfile.introduction == '자신을 알릴 수 있는 소개글을 작성해 주세요.' ||
             _updatedProfile.introduction == '자기소개를 입력해주세요.' ||
@@ -66,7 +66,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             : _updatedProfile.introduction
     );
 
-    // 지역 초기화 로직 유지
     if (_updatedProfile.activityZone.isNotEmpty) {
       final zones = _updatedProfile.activityZone.split(' ');
       if (zones.length >= 2) {
@@ -106,14 +105,14 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     if (nickname.isEmpty) return;
 
     if (nickname.contains('니즈파인') && !_isAdminInDB) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("해당 닉네임은 사용할 수 없습니다.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.nicknameUnavailable)));
       setState(() => _isNicknameAvailable = false);
       return;
     }
 
     if (nickname == widget.userProfile.nickname) {
       setState(() => _isNicknameAvailable = true);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("현재 사용 중인 닉네임입니다.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.nicknameCurrent)));
       return;
     }
 
@@ -125,9 +124,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
       if (mounted) {
         if (_isNicknameAvailable == true) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("사용 가능한 닉네임입니다.")));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.nicknameAvailable)));
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("이미 존재하는 닉네임입니다.")));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.nicknameTaken)));
         }
       }
     } catch (e) {
@@ -196,7 +195,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         Navigator.pop(context, _updatedProfile);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('저장 실패: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.processFailed(e.toString()))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -205,177 +204,257 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     bool showCrown = _isAdminInDB || _nicknameController.text.contains('니즈파인');
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('프로필 수정', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        title: Text(l10n.editProfileTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black)),
+        centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
         actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _saveAndPop,
-            child: _isSaving
-                ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: _primaryColor, strokeWidth: 2))
-                : Text("완료", style: TextStyle(color: _primaryColor, fontWeight: FontWeight.bold, fontSize: 16)),
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: TextButton(
+              onPressed: _isSaving ? null : _saveAndPop,
+              style: TextButton.styleFrom(
+                foregroundColor: _primaryColor, // 버튼 색상 밝게
+                textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              child: _isSaving
+                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: _primaryColor, strokeWidth: 2))
+                  : Text(l10n.saveAction),
+            ),
           ),
-          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. 프로필 이미지
-            Center(
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey[200],
-                    backgroundImage: _updatedProfile.imageFile != null
-                        ? FileImage(_updatedProfile.imageFile!) as ImageProvider
-                        : (_updatedProfile.profileImageUrl.isNotEmpty ? NetworkImage(_updatedProfile.profileImageUrl) : null),
-                    child: (_updatedProfile.imageFile == null && _updatedProfile.profileImageUrl.isEmpty)
-                        ? const Icon(Icons.person, size: 50, color: Colors.grey)
-                        : null,
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: _primaryColor, shape: BoxShape.circle),
-                        child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+            // 색다른 느낌을 주기 위해 상단 프로필 영역에 은은한 배경 추가
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.only(top: 24, bottom: 40),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    _primaryColor.withOpacity(0.05),
+                    Colors.white,
+                  ],
+                ),
+              ),
+              child: Center(
+                child: Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 4), // 흰색 테두리 강조
+                        boxShadow: [
+                           BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 4)),
+                        ], // 그림자로 입체감
+                      ),
+                      child: CircleAvatar(
+                        radius: 54,
+                        backgroundColor: Colors.grey[100],
+                        backgroundImage: _updatedProfile.imageFile != null
+                            ? FileImage(_updatedProfile.imageFile!) as ImageProvider
+                            : (_updatedProfile.profileImageUrl.isNotEmpty ? NetworkImage(_updatedProfile.profileImageUrl) : null),
+                        child: (_updatedProfile.imageFile == null && _updatedProfile.profileImageUrl.isEmpty)
+                            ? const Icon(Icons.person, size: 54, color: Colors.grey)
+                            : null,
                       ),
                     ),
+                    Positioned(
+                      bottom: 0,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _primaryColor, // 밝은 보라 포인트
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 4, offset: const Offset(0, 2)),
+                            ],
+                          ),
+                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 2. 닉네임
+                  _buildSectionLabel(l10n.nicknameLabel, icon: showCrown ? Icons.workspace_premium : null, iconColor: Colors.amber),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _nicknameController,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFFF9F9F9),
+                      hintText: l10n.nicknameLabel,
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                      // 포커스 시 밝은 보라색
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _primaryColor, width: 1.5)),
+                      suffixIcon: Padding(
+                        padding: const EdgeInsets.all(6.0),
+                        child: TextButton(
+                          onPressed: (_isCheckingNickname || _isNicknameAvailable == true) ? null : _checkNicknameDuplicate,
+                          style: TextButton.styleFrom(
+                            foregroundColor: _isNicknameAvailable == true ? Colors.green : Colors.grey[600],
+                            backgroundColor: _isNicknameAvailable == true ? Colors.green.withOpacity(0.1) : Colors.grey[200],
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            minimumSize: const Size(60, 36),
+                          ),
+                          child: _isCheckingNickname
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                              : Text(
+                            _isNicknameAvailable == true ? l10n.checked : l10n.checkDuplicate,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ),
+                    onChanged: (text) => setState(() => _isNicknameAvailable = null),
                   ),
+                  if (_isNicknameAvailable == false)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, left: 4),
+                      child: Text(l10n.nicknameUnavailable, style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w500)),
+                    ),
+
+                  const SizedBox(height: 28),
+
+                  // 3. 활동 지역
+                  _buildSectionLabel(l10n.activityZoneLabel),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildDropdown(
+                          value: _selectedSido,
+                          hint: l10n.selectSido,
+                          items: _sidoList,
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedSido = value;
+                              _selectedSigungu = null;
+                              _sigunguList = koreanRegions[value!] ?? [];
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildDropdown(
+                          value: _selectedSigungu,
+                          hint: l10n.selectSigungu,
+                          items: _sigunguList,
+                          onChanged: _selectedSido == null ? null : (value) => setState(() => _selectedSigungu = value),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // 4. 소개
+                  _buildSectionLabel(l10n.introLabel),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _introController,
+                    keyboardType: TextInputType.multiline,
+                    maxLines: 4,
+                    maxLength: 100,
+                    style: const TextStyle(fontSize: 15, height: 1.4),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFFF9F9F9),
+                      hintText: l10n.introHint,
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      contentPadding: const EdgeInsets.all(16),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _primaryColor, width: 1.5)),
+                      counterText: "", // Hide default counter
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ValueListenableBuilder(
+                      valueListenable: _introController,
+                      builder: (context, value, child) {
+                        return Text(
+                          "${value.text.length}/100",
+                          style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 48),
                 ],
               ),
             ),
-            const SizedBox(height: 32),
-
-            // 2. 닉네임 입력 (Filled Style + 내부 중복확인 버튼)
-            Row(
-              children: [
-                const Text('닉네임', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                if (showCrown)
-                  const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.workspace_premium, color: Colors.amber, size: 18)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _nicknameController,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: _inputFillColor,
-                hintText: '닉네임을 입력하세요',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _primaryColor, width: 1.5)),
-                // 중복 확인 버튼을 입력창 내부로 이동
-                suffixIcon: Padding(
-                  padding: const EdgeInsets.all(6.0),
-                  child: TextButton(
-                    onPressed: (_isCheckingNickname || _isNicknameAvailable == true) ? null : _checkNicknameDuplicate,
-                    style: TextButton.styleFrom(
-                      foregroundColor: _isNicknameAvailable == true ? Colors.green : Colors.grey[600],
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                    ),
-                    child: _isCheckingNickname
-                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(
-                      _isNicknameAvailable == true ? '확인됨' : '중복확인',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ),
-              onChanged: (text) => setState(() => _isNicknameAvailable = null),
-            ),
-            if (_isNicknameAvailable == false)
-              const Padding(
-                padding: EdgeInsets.only(top: 6, left: 4),
-                child: Text("해당 닉네임은 사용할 수 없습니다.", style: TextStyle(color: Colors.red, fontSize: 12)),
-              ),
-
-            const SizedBox(height: 24),
-
-            // 3. 자기소개
-            const Text('소개', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _introController,
-              maxLength: 35,
-              maxLines: 4,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: _inputFillColor,
-                hintText: '자신을 알릴 수 있는 소개글을 작성해 주세요.',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                contentPadding: const EdgeInsets.all(16),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _primaryColor, width: 1.5)),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // 4. 활동 지역 (드롭다운 디자인 일치화)
-            const Text('주 활동 지역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(color: _inputFillColor, borderRadius: BorderRadius.circular(12)),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedSido,
-                        hint: Text('시/도', style: TextStyle(color: Colors.grey[400])),
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
-                        isExpanded: true,
-                        items: _sidoList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedSido = value;
-                            _selectedSigungu = null;
-                            _sigunguList = koreanRegions[value!] ?? [];
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(color: _inputFillColor, borderRadius: BorderRadius.circular(12)),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedSigungu,
-                        hint: Text('시/군/구', style: TextStyle(color: Colors.grey[400])),
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
-                        isExpanded: true,
-                        items: _sigunguList.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                        onChanged: _selectedSido == null ? null : (value) => setState(() => _selectedSigungu = value),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 40),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionLabel(String label, {IconData? icon, Color? iconColor}) {
+    return Row(
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+        if (icon != null) ...[
+          const SizedBox(width: 4),
+          Icon(icon, color: iconColor, size: 16),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDropdown({
+    required String? value,
+    required String hint,
+    required List<String> items,
+    required ValueChanged<String?>? onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9F9F9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          hint: Text(hint, style: TextStyle(color: Colors.grey[400], fontSize: 15)),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
+          isExpanded: true,
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          style: const TextStyle(color: Colors.black87, fontSize: 15, fontWeight: FontWeight.w500),
+          items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+          onChanged: onChanged,
         ),
       ),
     );
