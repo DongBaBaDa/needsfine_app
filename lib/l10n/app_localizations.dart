@@ -2785,7 +2785,7 @@ abstract class AppLocalizations {
   /// No description provided for @selectStoreHint.
   ///
   /// In ko, this message translates to:
-  /// **'추천할 맛집을 선택해주세요 (필수)'**
+  /// **'등록할 매장을 검색해주세요'**
   String get selectStoreHint;
 
   /// No description provided for @editAction.
@@ -3027,6 +3027,192 @@ abstract class AppLocalizations {
   /// In ko, this message translates to:
   /// **'첫 리뷰 작성하기'**
   String get writeFirstReview;
+
+  /// No description provided for @regionKorea.
+  ///
+  /// In ko, this message translates to:
+  /// **'대한민국'**
+  String get regionKorea;
+
+  /// No description provided for @regionSeoul.
+  ///
+  /// In ko, this message translates to:
+  /// **'서울'**
+  String get regionSeoul;
+
+  /// No description provided for @regionBusan.
+  ///
+  /// In ko, this message translates to:
+  /// **'부산'**
+  String get regionBusan;
+
+  /// No description provided for @regionDaegu.
+  ///
+  /// In ko, this message translates to:
+  /// **'대구'**
+  String get regionDaegu;
+
+  /// No description provided for @regionIncheon.
+  ///
+  /// In ko, this message translates to:
+  /// **'인천'**
+  String get regionIncheon;
+
+  /// No description provided for @regionGwangju.
+  ///
+  /// In ko, this message translates to:
+  /// **'광주광역시'**
+  String get regionGwangju;
+
+  /// No description provided for @regionDaejeon.
+  ///
+  /// In ko, this message translates to:
+  /// **'대전광역시'**
+  String get regionDaejeon;
+
+  /// No description provided for @regionUlsan.
+  ///
+  /// In ko, this message translates to:
+  /// **'울산광역시'**
+  String get regionUlsan;
+
+  /// No description provided for @regionSejong.
+  ///
+  /// In ko, this message translates to:
+  /// **'세종특별자치시'**
+  String get regionSejong;
+
+  /// No description provided for @regionGyeonggi.
+  ///
+  /// In ko, this message translates to:
+  /// **'경기도'**
+  String get regionGyeonggi;
+
+  /// No description provided for @regionGangwon.
+  ///
+  /// In ko, this message translates to:
+  /// **'강원특별자치도'**
+  String get regionGangwon;
+
+  /// No description provided for @regionChungbuk.
+  ///
+  /// In ko, this message translates to:
+  /// **'충청북도'**
+  String get regionChungbuk;
+
+  /// No description provided for @regionChungnam.
+  ///
+  /// In ko, this message translates to:
+  /// **'충청남도'**
+  String get regionChungnam;
+
+  /// No description provided for @regionJeonbuk.
+  ///
+  /// In ko, this message translates to:
+  /// **'전북특별자치도'**
+  String get regionJeonbuk;
+
+  /// No description provided for @regionJeonnam.
+  ///
+  /// In ko, this message translates to:
+  /// **'전라남도'**
+  String get regionJeonnam;
+
+  /// No description provided for @regionGyeongbuk.
+  ///
+  /// In ko, this message translates to:
+  /// **'경상북도'**
+  String get regionGyeongbuk;
+
+  /// No description provided for @regionGyeongnam.
+  ///
+  /// In ko, this message translates to:
+  /// **'경상남도'**
+  String get regionGyeongnam;
+
+  /// No description provided for @regionJeju.
+  ///
+  /// In ko, this message translates to:
+  /// **'제주특별자치도'**
+  String get regionJeju;
+
+  /// No description provided for @requestStoreRegistration.
+  ///
+  /// In ko, this message translates to:
+  /// **'매장 등록 요청'**
+  String get requestStoreRegistration;
+
+  /// No description provided for @storeName.
+  ///
+  /// In ko, this message translates to:
+  /// **'매장명'**
+  String get storeName;
+
+  /// No description provided for @storeIntro.
+  ///
+  /// In ko, this message translates to:
+  /// **'소개'**
+  String get storeIntro;
+
+  /// No description provided for @storeAddress.
+  ///
+  /// In ko, this message translates to:
+  /// **'주소'**
+  String get storeAddress;
+
+  /// No description provided for @storePhone.
+  ///
+  /// In ko, this message translates to:
+  /// **'전화번호'**
+  String get storePhone;
+
+  /// No description provided for @storeHours.
+  ///
+  /// In ko, this message translates to:
+  /// **'운영시간'**
+  String get storeHours;
+
+  /// No description provided for @storeMenu.
+  ///
+  /// In ko, this message translates to:
+  /// **'추천 메뉴 / 메뉴'**
+  String get storeMenu;
+
+  /// No description provided for @submitRequest.
+  ///
+  /// In ko, this message translates to:
+  /// **'요청 보내기'**
+  String get submitRequest;
+
+  /// No description provided for @requestSuccess.
+  ///
+  /// In ko, this message translates to:
+  /// **'요청이 성공적으로 접수되었습니다. 검토 후 처리해드리겠습니다.'**
+  String get requestSuccess;
+
+  /// No description provided for @openTime.
+  ///
+  /// In ko, this message translates to:
+  /// **'오픈 시간'**
+  String get openTime;
+
+  /// No description provided for @closeTime.
+  ///
+  /// In ko, this message translates to:
+  /// **'마감 시간'**
+  String get closeTime;
+
+  /// No description provided for @addPhoto.
+  ///
+  /// In ko, this message translates to:
+  /// **'사진 추가하기'**
+  String get addPhoto;
+
+  /// No description provided for @storePhoto.
+  ///
+  /// In ko, this message translates to:
+  /// **'매장 사진 (1장)'**
+  String get storePhoto;
 }
 
 class _AppLocalizationsDelegate

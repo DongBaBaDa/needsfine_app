@@ -22,6 +22,8 @@ import 'package:needsfine_app/screens/report_management_screen.dart';
 import 'package:needsfine_app/screens/follow_list_screen.dart'; // ✅ 팔로우 리스트 추가
 import 'package:needsfine_app/screens/onboarding/taste_survey_modal.dart';
 import 'package:needsfine_app/screens/user_inquiry_history_screen.dart'; // ✅ 문의 내역 추가
+import 'package:needsfine_app/screens/store_management_screen.dart'; // ✅ 매장 관리 추가
+import 'package:needsfine_app/screens/request_store_registration_screen.dart'; // ✅ 매장 등록 요청 추가
 
 import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
@@ -194,8 +196,9 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       );
 
       final data = response.data;
+
       if (data != null && data['success'] == true) {
-        final version = data['version'] ?? "Unknown";
+        final version = data['logic_version'] ?? "Unknown";
         final count = data['count'] ?? 0;
         
         if (!mounted) return;
@@ -268,6 +271,15 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const UserInquiryHistoryScreen()));
+                  },
+                ),
+                const SizedBox(height: 12),
+                _ModalButton(
+                  icon: Icons.store_mall_directory_rounded,
+                  text: l10n.requestStoreRegistration,
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const RequestStoreRegistrationScreen()));
                   },
                 ),
                 const SizedBox(height: 12),
@@ -618,10 +630,17 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                 ),
                 if (_isSuperAdmin) 
                    _MenuItem(
+                    icon: Icons.store_mall_directory_rounded,
+                    iconColor: Colors.teal,
+                    title: '매장 관리',
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreManagementScreen())),
+                  ),
+                if (_isSuperAdmin) 
+                   _MenuItem(
                     icon: Icons.calculate_outlined,
                     iconColor: Colors.deepPurple,
                     title: l10n.recalculateReviews,
-                    isLast: true, // 여기가 진짜 마지막
+                    isLast: true,
                     onTap: _recalculateReviews,
                   ),
               ],

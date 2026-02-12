@@ -1388,7 +1388,7 @@ class AppLocalizationsId extends AppLocalizations {
   String get voteEditWarning => '* 투표 항목은 수정할 수 없습니다.';
 
   @override
-  String get selectStoreHint => '추천할 맛집을 선택해주세요 (필수)';
+  String get selectStoreHint => '등록할 매장을 검색해주세요';
 
   @override
   String get editAction => '수정하기';
@@ -1515,4 +1515,97 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get writeFirstReview => '첫 리뷰 작성하기';
+
+  @override
+  String get regionKorea => '대한민국';
+
+  @override
+  String get regionSeoul => '서울';
+
+  @override
+  String get regionBusan => '부산';
+
+  @override
+  String get regionDaegu => '대구';
+
+  @override
+  String get regionIncheon => '인천';
+
+  @override
+  String get regionGwangju => '광주광역시';
+
+  @override
+  String get regionDaejeon => '대전광역시';
+
+  @override
+  String get regionUlsan => '울산광역시';
+
+  @override
+  String get regionSejong => '세종특별자치시';
+
+  @override
+  String get regionGyeonggi => '경기도';
+
+  @override
+  String get regionGangwon => '강원특별자치도';
+
+  @override
+  String get regionChungbuk => '충청북도';
+
+  @override
+  String get regionChungnam => '충청남도';
+
+  @override
+  String get regionJeonbuk => '전북특별자치도';
+
+  @override
+  String get regionJeonnam => '전라남도';
+
+  @override
+  String get regionGyeongbuk => '경상북도';
+
+  @override
+  String get regionGyeongnam => '경상남도';
+
+  @override
+  String get regionJeju => '제주특별자치도';
+
+  @override
+  String get requestStoreRegistration => '매장 등록 요청';
+
+  @override
+  String get storeName => '매장명';
+
+  @override
+  String get storeIntro => '소개';
+
+  @override
+  String get storeAddress => '주소';
+
+  @override
+  String get storePhone => '전화번호';
+
+  @override
+  String get storeHours => '운영시간';
+
+  @override
+  String get storeMenu => '추천 메뉴 / 메뉴';
+
+  @override
+  String get submitRequest => '요청 보내기';
+
+  @override
+  String get requestSuccess => '요청이 성공적으로 접수되었습니다. 검토 후 처리해드리겠습니다.';
+
+  @override
+  String get openTime => '오픈 시간';
+
+  @override
+  String get closeTime => '마감 시간';
+
+  @override
+  String get addPhoto => '사진 추가하기';
+
+  @override
+  String get storePhoto => '매장 사진 (1장)';
 }

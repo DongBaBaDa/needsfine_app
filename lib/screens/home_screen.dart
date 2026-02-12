@@ -539,13 +539,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                         ),
                       ),
                     ),
-                    Positioned(
+                      Positioned(
                       top: 16,
                       right: 16,
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF3E5F5).withOpacity(0.95),
                               borderRadius: BorderRadius.circular(10),
@@ -554,14 +555,15 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                               "${l10n.needsFine} ${score.toStringAsFixed(1)}",
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
-                                fontSize: 12,
+                                fontSize: 12, // Unified size
                                 color: _brand,
+                                letterSpacing: -0.5,
                               ),
                             ),
                           ),
                           const SizedBox(width: 4),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                             decoration: BoxDecoration(
                               color: const Color(0xFFE3F2FD).withOpacity(0.95),
                               borderRadius: BorderRadius.circular(10),
@@ -570,8 +572,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                               "${l10n.trustScore} ${trustScore.toStringAsFixed(0)}%",
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
-                                fontSize: 12,
+                                fontSize: 11,
                                 color: Colors.blue,
+                                letterSpacing: -0.5,
                               ),
                             ),
                           ),

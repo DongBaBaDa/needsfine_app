@@ -48,6 +48,13 @@ class ReviewService {
         return [];
       }
 
+      // 🗺️ 첫 항목의 키 목록과 좌표 데이터 확인
+      if (data.isNotEmpty) {
+        final first = data.first as Map<String, dynamic>;
+        print("🗺️ [Debug] RPC 반환 키 목록: ${first.keys.toList()}");
+        print("🗺️ [Debug] store_lat: ${first['store_lat']}, store_lng: ${first['store_lng']}, store_address: ${first['store_address']}");
+      }
+
       // 2. 데이터 매핑 (여기서 에러가 터질 확률 99%)
       return data.asMap().entries.map((entry) {
         try {

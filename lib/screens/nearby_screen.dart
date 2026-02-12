@@ -12,6 +12,12 @@ import 'package:needsfine_app/models/app_data.dart';
 import 'package:needsfine_app/core/search_trigger.dart'; // ✅ 전역 트리거
 import 'package:needsfine_app/screens/write_review_screen.dart';
 import 'package:needsfine_app/screens/store_reviews_screen.dart';
+import 'package:needsfine_app/screens/store_info_screen.dart'; // ✅ 매장 정보 화면
+
+// ✅ 서비스 임포트 추가
+import 'package:needsfine_app/services/review_service.dart';
+import 'package:needsfine_app/services/naver_search_service.dart'; // ✅ Import added for GeocodingService
+import 'package:needsfine_app/models/ranking_models.dart'; // ✅ 모델 임포트 추가
 
 // ✅ Supabase 조회
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -46,12 +52,22 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   bool _isSearching = false;
 
   static const NCameraPosition _initialPosition = NCameraPosition(
-    target: NLatLng(37.5665, 126.9780), // 기본 위치 (서울시청)
-    zoom: 14.0,
+    target: NLatLng(36.5, 127.8), // 대한민국 중심
+    zoom: 7.0, // 전국 보기
   );
 
   // ✅ Supabase
   final SupabaseClient _supabase = Supabase.instance.client;
+  
+  // ✅ 클러스터 이미지 캐시 (성능 최적화)
+  final Map<String, NOverlayImage> _clusterImageCache = {};
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 캐시 정리 (예: 언어 변경 시)
+    _clusterImageCache.clear();
+  }
 
   // ✅ 매장 상태 관리 변수들 (UI 직결)
   bool _isStoreSaved = false;
@@ -63,6 +79,12 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   double _displayScore = 0.0;
   int _displayTrust = 0;
   List<String> _displayTags = []; // ✅ 태그 리스트 추가
+
+  // ✅ 클러스터링 관련 변수
+  List<StoreRanking> _allStoreRankings = [];
+  double _currentZoom = 7.0;
+  Set<NOverlay> _clusterOverlays = {};
+  Timer? _clusterDebounce;
 
   // ✅ 좌표 트리거로 들어왔을 때 주소 복구용
   String? _resolvedStoreName;
@@ -164,6 +186,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     searchTrigger.removeListener(_handleExternalSearch);
     _searchController.dispose();
     _debounce?.cancel();
+    _clusterDebounce?.cancel();
     super.dispose();
   }
 
@@ -175,6 +198,442 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     } else {
       _requestLocationPermission();
     }
+    
+    // ✅ [추가] 랭킹에 있는 매장 마커 표시
+    _fetchAndShowStoreMarkers();
+  }
+
+  // ✅ [New] 리뷰 테이블에서 직접 매장 좌표 + 점수 로드 → 클러스터 표시
+  Future<void> _fetchAndShowStoreMarkers() async {
+    print("🗺️🗺️🗺️ _fetchAndShowStoreMarkers 시작!");
+    try {
+      // reviews 테이블에서 직접 좌표 포함 조회
+      final response = await _supabase
+          .from('reviews')
+          .select('id, store_name, store_address, store_lat, store_lng, needsfine_score, trust_level, is_hidden');
+
+      final List<dynamic> data = response as List<dynamic>;
+      print("🗺️ 리뷰 원본 데이터 로드: ${data.length}건");
+
+      if (data.isEmpty) {
+        print("🗺️ 리뷰 데이터 없음!");
+        return;
+      }
+
+      // ★ 좌표 없는 리뷰를 지오코딩으로 자동 보정
+      final missingCoords = data.where((row) {
+        final map = row as Map<String, dynamic>;
+        final lat = map['store_lat'];
+        final lng = map['store_lng'];
+        final addr = map['store_address']?.toString() ?? '';
+        return (lat == null || lat == 0) && addr.isNotEmpty;
+      }).toList();
+
+      if (missingCoords.isNotEmpty) {
+        // 🔥 [최적화] 지오코딩 백그라운드 실행 (await 제거하여 지도 로딩 차단 방지)
+        _backfillCoordinates(missingCoords);
+      }
+
+      // 유효한 데이터만 필터 (is_hidden=false, 좌표 있음)
+      final validData = data.where((row) {
+        final map = row as Map<String, dynamic>;
+        final lat = (map['store_lat'] ?? 0);
+        final lng = (map['store_lng'] ?? 0);
+        final hidden = map['is_hidden'] ?? false;
+        return hidden == false && lat != 0 && lng != 0;
+      }).toList();
+
+      print("🗺️ 필터 후 유효 리뷰: ${validData.length}건 (원본 ${data.length}건)");
+
+      if (validData.isEmpty) {
+        print("🗺️ 유효한 좌표가 있는 리뷰 없음!");
+        return;
+      }
+
+      // 매장별 그룹핑
+      final Map<String, List<Map<String, dynamic>>> grouped = {};
+      for (final row in validData) {
+        final map = row as Map<String, dynamic>;
+        final name = map['store_name']?.toString() ?? '';
+        grouped.putIfAbsent(name, () => []).add(map);
+      }
+
+      // StoreRanking 목록 생성
+      _allStoreRankings = grouped.entries.map((entry) {
+        final reviews = entry.value;
+        final first = reviews.first;
+        double avgScore = 0;
+        double avgTrust = 0;
+        for (final r in reviews) {
+          avgScore += (r['needsfine_score'] ?? 0).toDouble();
+          avgTrust += (r['trust_level'] ?? 0).toDouble();
+        }
+        avgScore /= reviews.length;
+        avgTrust /= reviews.length;
+
+        return StoreRanking(
+          storeName: entry.key,
+          avgScore: avgScore,
+          avgUserRating: 0,
+          reviewCount: reviews.length,
+          avgTrust: avgTrust,
+          rank: 0,
+          address: first['store_address']?.toString(),
+          lat: (first['store_lat'] ?? 0).toDouble(),
+          lng: (first['store_lng'] ?? 0).toDouble(),
+        );
+      }).toList();
+
+      print("🗺️ ✅ 매장 ${_allStoreRankings.length}개 로드 완료!");
+      _updateClusters();
+    } catch (e, stack) {
+      print("❌❌❌ 매장 마커 로드 실패: $e");
+      print("❌ 스택: $stack");
+    }
+  }
+
+  // ✅ [New] 백그라운드 지오코딩 보정
+  Future<void> _backfillCoordinates(List<dynamic> missingCoords) async {
+    print("🗺️ [Background] 좌표 없는 리뷰 ${missingCoords.length}건 → 지오코딩 보정 시작");
+    final geocodingService = NaverGeocodingService();
+    int fixed = 0;
+    bool needsUpdate = false;
+
+    for (final row in missingCoords) {
+      final map = row as Map<String, dynamic>;
+      final addr = map['store_address']?.toString() ?? '';
+      final id = map['id'];
+      try {
+        final result = await geocodingService.searchAddress(addr);
+        if (result.addresses.isNotEmpty) {
+          final lat = double.tryParse(result.addresses.first.y);
+          final lng = double.tryParse(result.addresses.first.x);
+          if (lat != null && lng != null) {
+            await _supabase.from('reviews').update({
+              'store_lat': lat,
+              'store_lng': lng,
+            }).eq('id', id);
+            
+            // 메모리 데이터 업데이트
+            map['store_lat'] = lat;
+            map['store_lng'] = lng;
+            fixed++;
+            needsUpdate = true;
+            print("🗺️ ✅ [Background] 보정 완료: ${map['store_name']} → ($lat, $lng)");
+          }
+        }
+      } catch (e) {
+        print("🗺️ ⚠️ [Background] 지오코딩 실패 (${map['store_name']}): $e");
+      }
+    }
+    print("🗺️ [Background] 좌표 보정 완료: $fixed/${missingCoords.length}건");
+    
+    // 보정된 데이터가 있으면 마커 갱신
+    if (needsUpdate && mounted) {
+      // 데이터 다시 로드 대신 메모리에서 StoreRanking 재생성 후 갱신
+      _fetchAndShowStoreMarkers(); 
+    }
+  }
+
+  // ✅ 줌 변경 시 호출 (debounced)
+  void _onCameraChange(NCameraUpdateReason reason, bool isGestureActive) async {
+    _clusterDebounce?.cancel();
+    _clusterDebounce = Timer(const Duration(milliseconds: 100), () async {
+      try {
+        final controller = await _controller.future;
+        final position = await controller.getCameraPosition();
+        final newZoom = position.zoom;
+        // 줌 레벨 범주가 달라졌을 때만 클러스터 갱신
+        final oldLevel = _getClusterLevel(_currentZoom);
+        final newLevel = _getClusterLevel(newZoom);
+        _currentZoom = newZoom;
+        if (oldLevel != newLevel) {
+          debugPrint("🗺️ 줌 변경: $_currentZoom (level $oldLevel → $newLevel)");
+          _updateClusters();
+        }
+      } catch (_) {}
+    });
+  }
+
+  int _getClusterLevel(double zoom) {
+    if (zoom >= 14) return 4; // 개별 매장
+    if (zoom >= 11) return 3; // 읍면동
+    if (zoom >= 8) return 2;  // 시군구
+    if (zoom >= 6) return 1;  // 시도
+    return 0;                  // 대한민국 전체
+  }
+
+  // ✅ 주소에서 행정구역 토큰 추출
+  String _getClusterKey(String? address, int level) {
+    if (address == null || address.isEmpty) return '기타';
+    final tokens = address.split(' ');
+    switch (level) {
+      case 0: // 대한민국 전체
+        return '대한민국';
+      case 1: // 시·도
+        return tokens.isNotEmpty ? tokens[0] : '기타';
+      case 2: // 시·군·구
+        return tokens.length >= 2 ? '${tokens[0]} ${tokens[1]}' : tokens[0];
+      case 3: // 읍·면·동
+        return tokens.length >= 3 ? '${tokens[0]} ${tokens[1]} ${tokens[2]}' : (tokens.length >= 2 ? '${tokens[0]} ${tokens[1]}' : tokens[0]);
+      default:
+        return address;
+    }
+  }
+
+  // ✅ 클러스터용 짧은 표시명
+  String _getClusterDisplayName(String key, int level) {
+    final tokens = key.split(' ');
+    switch (level) {
+      case 0: // 대한민국 전체
+        return '대한민국';
+      case 1:
+        // "서울특별시" → "서울", "전라남도" → "전남" 등 표준 약어 적용 (다국어 지원)
+        final t = tokens.last;
+        return _abbreviateRegion(t);
+      case 2:
+        return tokens.length >= 2 ? tokens[1] : tokens[0];
+      case 3:
+        return tokens.length >= 3 ? tokens[2] : tokens.last;
+      default:
+        return key;
+    }
+  }
+
+  // ✅ 행정구역 표준 약어 변환 (다국어 지원)
+  String _abbreviateRegion(String name) {
+    if (!mounted) return name;
+    final l10n = AppLocalizations.of(context)!;
+    
+    final Map<String, String> regionMap = {
+      '대한민국': l10n.regionKorea,
+      '서울특별시': l10n.regionSeoul,
+      '서울': l10n.regionSeoul,
+      '부산광역시': l10n.regionBusan,
+      '부산': l10n.regionBusan,
+      '대구광역시': l10n.regionDaegu,
+      '대구': l10n.regionDaegu,
+      '인천광역시': l10n.regionIncheon,
+      '인천': l10n.regionIncheon,
+      '광주광역시': l10n.regionGwangju,
+      '광주': l10n.regionGwangju,
+      '대전광역시': l10n.regionDaejeon,
+      '대전': l10n.regionDaejeon,
+      '울산광역시': l10n.regionUlsan,
+      '울산': l10n.regionUlsan,
+      '세종특별자치시': l10n.regionSejong,
+      '세종': l10n.regionSejong,
+      '경기도': l10n.regionGyeonggi,
+      '경기': l10n.regionGyeonggi,
+      '강원특별자치도': l10n.regionGangwon,
+      '강원도': l10n.regionGangwon,
+      '강원': l10n.regionGangwon,
+      '충청북도': l10n.regionChungbuk,
+      '충북': l10n.regionChungbuk,
+      '충청남도': l10n.regionChungnam,
+      '충남': l10n.regionChungnam,
+      '전라북도': l10n.regionJeonbuk,
+      '전북특별자치도': l10n.regionJeonbuk,
+      '전북': l10n.regionJeonbuk,
+      '전라남도': l10n.regionJeonnam,
+      '전남': l10n.regionJeonnam,
+      '경상북도': l10n.regionGyeongbuk,
+      '경북': l10n.regionGyeongbuk,
+      '경상남도': l10n.regionGyeongnam,
+      '경남': l10n.regionGyeongnam,
+      '제주특별자치도': l10n.regionJeju,
+      '제주도': l10n.regionJeju,
+      '제주': l10n.regionJeju,
+    };
+    
+    // 1차 매핑 시도
+    if (regionMap.containsKey(name)) return regionMap[name]!;
+    
+    // "전라남도" -> "전남" 같은 축약형에 대한 매핑이 없을 경우를 대비해,
+    // 정규식으로 "도, 시" 제거 후 다시 매핑 시도해볼 수도 있음.
+    // 하지만 현재 맵퍼가 대부분 커버함.
+    
+    return name.replaceAll(RegExp(r'(특별시|광역시|특별자치시|특별자치도|도)$'), '');
+  }
+
+  // ✅ 핵심: 줌 레벨에 따라 클러스터/개별 마커 갱신
+  Future<void> _updateClusters() async {
+    if (_allStoreRankings.isEmpty) {
+      debugPrint("🗺️ _updateClusters: 매장 데이터 없음, 스킵");
+      return;
+    }
+
+    // ★ 핵심 수정: await로 컨트롤러 대기 (기존: isCompleted 체크 후 return → 초기 로드 시 마커 안 뜸)
+    final controller = await _controller.future;
+
+    // 기존 클러스터 오버레이 제거
+    for (final overlay in _clusterOverlays) {
+      controller.deleteOverlay(overlay.info);
+    }
+    _clusterOverlays.clear();
+
+    final validStores = _allStoreRankings.where((s) => s.lat != null && s.lng != null && s.lat != 0 && s.lng != 0).toList();
+    if (validStores.isEmpty) {
+      debugPrint("🗺️ _updateClusters: 유효한 좌표 매장 없음!");
+      return;
+    }
+
+    final level = _getClusterLevel(_currentZoom);
+
+    if (level == 4) {
+      // ============ 개별 매장 핀 ============
+      final markers = <NMarker>{};
+      for (final store in validStores) {
+        final position = NLatLng(store.lat!, store.lng!);
+        final iconImage = await NOverlayImage.fromWidget(
+          widget: _buildCustomMarkerWidget(store.storeName, score: store.avgScore),
+          context: context,
+        );
+        final marker = NMarker(
+          id: 'cluster_store_${store.storeName}_${store.lat}_${store.lng}',
+          position: position,
+          icon: iconImage,
+        );
+        marker.setOnTapListener((overlay) {
+          _selectPlaceWithCoordinates(
+            NaverPlace(
+              title: store.storeName,
+              address: store.address ?? '',
+              roadAddress: store.address ?? '',
+              category: '',
+            ),
+            position,
+          );
+        });
+        markers.add(marker);
+      }
+      _clusterOverlays = markers.cast<NOverlay>().toSet();
+      controller.addOverlayAll(markers);
+    } else {
+      // ============ 클러스터 배지 ============
+      final groups = <String, List<StoreRanking>>{};
+      for (final store in validStores) {
+        final key = _getClusterKey(store.address, level);
+        groups.putIfAbsent(key, () => []).add(store);
+      }
+
+      final markers = <NMarker>{};
+      for (final entry in groups.entries) {
+        final stores = entry.value;
+        final displayName = _getClusterDisplayName(entry.key, level);
+
+        // 클러스터 중심: 그룹 내 매장 좌표 평균
+        double avgLat = 0, avgLng = 0;
+        for (final s in stores) {
+          avgLat += s.lat!;
+          avgLng += s.lng!;
+        }
+        avgLat /= stores.length;
+        avgLng /= stores.length;
+
+        final position = NLatLng(avgLat, avgLng);
+        final cacheKey = "${displayName}_${stores.length}";
+        
+        NOverlayImage iconImage;
+        if (_clusterImageCache.containsKey(cacheKey)) {
+          iconImage = _clusterImageCache[cacheKey]!;
+        } else {
+          iconImage = await NOverlayImage.fromWidget(
+            widget: _buildClusterMarkerWidget(displayName, stores.length),
+            context: context,
+          );
+          _clusterImageCache[cacheKey] = iconImage;
+        }
+
+        final marker = NMarker(
+          id: 'cluster_group_${entry.key.hashCode}',
+          position: position,
+          icon: iconImage,
+        );
+
+        // 탭 시 해당 클러스터 영역으로 줌 인
+        marker.setOnTapListener((overlay) async {
+          double targetZoom;
+          if (level == 0) targetZoom = 7;       // 대한민국 → 시도
+          else if (level == 1) targetZoom = 9;   // 시도 → 시군구
+          else if (level == 2) targetZoom = 12;  // 시군구 → 읍면동
+          else targetZoom = 14;                   // 읍면동 → 개별
+
+          final ctrl = await _controller.future;
+          ctrl.updateCamera(
+            NCameraUpdate.scrollAndZoomTo(
+              target: position,
+              zoom: targetZoom,
+            )..setAnimation(animation: NCameraAnimation.easing, duration: const Duration(milliseconds: 500)),
+          );
+        });
+
+        markers.add(marker);
+      }
+      _clusterOverlays = markers.cast<NOverlay>().toSet();
+      controller.addOverlayAll(markers);
+    }
+  }
+
+  // ✅ 클러스터 마커 위젯: 원형 배지 + 이름 + 개수
+  Widget _buildClusterMarkerWidget(String regionName, int count) {
+    // 개수에 따라 크기 조절
+    final double size = count >= 20 ? 70 : (count >= 5 ? 60 : 50);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: size, height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              colors: [Color(0xFF9C7CFF), Color(0xFF7B5FE0)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF9C7CFF).withOpacity(0.4),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+            border: Border.all(color: Colors.white, width: 2.5),
+          ),
+          child: Center(
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 4),
+            ],
+          ),
+          child: Text(
+            regionName,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF2D2D3A),
+              height: 1.2,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _requestLocationPermission() async {
@@ -263,7 +722,10 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     } catch (_) {}
   }
 
-  Widget _buildCustomMarkerWidget(String title) {
+  Widget _buildCustomMarkerWidget(String title, {double? score}) {
+    final displayTitle = score != null 
+        ? "$title (${score.toStringAsFixed(1)})" 
+        : title;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -287,7 +749,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
               const Icon(Icons.place, color: Color(0xFF9C7CFF), size: 20),
               const SizedBox(width: 6),
               Text(
-                title,
+                displayTitle,
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 14,
@@ -847,6 +1309,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             onMapReady: (controller) {
               if (!_controller.isCompleted) _controller.complete(controller);
             },
+            onCameraChange: _onCameraChange,
             onMapTapped: (_, __) {
               if (_showBottomSheet) setState(() => _showBottomSheet = false);
               if (_autocompleteResults.isNotEmpty) setState(() => _autocompleteResults = []);
@@ -1117,6 +1580,35 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                   ),
                 ),
               ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // ✅ [추가] 매장 정보 버튼
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => StoreInfoScreen(
+                        storeName: title,
+                        storeAddress: addrText,
+                        lat: _selectedPosition?.latitude ?? 0,
+                        lng: _selectedPosition?.longitude ?? 0,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.store, color: Color(0xFF9C7CFF)),
+                label: const Text('매장 정보', style: TextStyle(color: Color(0xFF9C7CFF), fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF9C7CFF)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
             ),
 
             const SizedBox(height: 12),

@@ -1523,4 +1523,98 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get writeFirstReview => '첫 리뷰 작성하기';
+
+  @override
+  String get regionKorea => 'South Korea';
+
+  @override
+  String get regionSeoul => 'Seoul';
+
+  @override
+  String get regionBusan => 'Busan';
+
+  @override
+  String get regionDaegu => 'Daegu';
+
+  @override
+  String get regionIncheon => 'Incheon';
+
+  @override
+  String get regionGwangju => 'Gwangju';
+
+  @override
+  String get regionDaejeon => 'Daejeon';
+
+  @override
+  String get regionUlsan => 'Ulsan';
+
+  @override
+  String get regionSejong => 'Sejong';
+
+  @override
+  String get regionGyeonggi => 'Gyeonggi';
+
+  @override
+  String get regionGangwon => 'Gangwon';
+
+  @override
+  String get regionChungbuk => 'Chungbuk';
+
+  @override
+  String get regionChungnam => 'Chungnam';
+
+  @override
+  String get regionJeonbuk => 'Jeonbuk';
+
+  @override
+  String get regionJeonnam => 'Jeonnam';
+
+  @override
+  String get regionGyeongbuk => 'Gyeongbuk';
+
+  @override
+  String get regionGyeongnam => 'Gyeongnam';
+
+  @override
+  String get regionJeju => 'Jeju';
+
+  @override
+  String get requestStoreRegistration => 'Request Store Registration';
+
+  @override
+  String get storeName => 'Store Name';
+
+  @override
+  String get storeIntro => 'Introduction';
+
+  @override
+  String get storeAddress => 'Address';
+
+  @override
+  String get storePhone => 'Phone';
+
+  @override
+  String get storeHours => 'Hours';
+
+  @override
+  String get storeMenu => 'Recommendation / Menu';
+
+  @override
+  String get submitRequest => 'Submit Request';
+
+  @override
+  String get requestSuccess =>
+      'Request submitted successfully. We will review it shortly.';
+
+  @override
+  String get openTime => 'Open Time';
+
+  @override
+  String get closeTime => 'Close Time';
+
+  @override
+  String get addPhoto => 'Add Photo';
+
+  @override
+  String get storePhoto => 'Store Photo (Max 1)';
 }

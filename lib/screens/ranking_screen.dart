@@ -512,7 +512,7 @@ class _RankingScreenState extends State<RankingScreen> {
                     lat: reviews[index].storeLat,
                     lng: reviews[index].storeLng
                 );
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.movingToMap)));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${reviews[index].storeName}${l10n.movingToMap}")));
               }
             },
             onTapProfile: () {
@@ -582,7 +582,7 @@ class _RankingScreenState extends State<RankingScreen> {
                 onTap: () {
                   // ✅ [핵심] 지도 검색 트리거 작동
                   searchTrigger.value = SearchTarget(query: ranking.storeName);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ranking.storeName} ${l10n.movingToMap}")));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ranking.storeName}${l10n.movingToMap}")));
                 },
                 child: StoreRankingCard(
                   ranking: ranking,

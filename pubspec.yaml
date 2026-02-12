@@ -1,7 +1,7 @@
 name: needsfine_app
 description: "A new Flutter project for NeedsFine app."
 publish_to: 'none'
-version: 1.0.5+22
+version: 1.0.5+23
 environment:
   sdk: '>=3.4.3 <4.0.0'
 
@@ -20,7 +20,7 @@ dependencies:
   # Image & Cache
   cached_network_image: ^3.3.0
   flutter_image_compress: ^2.3.0
-  image_picker: ^1.1.2
+  image_picker: ^1.2.1
   flutter_svg: ^2.0.9
 
   # Supabase
