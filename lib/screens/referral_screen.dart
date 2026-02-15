@@ -166,20 +166,23 @@ class _ReferralScreenState extends State<ReferralScreen> {
   void _shareReferralCode() {
     if (_myCode == null) return;
     
-    String downloadLink;
+    // 2026-02-16: Always provide both links for better cross-platform sharing
+    const String androidLink = "https://play.google.com/store/apps/details?id=com.needsfine.needsfine_app&pcampaignid=web_share";
+    const String iosLink = "https://apps.apple.com/app/id6758127044";
+
+    String links;
+    // Put the sender's platform link first
     if (Platform.isAndroid) {
-      downloadLink = "https://play.google.com/store/apps/details?id=com.needsfine.needsfine_app&pcampaignid=web_share";
-    } else if (Platform.isIOS) {
-       downloadLink = "https://apps.apple.com/app/id6758127044"; 
+      links = "구글 플레이: $androidLink\n앱 스토어: $iosLink";
     } else {
-       downloadLink = "https://needsfine.com/app";
+      links = "앱 스토어: $iosLink\n구글 플레이: $androidLink";
     }
 
     final String message = 
         "[NeedsFine] 친구가 초대했어요! 🍽️\n"
-        "추천 코드: $_myCode\n"
-        "앱 설치하고 가입 시 위 코드를 입력하면 기여도 보상을 받을 수 있습니다!\n"
-        "$downloadLink";
+        "추천 코드: $_myCode\n\n"
+        "앱 설치하고 가입 시 위 코드를 입력하면 기여도 보상을 받을 수 있습니다!\n\n"
+        "$links";
     
     Share.share(message, subject: "NeedsFine 친구 초대");
   }
