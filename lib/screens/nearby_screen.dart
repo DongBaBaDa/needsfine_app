@@ -17,7 +17,7 @@ import 'package:needsfine_app/screens/store_info_screen.dart'; // ✅ 매장 정
 // ✅ 서비스 임포트 추가
 import 'package:needsfine_app/services/review_service.dart';
 import 'package:needsfine_app/services/naver_search_service.dart'; // ✅ Import added for GeocodingService
-import 'package:needsfine_app/models/ranking_models.dart'; // ✅ 모델 임포트 추가
+import 'package:needsfine_app/models/ranking_models.dart' hide Review; // ✅ 모델 임포트 추가
 
 // ✅ Supabase 조회
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -78,6 +78,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   // ✅ 화면 표시용 상태 (점수, 신뢰도, 태그)
   double _displayScore = 0.0;
   int _displayTrust = 0;
+  int _displayReviewCount = 0; // ✅ 추가: 마커 배지 로직용
   List<String> _displayTags = []; // ✅ 태그 리스트 추가
 
   // ✅ 클러스터링 관련 변수
@@ -142,6 +143,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     _storeCommentCount = 0;
     _displayScore = 0.0;
     _displayTrust = 0;
+    _displayReviewCount = 0; // 초기화
     _displayTags = [];
   }
 
@@ -207,10 +209,10 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   Future<void> _fetchAndShowStoreMarkers() async {
     print("🗺️🗺️🗺️ _fetchAndShowStoreMarkers 시작!");
     try {
-      // reviews 테이블에서 직접 좌표 포함 조회
+      // reviews 테이블에서 직접 좌표 포함 조회 (사진, 작성일 추가)
       final response = await _supabase
           .from('reviews')
-          .select('id, store_name, store_address, store_lat, store_lng, needsfine_score, trust_level, is_hidden');
+          .select('id, store_name, store_address, store_lat, store_lng, needsfine_score, trust_level, is_hidden, photo_urls, created_at');
 
       final List<dynamic> data = response as List<dynamic>;
       print("🗺️ 리뷰 원본 데이터 로드: ${data.length}건");
@@ -264,6 +266,28 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         final first = reviews.first;
         double avgScore = 0;
         double avgTrust = 0;
+        
+        // 날짜순 정렬 (최신 사진 찾기 위해)
+        reviews.sort((a, b) {
+            final da = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2000);
+            final db = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2000);
+            return db.compareTo(da); // 최신순
+        });
+
+        // 최신 사진 찾기
+        String? latestPhotoUrl;
+        for (final r in reviews) {
+            final photos = r['photo_urls'];
+            if (photos is List && photos.isNotEmpty) {
+                latestPhotoUrl = photos[0].toString();
+                // debugPrint("📷 [Nearby Marker] Found photo for ${entry.key}: $latestPhotoUrl");
+                break; // 가장 최신 1개만 찾으면 됨
+            }
+        }
+        if (latestPhotoUrl == null) {
+             // debugPrint("📷 [Nearby Marker] No photo for ${entry.key}");
+        }
+
         for (final r in reviews) {
           avgScore += (r['needsfine_score'] ?? 0).toDouble();
           avgTrust += (r['trust_level'] ?? 0).toDouble();
@@ -281,6 +305,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
           address: first['store_address']?.toString(),
           lat: (first['store_lat'] ?? 0).toDouble(),
           lng: (first['store_lng'] ?? 0).toDouble(),
+          imageUrl: latestPhotoUrl, // ✅ [New] 이미지 URL
         );
       }).toList();
 
@@ -486,7 +511,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       for (final store in validStores) {
         final position = NLatLng(store.lat!, store.lng!);
         final iconImage = await NOverlayImage.fromWidget(
-          widget: _buildCustomMarkerWidget(store.storeName, score: store.avgScore),
+          widget: _buildCustomMarkerWidget(store.storeName, score: store.avgScore, trust: store.avgTrust.round(), reviewCount: store.reviewCount),
           context: context,
         );
         final marker = NMarker(
@@ -722,13 +747,22 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     } catch (_) {}
   }
 
-  Widget _buildCustomMarkerWidget(String title, {double? score}) {
-    final displayTitle = score != null 
-        ? "$title (${score.toStringAsFixed(1)})" 
-        : title;
+  Widget _buildCustomMarkerWidget(String title, {double? score, int? trust, int? reviewCount}) {
+    // 1. 배지 위젯 생성
+    Widget? badgeWidget;
+    if (score != null && trust != null) {
+      badgeWidget = _buildTierBadge(score, trust, reviewCount);
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // 칭호 (매장 이름 위, 4pt 작은 글씨, 중앙 정렬)
+        if (badgeWidget != null) ...[
+          badgeWidget,
+          const SizedBox(height: 4),
+        ],
+
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
@@ -743,20 +777,41 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             ],
             border: Border.all(color: const Color(0xFF9C7CFF), width: 2.5),
           ),
-          child: Row(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.place, color: Color(0xFF9C7CFF), size: 20),
-              const SizedBox(width: 6),
-              Text(
-                displayTitle,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                  color: Colors.black,
-                  height: 1.2,
-                ),
+               Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.place, color: Color(0xFF9C7CFF), size: 20),
+                  const SizedBox(width: 6),
+                  Flexible( // 텍스트 오버플로우 방지
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: Colors.black,
+                        height: 1.2,
+                      ),
+                      maxLines: 1, 
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
+              // 니즈파인 점수 (매장 이름 밑)
+              if (score != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  "니즈파인 점수 ${score.toStringAsFixed(1)}",
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF9C7CFF),
+                  ),
+                ),
+              ]
             ],
           ),
         ),
@@ -769,6 +824,65 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
           ),
         ),
       ],
+    );
+  }
+
+  // ✅ 칭호 배지 생성 (RankingScreen 로직과 동일)
+  Widget _buildTierBadge(double score, int trust, int? reviewCount) {
+    String? label;
+    Color color;
+    bool isCandidate = trust <= 65;
+    bool isVerified = (reviewCount ?? 0) >= 10; // ✅ 10개 이상이어야 검증됨
+
+    if (score >= 4.5) {
+      label = "웨이팅 맛집";
+      color = const Color(0xFF9C7CFF);
+    } else if (score >= 4.0) {
+      label = "지역 맛집";
+      color = const Color(0xFFCE93D8);
+    } else if (score >= 3.5) {
+      label = "실패없는 식당";
+      color = const Color(0xFF00BFA5);
+    } else if (score >= 3.0) {
+      label = "괜찮은 집";
+      color = const Color(0xFFFFAB00);
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    if (isCandidate) {
+      label = "$label 후보";
+      color = const Color(0xFF9E9E9E);
+    }
+
+    // ✅ [신규] 리뷰 10개 미만이면 회색 처리 (검증 미완료)
+    if (!isVerified) {
+      color = const Color(0xFF9E9E9E); // Grey
+    }
+
+    // 4pt 작은 글씨 (기본 14pt 대비 10pt)
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white, // 배경은 흰색으로 깔끔하게
+        borderRadius: BorderRadius.circular(12), // 둥근 캡슐 형태
+        border: Border.all(color: color, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10, 
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
     );
   }
 
@@ -848,7 +962,13 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       userRating: 0.0,
       needsFineScore: needsFineScore,
       reviewCount: reviewCount,
-      reviews: [],
+      reviews: allPhotos.map((url) => Review(
+        userName: 'System',
+        content: '',
+        rating: 0.0,
+        date: '',
+        photoUrls: [url],
+      )).toList(),
     );
   }
 
@@ -859,8 +979,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   }
 
   List<String> _getStorePhotos(Store s) {
-    // DB에서 가져온 사진 리스트를 반환할 수도 있으나, Store 모델에 없다면 빈 리스트
-    return [];
+    return s.allPhotos;
   }
 
   // ✅ [복구] ID 해결 로직 (가장 많이 사용된 주소 찾기 등)
@@ -1100,11 +1219,28 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     // RankingScreen과 로직을 통일하여 해당 이름의 모든 리뷰를 긁어옴
     List rows = [];
     try {
-      final res = await _supabase
+      // 1차 시도: 원본 이름 조회
+      var res = await _supabase
           .from('reviews')
           .select('needsfine_score, trust_level, photo_urls, is_hidden, tags')
-          .eq('store_name', name);
+          .eq('store_name', name)
+          .order('created_at', ascending: false) // 최신순 정렬 보장
+          .limit(50); // 최근 50개만 조회 (성능 최적화)
+      
       rows = (res is List) ? res : [];
+
+      // 2차 시도: 실패 및 공백 포함 시, 공백 제거 후 재시도
+      if (rows.isEmpty && name.contains(' ')) {
+        final cleanName = name.replaceAll(' ', '');
+        debugPrint("🔍 [Nearby] Retry fetch with clean name: $cleanName");
+        res = await _supabase
+            .from('reviews')
+            .select('needsfine_score, trust_level, photo_urls, is_hidden, tags')
+            .eq('store_name', cleanName)
+            .order('created_at', ascending: false)
+            .limit(50);
+        rows = (res is List) ? res : [];
+      }
     } catch (e) {
       debugPrint("리뷰 전체 조회 실패: $e");
     }
@@ -1131,6 +1267,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
 
       final pu = m['photo_urls'];
       if (pu is List) {
+        debugPrint("📷 [Nearby Sheet] Found photos for $name: ${pu.length}");
         for (final x in pu) { if (x is String && x.isNotEmpty) photos.add(x); }
       }
 
@@ -1172,6 +1309,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       storeAddress: _effectiveStoreAddress(place),
       avgScore: avgScore, // ✅ 계산된 점수 전달
       avgTrust: avgTrust, // ✅ 계산된 신뢰도 전달
+      reviewCount: count, // ✅ 리뷰 개수 전달
       topTags: topTags,   // ✅ 계산된 태그 전달
     );
   }
@@ -1221,6 +1359,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
           // ✅ [핵심] DB에서 계산된 점수, 신뢰도, 태그를 화면 상태 변수에 반영
           _displayScore = dbResult.avgScore;
           _displayTrust = dbResult.avgTrust;
+          _displayReviewCount = dbResult.reviewCount; // ✅ 리뷰 개수 반영
           _displayTags = dbResult.topTags;
         });
       } else {
@@ -1232,7 +1371,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     controller.updateCamera(NCameraUpdate.scrollAndZoomTo(target: position, zoom: 16));
 
     final iconImage = await NOverlayImage.fromWidget(
-      widget: _buildCustomMarkerWidget(place.cleanTitle),
+      widget: _buildCustomMarkerWidget(place.cleanTitle, score: _displayScore > 0 ? _displayScore : null, trust: _displayTrust > 0 ? _displayTrust : null, reviewCount: _displayReviewCount),
       context: context,
     );
     final marker = NMarker(id: 'selected', position: position, icon: iconImage);
@@ -1738,6 +1877,7 @@ class _StoreFetchResult {
   final String? storeAddress;
   final double avgScore;
   final int avgTrust;
+  final int reviewCount; // ✅ 추가
   final List<String> topTags; // ✅ 태그 추가
 
   const _StoreFetchResult({
@@ -1746,6 +1886,7 @@ class _StoreFetchResult {
     this.storeAddress,
     this.avgScore = 0.0,
     this.avgTrust = 0,
+    this.reviewCount = 0, // ✅ 기본값
     this.topTags = const [], // ✅ 기본값 설정
   });
 }

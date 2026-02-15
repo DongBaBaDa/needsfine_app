@@ -83,7 +83,7 @@ class _ReviewCardState extends State<ReviewCard> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            review.storeAddress ?? "",
+                            review.storeAddress ?? '주소 정보 없음',
                             style: const TextStyle(fontSize: 12, color: Colors.grey),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -125,6 +125,18 @@ class _ReviewCardState extends State<ReviewCard> {
                           height: 1.0,
                         ),
                       ),
+                      // ✅ 거리 표시 (신뢰도 아래로 이동)
+                      if (review.distance != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          "${review.distance!.toStringAsFixed(1)}km",
+                          style: const TextStyle(
+                            fontSize: 11, 
+                            fontWeight: FontWeight.bold, 
+                            color: Color(0xFF9C7CFF)
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],

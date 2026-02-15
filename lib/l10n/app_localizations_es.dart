@@ -93,6 +93,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get sortByReliability => 'Por Fiab.';
 
   @override
+  String get sortByDistance => '거리순';
+
+  @override
+  String distanceUnit(Object distance) {
+    return '${distance}km';
+  }
+
+  @override
   String get bitterCriticism => 'Crítico';
 
   @override

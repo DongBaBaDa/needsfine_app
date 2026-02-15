@@ -9,6 +9,7 @@
     <application
         android:label="니즈파인"
         android:name="${applicationName}"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/launcher_icon">
 
         <meta-data

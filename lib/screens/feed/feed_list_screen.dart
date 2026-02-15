@@ -29,6 +29,7 @@ class _FeedListScreenState extends State<FeedListScreen> with AutomaticKeepAlive
   final Set<int> _viewedPostIds = {}; // Track viewed posts in this session
   double? _lat;
   double? _lng;
+  String _sortOption = 'latest'; // 'latest' or 'distance'
 
   @override
   bool get wantKeepAlive => true;
@@ -43,6 +44,7 @@ class _FeedListScreenState extends State<FeedListScreen> with AutomaticKeepAlive
     if (refresh) {
       _offset = 0;
       _hasMore = true;
+      // Do not reset sort option on refresh
     }
     if (!_hasMore) return;
 
@@ -62,6 +64,7 @@ class _FeedListScreenState extends State<FeedListScreen> with AutomaticKeepAlive
         offset: _offset,
         lat: _lat,
         lng: _lng,
+        sortOption: widget.filter == FeedFilter.nearMe ? _sortOption : null,
       );
 
       if (mounted) {
@@ -121,49 +124,99 @@ class _FeedListScreenState extends State<FeedListScreen> with AutomaticKeepAlive
   Widget build(BuildContext context) {
     super.build(context);
     if (_isLoading && _posts.isEmpty) return const Center(child: CircularProgressIndicator());
-    if (_posts.isEmpty) return const Center(child: Text("게시물이 없습니다."));
+    if (_posts.isEmpty) {
+      return const Center(child: Text("게시물이 없습니다.", textAlign: TextAlign.center));
+    }
 
     return RefreshIndicator(
       onRefresh: _onRefresh,
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: _posts.length + 1,
-        separatorBuilder: (context, index) => const SizedBox(height: 16),
-        itemBuilder: (context, index) {
-          if (index == _posts.length) {
-            return _hasMore
-                ? FutureBuilder(
-                    future: _fetchPosts(),
-                    builder: (_, __) => const Center(child: CircularProgressIndicator()))
-                : const SizedBox(height: 50); // Bottom padding
-          }
-          final post = _posts[index];
-          final postId = post['id'] as int;
-          
-          return VisibilityDetector(
-            key: Key('feed-post-$postId'),
-            onVisibilityChanged: (info) {
-              if (info.visibleFraction > 0.5 && !_viewedPostIds.contains(postId)) {
-                _viewedPostIds.add(postId);
-                FeedService.incrementViewCount(postId);
-                // Update local state to reflect view count immediately
-                if (mounted) {
-                  setState(() {
-                    post['view_count'] = (post['view_count'] ?? 0) + 1;
-                  });
+      child: Column(
+        children: [
+          // Sort Filter for "Near Me"
+          if (widget.filter == FeedFilter.nearMe)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16, top: 4, bottom: 4),
+                child: PopupMenuButton<String>(
+                  onSelected: (String newValue) {
+                    if (newValue != _sortOption) {
+                      setState(() {
+                        _sortOption = newValue;
+                        _isLoading = true;
+                        _posts.clear();
+                      });
+                      _fetchPosts(refresh: true);
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'latest',
+                      child: Text(AppLocalizations.of(context)!.latestOrder),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'distance',
+                      child: Text(AppLocalizations.of(context)!.sortByDistance ?? '거리순'),
+                    ),
+                  ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _sortOption == 'latest' 
+                            ? AppLocalizations.of(context)!.latestOrder 
+                            : (AppLocalizations.of(context)!.sortByDistance ?? '거리순'),
+                        style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                      ),
+                      const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Colors.grey),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: _posts.length + 1,
+              separatorBuilder: (context, index) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                if (index == _posts.length) {
+                  return _hasMore
+                      ? FutureBuilder(
+                          future: _fetchPosts(),
+                          builder: (_, __) => const Center(child: CircularProgressIndicator()))
+                      : const SizedBox(height: 50); // Bottom padding
                 }
-              }
-            },
-            child: FeedPostCard(
-              post: post,
-              onDelete: (pid) {
-                setState(() {
-                  _posts.removeWhere((p) => p['id'] == pid);
-                });
+                final post = _posts[index];
+                final postId = post['id'] as int;
+                
+                return VisibilityDetector(
+                  key: Key('feed-post-$postId'),
+                  onVisibilityChanged: (info) {
+                    if (info.visibleFraction > 0.5 && !_viewedPostIds.contains(postId)) {
+                      _viewedPostIds.add(postId);
+                      FeedService.incrementViewCount(postId);
+                      // Update local state to reflect view count immediately
+                      if (mounted) {
+                        setState(() {
+                          post['view_count'] = (post['view_count'] ?? 0) + 1;
+                        });
+                      }
+                    }
+                  },
+                  child: FeedPostCard(
+                    post: post,
+                    onDelete: (pid) {
+                      setState(() {
+                        _posts.removeWhere((p) => p['id'] == pid);
+                      });
+                    },
+                  ),
+                );
               },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -341,6 +394,15 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   ],
                 ),
                 Text(timeStr, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                // ✅ 거리 표시 (있으면)
+                if (_post['distance'] != null && (_post['distance'] as num) < 9999)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      "${(_post['distance'] as num).toStringAsFixed(1)}km", 
+                      style: const TextStyle(color: Color(0xFFC87CFF), fontSize: 11, fontWeight: FontWeight.bold)
+                    ),
+                  ),
               ],
             ),
           ),

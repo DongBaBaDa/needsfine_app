@@ -15,6 +15,7 @@ import 'package:needsfine_app/core/profanity_filter.dart';
 
 // ✅ FIX: AppLocalizations import 누락으로 타입/참조 에러가 났던 부분
 import 'package:needsfine_app/l10n/app_localizations.dart';
+import 'package:geolocator/geolocator.dart';
 
 class FeedWriteScreen extends StatefulWidget {
   final Map<String, dynamic>? post; // Optional post for editing
@@ -204,6 +205,27 @@ class _FeedWriteScreenState extends State<FeedWriteScreen> with SingleTickerProv
     if (ProfanityFilter.hasProfanity(content)) {
        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('부적절한 단어가 포함되어 있습니다')));
        return;
+    }
+
+    // ✅ 내 주변 피드 노출을 위해 위치 정보가 없으면 현재 위치 사용
+    if (_lat == null || _lng == null) {
+      try {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+          final position = await Geolocator.getCurrentPosition();
+          if (mounted) {
+            setState(() {
+              _lat = position.latitude;
+              _lng = position.longitude;
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint("Location fetch error: $e");
+      }
     }
 
     setState(() => _isSubmitting = true);

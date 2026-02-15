@@ -20,6 +20,9 @@ class Review {
   // ✅ [추가] 저장(스크랩) 수 및 조회수 필드 추가
   final int saveCount;
   final int viewCount;
+  
+  // ✅ [추가] 거리 필드 (계산 후 주입)
+  final double? distance;
 
   final String? userEmail;
   final String? myCommentText;
@@ -48,6 +51,7 @@ class Review {
     this.commentCount = 0,
     this.saveCount = 0,
     this.viewCount = 0, // ✅ 기본값
+    this.distance,      // ✅ 초기화
     this.userEmail,
     this.myCommentText,
     this.myCommentCreatedAt,
@@ -131,6 +135,7 @@ class Review {
       commentCount: (json['comment_count'] as int?) ?? parseCount(json['comments']),
       saveCount: (json['save_count'] as int?) ?? parseCount(json['review_saves']),
       viewCount: (json['view_count'] as int?) ?? 0, // ✅ 조회수 파싱
+      distance: (json['distance'] as num?)?.toDouble(), // ✅ 거리 파싱 (있으면)
 
       myCommentText: json['comment_content']?.toString(),
       myCommentCreatedAt: json['comment_created_at'] != null
@@ -166,6 +171,8 @@ class StoreRanking {
   final String? address;
   final double? lat;
   final double? lng;
+  final double? distance; // ✅ 거리 필드 추가
+  final String? imageUrl; // ✅ [Added] 매장 이미지(리뷰 사진 등)
 
   StoreRanking({
     required this.storeName,
@@ -178,6 +185,8 @@ class StoreRanking {
     this.address,
     this.lat,
     this.lng,
+    this.distance,
+    this.imageUrl,
   });
 
   factory StoreRanking.fromViewJson(Map<String, dynamic> json, int rank) {
@@ -207,6 +216,7 @@ class StoreRanking {
       address: json['store_address']?.toString(),
       lat: toDouble(json['store_lat']),
       lng: toDouble(json['store_lng']),
+      distance: (json['distance'] as num?)?.toDouble(), // ✅ 거리 파싱
     );
   }
 }

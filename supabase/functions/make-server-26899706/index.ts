@@ -3,7 +3,7 @@ import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { calculateNeedsFineScore } from "./logic.ts";
+import { analyzeReview, NEEDSFINE_VERSION } from "./logic.ts";
 
 const app = new Hono();
 
@@ -102,8 +102,27 @@ app.post("/make-server-26899706/reviews", async (c) => {
 
         const hasPhoto = photo_urls && Array.isArray(photo_urls) && photo_urls.length > 0;
 
-        // logic.ts 호출
-        const calculated = calculateNeedsFineScore(review_text, user_rating, hasPhoto);
+        // logic.ts 호출 (v17.2.0)
+        const analysis = analyzeReview({ text: review_text, userRating: Number(user_rating), hasPhoto: hasPhoto });
+
+        // Adapter: Map Policy v1 analysis to DB schema
+        const calculated = {
+            needsfine_score: analysis.needsFineScore,
+            trust_level: analysis.trust,
+            // Authenticity: high trust
+            authenticity: analysis.trust >= 70,
+            // Advertising: removed to default false
+            advertising_words: false,
+            // tags: analysis.tags (TagResult[]) -> string[] for DB/App compatibility
+            tags: analysis.tags.map(t => t.label),
+            // Critical: Low score or specific debug reasons (Updated for v17.2.0)
+            is_critical: analysis.needsFineScore <= 2.0 || (analysis.evidence.strongNegative?.flag ?? false),
+            // Hidden: Only hide if trust is extremely low (<= 2%)
+            // Simple Logic v1.0 gives 3% for spam/low-info, but 2~5% for very short reviews.
+            // To be safe and show everything for now, we set threshold to 2.
+            is_hidden: analysis.trust <= 2,
+            logic_version: NEEDSFINE_VERSION
+        };
 
         const { data: review, error } = await supabase.from('reviews').insert({
             store_name, store_address: store_address || null, review_text, user_rating, user_id: profile.id, photo_urls: photo_urls || [],
@@ -177,11 +196,23 @@ app.post("/make-server-26899706/recalculate-all", async (c) => {
 
     try {
         // 모든 리뷰를 가져오지 않고, 재계산이 필요한 것들만 가져오거나 전체를 끊어서 처리
+        // 1. Service Role Key 확인
+        const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        console.log(`[Recalculate] Service Role Key exists: ${!!serviceRoleKey}`);
+
+        // 2. 리뷰 데이터 조회
         const { data: reviews, error: fetchError } = await supabase.from('reviews').select('*');
-        if (fetchError) throw fetchError;
+
+        if (fetchError) {
+            console.error(`[Recalculate] Fetch Error:`, fetchError);
+            throw fetchError;
+        }
+
+        console.log(`[Recalculate] Reviews found: ${reviews?.length ?? 0}`);
 
         let successCount = 0;
         let lastLogicVersion = "unknown";
+        let lastError: any = null;
         const total = reviews?.length || 0;
 
         // 성능 최적화: 50개씩 묶어서 UPSERT 처리 (완전 빠름)
@@ -189,21 +220,46 @@ app.post("/make-server-26899706/recalculate-all", async (c) => {
         for (let i = 0; i < total; i += batchSize) {
             const chunk = reviews!.slice(i, i + batchSize);
             const updates = chunk.map(r => {
-                const hasPhoto = (r.photo_urls && r.photo_urls.length > 0);
-                const calculated = calculateNeedsFineScore(r.review_text, Number(r.user_rating), hasPhoto);
-                lastLogicVersion = calculated.logic_version;
+                // v17.2.0 recalculation
+                const hasPhoto = r.photo_urls && Array.isArray(r.photo_urls) && r.photo_urls.length > 0;
+                const analysis = analyzeReview({ text: r.review_text, userRating: Number(r.user_rating), hasPhoto: hasPhoto });
+
+                lastLogicVersion = NEEDSFINE_VERSION;
 
                 return {
                     id: r.id,
-                    ...calculated,
-                    logic_version: calculated.logic_version,
+                    store_name: r.store_name,
+                    user_id: r.user_id,
+                    review_text: r.review_text,
+                    user_rating: r.user_rating,
+                    needsfine_score: analysis.needsFineScore,
+                    trust_level: analysis.trust,
+                    authenticity: analysis.trust >= 70,
+                    advertising_words: false,
+                    tags: analysis.tags.map(t => t.label),
+                    is_critical: analysis.needsFineScore <= 2.0 || (analysis.evidence.strongNegative?.flag ?? false),
+                    is_hidden: analysis.trust <= 2,
+                    logic_version: NEEDSFINE_VERSION,
                     recalculated_at: new Date().toISOString()
                 };
             });
 
             const { error: updateError } = await supabase.from('reviews').upsert(updates);
-            if (updateError) console.error(`Batch ${i} update error:`, updateError);
+            if (updateError) {
+                console.error(`Batch ${i} update error:`, updateError);
+                lastError = updateError;
+            }
             else successCount += chunk.length;
+        }
+
+        if (successCount === 0 && total > 0) {
+            return c.json({
+                success: false,
+                count: 0,
+                total: total,
+                logic_version: lastLogicVersion,
+                error: `Recalculation failed. Last error: ${JSON.stringify(lastError)}`
+            }, 400);
         }
 
         return c.json({
@@ -213,7 +269,7 @@ app.post("/make-server-26899706/recalculate-all", async (c) => {
             logic_version: lastLogicVersion
         });
     } catch (e) {
-        return c.json({ error: e.message }, 500);
+        return c.json({ error: e.message, last_error: lastError }, 500);
     }
 });
 
@@ -258,7 +314,15 @@ app.post("/make-server-26899706/analyze", async (c) => {
         const userRating = body.user_rating || body.userRating;
         const hasPhoto = body.has_photo || body.hasPhoto || false;
 
-        const result = calculateNeedsFineScore(reviewText, userRating, hasPhoto);
+        const analysis = analyzeReview({ text: reviewText, userRating: Number(userRating), hasPhoto: hasPhoto });
+
+        // Map for App compatibility (review_service.dart expects snake_case)
+        const result = {
+            needsfine_score: analysis.needsFineScore,
+            trust_level: analysis.trust,
+            tags: analysis.tags.map(t => t.label),
+            is_warning: analysis.needsFineScore <= 2.0 || (analysis.evidence.strongNegative?.flag ?? false)
+        };
         return c.json(result);
     } catch (error) { return c.json({ error: "분석 실패" }, 500); }
 });
@@ -333,5 +397,240 @@ async function sendAdminPush(title: string, body: string, referenceId: string | 
         console.error("Push send failed:", e);
     }
 }
+
+// [Additional Endpoint] Batch Image Fetching
+app.post("/make-server-26899706/fetch-store-images", async (c: any) => {
+    try {
+        const body = await c.req.json();
+        const store_names: any[] = body.store_names;
+
+        if (!store_names || !Array.isArray(store_names) || store_names.length === 0) {
+            return c.json({ data: [] });
+        }
+
+        // 1. 요청된 상점 이름 목록 (중복 제거)
+        const targets: string[] = [...new Set(store_names.map((n: any) => n.toString().trim()))];
+        const results: { store_name: string, photo_url: string }[] = [];
+
+        // 2. DB 조회
+        const { data: exactMatches, error: exactError } = await supabase
+            .from('reviews')
+            .select('store_name, photo_urls')
+            .in('store_name', targets)
+            .not('photo_urls', 'is', null)
+            .order('created_at', { ascending: false });
+
+        if (exactError) throw exactError;
+
+        // 3. 매칭된 데이터 처리
+        const foundMap = new Map<string, string>();
+
+        if (exactMatches) {
+            for (const row of (exactMatches as any[])) {
+                const name = row.store_name;
+                if (!foundMap.has(name)) {
+                    const photos = row.photo_urls as any[];
+                    if (photos && photos.length > 0 && photos[0]) {
+                        foundMap.set(name, photos[0]);
+                        results.push({ store_name: name, photo_url: photos[0] });
+                    }
+                }
+            }
+        }
+
+        // 4. (Optional) 미발견 상점에 대해 Fuzzy Match (공백 제거) 시도
+        // 상위 랭킹 등 중요한 경우 클라이언트가 재요청하거나, 여기서 처리.
+        // 성능을 위해 여기서는 정확한 매칭만 반환하고, 클라이언트가 못 찾은 건에 대해 
+        // 2차로 '공백 제거 이름'으로 다시 요청하는 패턴이 나을 수 있음.
+        // 하지만 요청 수 줄이는게 목표므로, 남은 것들에 대해 서버에서 공백 제거 매칭 시도.
+
+        const missing = targets.filter(t => !foundMap.has(t));
+        if (missing.length > 0) {
+            // 공백 제거된 이름 매핑: { "Starbucks Coffee": "StarbucksCoffee" }
+            const cleanToOriginal = new Map<string, string>();
+            const cleanTargets: string[] = [];
+
+            for (const m of missing) {
+                const clean = m.replace(/\s+/g, '');
+                if (clean !== m) {
+                    cleanToOriginal.set(clean, m);
+                    cleanTargets.push(clean);
+                }
+            }
+
+            if (cleanTargets.length > 0) {
+                const { data: fuzzyMatches } = await supabase
+                    .from('reviews')
+                    .select('store_name, photo_urls')
+                    .in('store_name', cleanTargets)
+                    .not('photo_urls', 'is', null)
+                    .order('created_at', { ascending: false });
+
+                if (fuzzyMatches) {
+                    for (const row of fuzzyMatches) {
+                        const cleanName = row.store_name;
+                        const originalName = cleanToOriginal.get(cleanName);
+                        if (originalName && !foundMap.has(originalName)) {
+                            const photos = row.photo_urls as any[];
+                            if (photos && photos.length > 0 && photos[0]) {
+                                foundMap.set(originalName, photos[0]);
+                                results.push({ store_name: originalName, photo_url: photos[0] });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return c.json({ data: results });
+    } catch (e: any) {
+        console.error("fetch-store-images error:", e);
+        return c.json({ error: e.message }, 500);
+    }
+});
+
+// [Referral Endpoint] Get or Generate Referral Code
+app.post("/make-server-26899706/get-my-referral-code", async (c: any) => {
+    try {
+        const { user_id } = await c.req.json();
+        if (!user_id) return c.json({ error: "Missing user_id" }, 400);
+
+        // 1. Check existing code
+        const { data: profile, error: fetchError } = await supabase
+            .from('profiles')
+            .select('my_referral_code, referral_count, contribution_score')
+            .eq('id', user_id)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        if (profile.my_referral_code) {
+            return c.json({
+                code: profile.my_referral_code,
+                count: profile.referral_count,
+                contribution_score: profile.contribution_score || 0
+            });
+        }
+
+        // 2. Generate new unique code
+        let newCode = "";
+        let isUnique = false;
+        let retries = 0;
+
+        while (!isUnique && retries < 5) {
+            // Generate 6-char alphanumeric (A-Z, 0-9)
+            newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+            // Check uniqueness
+            const { data: duplicate } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('my_referral_code', newCode)
+                .maybeSingle();
+
+            if (!duplicate) isUnique = true;
+            retries++;
+        }
+
+        if (!isUnique) throw new Error("Failed to generate unique code");
+
+        // 3. Save new code
+        const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ my_referral_code: newCode })
+            .eq('id', user_id);
+
+        if (updateError) throw updateError;
+
+        return c.json({
+            code: newCode,
+            count: 0,
+            contribution_score: profile.contribution_score || 0
+        });
+
+    } catch (e: any) {
+        console.error("get-my-referral-code error:", e);
+        return c.json({ error: e.message }, 500);
+    }
+});
+
+// [Referral Endpoint] Apply Referral Code
+app.post("/make-server-26899706/apply-referral-code", async (c: any) => {
+    try {
+        const { user_id, referral_code } = await c.req.json();
+        if (!user_id || !referral_code) return c.json({ error: "Missing data" }, 400);
+
+        const targetCode = referral_code.toString().trim().toUpperCase();
+
+        // 1. Validate User
+        const { data: me, error: meError } = await supabase
+            .from('profiles')
+            .select('id, referred_by, my_referral_code, contribution_score')
+            .eq('id', user_id)
+            .single();
+
+        if (meError) {
+            console.error("Referral Error (Validate User):", meError);
+            return c.json({ success: false, message: "사용자 정보를 찾을 수 없습니다." });
+        }
+        if (me.referred_by) {
+            return c.json({ success: false, message: "이미 추천인을 등록했습니다." });
+        }
+        if (me.my_referral_code === targetCode) {
+            return c.json({ success: false, message: "본인의 코드는 입력할 수 없습니다." });
+        }
+
+        // 2. Find Referrer
+        const { data: referrer, error: referrerError } = await supabase
+            .from('profiles')
+            .select('id, referral_count, contribution_score')
+            .eq('my_referral_code', targetCode)
+            .maybeSingle();
+
+        if (referrerError) {
+            console.error("Referral Error (Find Referrer):", referrerError);
+        }
+
+        if (!referrer) {
+            return c.json({ success: false, message: "유효하지 않은 추천인 코드입니다." });
+        }
+
+        // 3. Apply Referral (Update both profiles)
+
+        // Update Me
+        // Use current score from 'me' fetched above
+        const myNewScore = (me.contribution_score || 0) + 10;
+
+        const { error: updateMeError } = await supabase.from('profiles').update({
+            referred_by: referrer.id,
+            contribution_score: myNewScore
+        }).eq('id', user_id);
+
+        if (updateMeError) console.error("Referral Update Me Error:", updateMeError);
+
+        // Update Referrer
+        const referrerNewScore = (referrer.contribution_score || 0) + 10;
+        const referrerNewCount = (referrer.referral_count || 0) + 1;
+
+        const { error: updateReferrerError } = await supabase.from('profiles').update({
+            contribution_score: referrerNewScore,
+            referral_count: referrerNewCount
+        }).eq('id', referrer.id);
+
+        if (updateReferrerError) console.error("Referral Update Referrer Error:", updateReferrerError);
+
+        return c.json({ success: true, message: "추천인 등록 완료! 기여도가 10 상승했습니다." });
+
+    } catch (e: any) {
+        console.error("apply-referral-code error:", e);
+        return c.json({ error: e.message }, 500);
+    }
+});
+
+async function getCurrentTrust(userId: string, client: any) {
+    const { data } = await client.from('profiles').select('trust_level').eq('id', userId).single();
+    return data?.trust_level ?? 0;
+}
+
 
 Deno.serve(app.fetch);

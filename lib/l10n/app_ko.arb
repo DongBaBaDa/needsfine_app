@@ -27,6 +27,13 @@
   "storeRanking": "매장 순위",
   "sortByScore": "니즈파인 점수순",
   "sortByReliability": "신뢰도순",
+  "sortByDistance": "거리순",
+  "distanceUnit": "{distance}km",
+  "@distanceUnit": {
+    "placeholders": {
+      "distance": {}
+    }
+  },
   "bitterCriticism": "쓴소리",
   "latestOrder": "최신순",
   "noInfo": "정보 없음",

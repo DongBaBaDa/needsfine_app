@@ -93,6 +93,14 @@ class AppLocalizationsKo extends AppLocalizations {
   String get sortByReliability => '신뢰도순';
 
   @override
+  String get sortByDistance => '거리순';
+
+  @override
+  String distanceUnit(Object distance) {
+    return '${distance}km';
+  }
+
+  @override
   String get bitterCriticism => '쓴소리';
 
   @override

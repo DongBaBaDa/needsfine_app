@@ -2,6 +2,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import 'dart:math';
 import 'package:needsfine_app/services/user_blocking_service.dart';
 
 class FeedService {
@@ -15,6 +16,7 @@ class FeedService {
     double? lat,
     double? lng,
     int radiusKm = 10, // Default radius for nearMe
+    String? sortOption, // 'latest', 'distance'
   }) async {
     final userId = _supabase.auth.currentUser?.id;
 
@@ -72,13 +74,23 @@ class FeedService {
       // Fetch larger batch - relying on bounding box to limit count
       final response = await queryBuilder.order('created_at', ascending: false).limit(100); 
       List<Map<String, dynamic>> temp = List<Map<String, dynamic>>.from(response);
+
+      // distance calculation for all items
+      for (var item in temp) {
+        item['distance'] = _calcDist(lat, lng, item['lat'], item['lng']);
+      }
       
-      // Client-side Distance Sort
-      temp.sort((a, b) {
-        double distA = _calcDist(lat, lng, a['lat'], a['lng']);
-        double distB = _calcDist(lat, lng, b['lat'], b['lng']);
-        return distA.compareTo(distB);
-      });
+      if (sortOption == 'distance') {
+         // Client-side Distance Sort
+         temp.sort((a, b) {
+           double distA = a['distance'] ?? 999999;
+           double distB = b['distance'] ?? 999999;
+           return distA.compareTo(distB);
+         });
+      } else {
+        // Default: Latest (already sorted by DB, but safe to re-sort if needed or trust DB)
+        // temp is already sorted by created_at desc from DB
+      }
       
       // Manual Pagination
       int start = offset;
@@ -98,11 +110,39 @@ class FeedService {
 
   static double _calcDist(double lat1, double lng1, dynamic lat2, dynamic lng2) {
     if (lat2 == null || lng2 == null) return 999999;
-    double dLat = (lat2 - lat1).abs();
-    double dLng = (lng2 - lng1).abs();
-    // Simple Eucledian approximation for sorting is fast enough for small areas
-    return dLat * dLat + dLng * dLng;
+    double lat2d = (lat2 is num) ? lat2.toDouble() : double.tryParse(lat2.toString()) ?? 0.0;
+    double lng2d = (lng2 is num) ? lng2.toDouble() : double.tryParse(lng2.toString()) ?? 0.0;
+
+    // Use Geolocator for precise distance in meters
+    // import 'package:geolocator/geolocator.dart'; needed.
+    // Or simple Haversine if we don't want dependency here.
+    // Since we import geolocator in screens, better to use it here or simple math.
+    // Let's use simple Haversine for service portability or keep it simple.
+    // Actually, `Geolocator.distanceBetween` is best. 
+    // But this file might not have geolocator imported.
+    // Let's check imports. No geolocator yet.
+    // I will use a custom Haversine implementation to avoid adding dependency if not present,
+    // OR just add the import.
+    // Since `feed_list_screen.dart` uses it, package is available.
+    // I'll add import at top of file in next step or use simple Euclidean relative check as before was square.
+    // Return KILOMETERS for UI display.
+    
+    const R = 6371; // Radius of the earth in km
+    double dLat = _deg2rad(lat2d - lat1);
+    double dLon = _deg2rad(lng2d - lng1);
+    double a = 
+      sin(dLat/2) * sin(dLat/2) +
+      cos(_deg2rad(lat1)) * cos(_deg2rad(lat2d)) * 
+      sin(dLon/2) * sin(dLon/2);
+      
+    double c = 2 * atan2(sqrt(a), sqrt(1-a)); 
+    return R * c;
   }
+
+  static double _deg2rad(double deg) {
+    return deg * (pi / 180);
+  }
+
 
   // --- Create Post ---
   static Future<void> createPost({

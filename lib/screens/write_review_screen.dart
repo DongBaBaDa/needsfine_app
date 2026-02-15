@@ -251,20 +251,32 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
   }
 
   Future<void> _pickImage() async {
-    if ((_newImages.length + _existingImageUrls.length) >= 5) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.photoLimit)));
+    final currentCount = _newImages.length + _existingImageUrls.length;
+    if (currentCount >= 10) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("최대 10장까지만 업로드 가능합니다.")));
       return;
     }
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
-    if (image != null) {
-      File? compressedFile = await _compressImage(File(image.path));
-      if (compressedFile != null) {
-        setState(() => _newImages.add(compressedFile));
-        _analyzeRealTime();
-      }
+    final List<XFile> pickedFiles = await ImagePicker().pickMultiImage(
+      maxWidth: 1024,
+      imageQuality: 80,
+    );
+    
+    // ignore: unnecessary_null_comparison
+    if (pickedFiles == null || pickedFiles.isEmpty) return;
+
+    final availableSlots = 10 - currentCount;
+    final filesToAdd = pickedFiles.take(availableSlots).map((x) => File(x.path)).toList();
+
+    setState(() {
+      _newImages.addAll(filesToAdd);
+    });
+
+    if (pickedFiles.length > availableSlots) {
+       if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("최대 10장까지만 업로드 가능합니다.")));
     }
+
+    _analyzeRealTime();
   }
 
   Future<File?> _compressImage(File file) async {
@@ -714,7 +726,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                           children: [
                             const Icon(Icons.camera_alt_rounded, color: Colors.grey),
                             const SizedBox(height: 4),
-                            Text("${_newImages.length + _existingImageUrls.length}/5", style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                            Text("${_newImages.length + _existingImageUrls.length}/10", style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),

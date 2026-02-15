@@ -184,54 +184,134 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   Future<Map<String, StoreMetadata>> _fetchStoreMetadata(List<String> storeNames) async {
     if (storeNames.isEmpty) return {};
     final map = <String, StoreMetadata>{};
-    final List<String> missingStores = [];
 
+    // 1. 상점 메타데이터(좌표 등) 조회
     try {
-      // 좌표 쿼리도 재시도 로직 적용
       final res = await _retryRequest(() => _supabase
           .from('stores')
-          .select('name, image_url, lat, lng')
+          .select('name, lat, lng') 
           .inFilter('name', storeNames));
 
       if (res is List) {
         for (final row in res) {
           final name = (row['name'] ?? '').toString();
-          final url = (row['image_url'] ?? '').toString();
           final lat = (row['lat'] as num?)?.toDouble();
           final lng = (row['lng'] as num?)?.toDouble();
+          
           if (name.isNotEmpty) {
-            map[name] = StoreMetadata(imageUrl: url, lat: lat, lng: lng);
+            map[name] = StoreMetadata(imageUrl: null, lat: lat, lng: lng);
           }
         }
       }
-
-      for (var name in storeNames) {
-        if (!map.containsKey(name)) missingStores.add(name);
-      }
-
-      if (missingStores.isNotEmpty) {
-        final reviewRes = await _supabase
-            .from('reviews')
-            .select('store_name, photo_urls')
-            .inFilter('store_name', missingStores)
-            .not('photo_urls', 'is', null)
-            .order('created_at', ascending: false);
-
-        if (reviewRes is List) {
-          for (final row in reviewRes) {
-            final name = (row['store_name'] ?? '').toString();
-            if (map.containsKey(name)) continue;
-            final List photos = row['photo_urls'] ?? [];
-            if (photos.isNotEmpty) {
-              map[name] = StoreMetadata(imageUrl: photos[0].toString(), lat: null, lng: null);
-            }
-          }
-        }
-      }
-      return map;
     } catch (e) {
-      return {};
+      debugPrint("📷 [Home] Failed to load store metadata (lat/lng): $e");
     }
+
+    // 2. [최적화] 1차 배치 조회: 모든 상점에 대해 정확한 이름 매칭 시도 (빠름)
+    try {
+      // 20개씩 끊어서 병렬 처리하지 않고, 30개씩 순차 처리하되 UI 업데이트는 나중에 한 번에? 
+      // 아니면 전체를 한 번에 50개씩 끊어서 inFilter?
+      // 일단 50개씩 끊어서 inFilter로 가져옵니다.
+      
+      const int batchSize = 50;
+      for (var i = 0; i < storeNames.length; i += batchSize) {
+        final end = (i + batchSize < storeNames.length) ? i + batchSize : storeNames.length;
+        final batch = storeNames.sublist(i, end);
+        
+        try {
+           final reviewRes = await _supabase
+              .from('reviews')
+              .select('store_name, photo_urls')
+              .inFilter('store_name', batch)
+              .not('photo_urls', 'is', null) // 사진 있는 것만
+              .order('created_at', ascending: false)
+              .limit(100); // 넉넉하게
+
+           if (reviewRes is List) {
+             for (final row in reviewRes) {
+               final n = (row['store_name'] ?? '').toString();
+               // 이미지가 아직 없는 경우에만 업데이트
+               if (!map.containsKey(n) || map[n]?.imageUrl == null) {
+                 final List photos = row['photo_urls'] ?? [];
+                 if (photos.isNotEmpty && photos[0].toString().isNotEmpty) {
+                   final existing = map[n];
+                   map[n] = StoreMetadata(
+                     imageUrl: photos[0].toString(), 
+                     lat: existing?.lat, 
+                     lng: existing?.lng
+                   );
+                 }
+               }
+             }
+           }
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint("📷 [Home] Batch fetch error: $e");
+    }
+
+    // 3. [보정] 2차 개별 조회: 이미지를 못 찾은 상위권(Top 20) 상점에 한해 Fuzzy Search(공백 제거) 시도
+    // 1차 배치에서 이미지를 찾았으면 skip하므로 성능 저하 없음
+    final topMissing = storeNames.take(20).where((name) => map[name]?.imageUrl == null).toList();
+
+    if (topMissing.isNotEmpty) {
+      // debugPrint("📷 [Home] Fuzzy searching for ${topMissing.length} missing top stores...");
+      await Future.wait(topMissing.map((name) async {
+        try {
+          // 이미 1차에서 실패했으므로 바로 Fuzzy Search (공백제거) 시도
+          // 단, _fetchStorePhotoUrl 내부에 1차(정확), 2차(공백제거) 로직이 다 있으므로 재사용 가능하지만
+          // 1차는 위에서 했으니... _fetchStorePhotoUrl을 그대로 쓰면 안전함 (정확 매칭 재확인 비용은 들지만 미미)
+          final photoUrl = await _fetchStorePhotoUrl(name);
+          
+          if (photoUrl != null) {
+            final existing = map[name];
+            map[name] = StoreMetadata(
+              imageUrl: photoUrl, 
+              lat: existing?.lat, 
+              lng: existing?.lng
+            );
+          }
+        } catch (_) {}
+      }));
+    }
+
+    return map;
+  }
+
+  // ✅ [신규] 단일 상점 사진 조회 헬퍼 (NearbyScreen 로직 이식)
+  Future<String?> _fetchStorePhotoUrl(String storeName) async {
+    // 1차: 정확한 이름 매칭
+    String? url = await _queryPhoto(storeName);
+    if (url != null) return url;
+
+    // 2차: 공백 제거 후 매칭 (사용자 실수 보정)
+    if (storeName.contains(' ')) {
+      final cleanName = storeName.replaceAll(' ', '');
+      url = await _queryPhoto(cleanName);
+    }
+    
+    return url;
+  }
+
+  Future<String?> _queryPhoto(String name) async {
+    try {
+      final res = await _supabase
+          .from('reviews')
+          .select('photo_urls')
+          .eq('store_name', name)
+          .order('created_at', ascending: false) // 최신순
+          .limit(20); // 최근 20개 리뷰 확인
+      
+      if (res != null && res is List) {
+        for (final row in res) {
+          final List photos = row['photo_urls'] ?? [];
+          for (final p in photos) {
+             if (p.toString().isNotEmpty) return p.toString();
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   void _submitSearch(String q) {

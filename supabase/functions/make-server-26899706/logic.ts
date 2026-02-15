@@ -1,597 +1,1334 @@
-// 파일명: logic.ts ver 15.7 (Tracer + Dual Scope Fix)
+/* eslint-disable no-useless-escape */
 
 /**
- * [NeedsFine Logic v15.7 - Tracer Edition]
- * - Debugging: 점수 계산 경로(Trace)와 기존 Tag를 동시에 기록.
- * - Logic Enforcement: 장문/단골이 점수 캡에 걸리는 현상 원천 봉쇄.
- * - Scope Fix: isFlavorless 등 핵심 변수 상위 스코프 선언 보장.
+ * NeedsFine v17.3.0
+ * - POLICY A (forced):
+ *   userRating >= 4.0 => final score cannot go below 3.0 (unconditional).
+ *
+ * - POLICY B (long mixed):
+ *   If long review AND has both pos & neg evidence (and not strongNeg),
+ *   baseline = userRating - 1.2
+ *   candidate = baseline + (positive-only gain * multiplier)
+ *   finalRawScore = max(regularScore, candidate)
+ *
+ * - TRUST caps:
+ *   trust <= 99
+ *   if hasPhoto === false => trust <= 92
  */
 
-// ==============================================================================
-// 1. [Constants] 패턴 정의 (유지)
-// ==============================================================================
+export const NEEDSFINE_VERSION = "17.3.0";
 
-export const KEYWORDS_MAIN = [
-    /(맛|국물|소스|고기|면|밥|양념|간|향|식감|메뉴|반찬|재료|신선|비린|짜|달|매워|뜨거|차가|회|스시|초밥|매운탕|질겨|질긴|부드러|바삭|눅눅)/,
-    /(존맛|노맛|꿀맛|먹|마시|시키|주문|요리|음식|그릇|접시|포장|배달|양|토핑|씹|뜯|넘김|입맛)/,
-];
+export type AspectKey =
+    | "taste"
+    | "service"
+    | "value"
+    | "revisit"
+    | "hygiene"
+    | "ambience"
+    | "wait"
+    | "portion"
+    | "overall";
 
-export const KEYWORDS_SUB = [
-    /(친절|서비스|사장|직원|알바|응대|인사|웨이팅|대기|예약|자리|테이블|룸|화장실|주차|매장|가게|식당|집|곳|위생|청결|더러|깨끗)/,
-    /(가격|가성비|비싸|저렴|계산|결제|영수증|돈|원|인분)/,
-    /(분위기|인테리어|점심|저녁|아침|식사|친구|가족|연인|데이트|회식|혼밥|방문|갔|와|오|가시|추천|비추|재방문)/
-];
+export type Polarity = "POS" | "NEG" | "MIXED" | "NEUTRAL";
 
-const INCENTIVE_PATTERNS = [
-    /(리뷰|영수증)\s*(이벤트|참여|작성|약속)/,
-    /(서비스|음료수|볶음밥|사리)[^]{0,10}(받았|주셨|주신|먹었)/,
-    /(이벤트)[^]{0,10}(서비스|공짜|무료)/
-];
-
-const MALICIOUS_PATTERNS = [
-    /(씨발|시발|개새끼|지랄|병신|망해|꺼져|퉤|니네|너네)/,
-    /(미친|돌았)(?=\s*(놈|새끼|년|짓))/
-];
-
-const SERVICE_FAIL_PATTERNS = [
-    /(불친절|싸가지|화내|화냄|짜증|무시|반말|던지|표정|교육|최악)[^]{0,10}(직원|사장|알바|서빙|응대)/,
-    /(기분)[^]{0,10}(나빠|나쁨|잡침|상해|상함|더러)/
-];
-
-const GRATITUDE_PATTERNS = [
-    /(잘|맛있게|배부르게)[^]{0,5}(먹었|먹고|갑니다|갔어요)/,
-    /(감사|고마워|친절|최고|짱|굿|good|대박|빠름|빨라|신속)/
-];
-
-const POSITIVE_SLANG_PATTERNS = [
-    /(맛|양|가격|가성비|비주얼|웨이팅|퀄리티|사장님|기름칠|분위기)[이가은는을를도\s]*(미쳤|돌았|개쩔|깡패|끝장|지리|오지)/,
-    /(미친|돌았|개)[^]{0,5}(맛|존맛|꿀맛|대박|혜자)/,
-    /(사장님)[^]{0,10}(미쳤)/
-];
-
-const QUALITY_FAIL_ABSOLUTE = [
-    /(기름 둥둥|기름 범벅|쉰내|썩은|벌레|이물질|머리카락|재탕)/
-];
-const QUALITY_FAIL_CONDITIONAL = [
-    '상한', '비린', '비릿', '잡내', '누린', '물컹', '안익', '식어', '딱딱', '말라', '오버쿡', '질겨', '질긴', '돼지 냄새', '느끼', '기름진', '짜서', '너무 짜', '간이 쎄'
-];
-
-const CRITICAL_HYGIENE_PATTERNS = [
-    /(쓰레기|걸레|행주|음쓰)[^]{0,15}(손|만지|서빙|담아|그릇|위생)/,
-    /(손|반찬|그릇)[^]{0,10}(안 씻|재사용|더러|지저분)/,
-    /(위생)[^]{0,10}(개판|최악|별로|안좋|문제)/
-];
-
-export const KEYWORDS_PREFERENCE_MISMATCH = [
-    /(밍밍|맹물|무슨 맛|니맛|내맛|싱거|심심|건강한 맛|우린 물|걸레 빤|화장품|비누|퐁퐁|세제|암모니아|겨드랑이|꼬린내)/,
-    /(내 스타일|나랑|나에겐|저한테는|개인적|취향|호불호|이해|왜|모르겠|글쎄)/
-];
-
-const PERSONAL_REGRET_PATTERNS = [
-    /(몸이|컨디션|배불러|배가 불러|시간이|멀어서|일정)[^]{0,15}(아쉽|못 먹|남겨|힘들)/,
-    /(차|운전)[^]{0,15}(때문에|가져|라서)[^]{0,15}(아쉽|못 먹|참았)/
-];
-
-const ALCOHOL_CRAVING_PATTERNS = [
-    /(차|운전|몸|약|건강)[^]{0,20}(때문에|이라)[^]{0,20}(술|소주|맥주|한잔)[^]{0,10}(못|참|아쉽|땡)/,
-    /(술|소주|맥주|안주)[^]{0,10}(각|도둑|부르|땡|생각)/
-];
-
-const LOYALTY_PATTERNS = {
-    ACTUAL: /(여기만|맨날|단골|n번째|또|매번|원픽|최애|항상|주기적|갈때마다|재방문입니다|[두세네오육칠팔구십]번째 방문)/,
-    PROMISED: /(재방문|다시|또|오고|가고)[^]{0,10}(의사|싶|할|예정|각)/
-};
-
-const MEANINGFUL_SHORT_PATTERNS = [
-    /(데이트|회식|모임|부모님|혼밥|안주|해장|소개팅|상견례)/,
-    /(추천|강추|맛집|짱|굿|최고)/
-];
-
-const SPAM_PATTERNS = [
-    /(매수|매도|양봉|음봉|손절|익절|차트|떡상|떡락|코인|비트|주식|투자|출장|조건만남|카톡ID|텔레그램|단톡방)/,
-    /(하모닉|엘리어트|파동|반등|지지선|저항선|나스닥|코스피|리딩방)/,
-    /(협찬|제공받아|체험단|원고료|소정의|서포터즈|광고)/
-];
-
-const AI_PATTERNS = [
-    /(결론적으로|종합해보면|전반적으로|살펴보자면|요약하자면)/,
-    /(매우 만족스러운 경험이었습니다|훌륭한 선택이 될 것입니다|방문해보시길 권장합니다)/,
-    /(영업시간은.*주차는)/
-];
-
-const LOGIC_PATTERNS = {
-    CONTRAST: /(는데|지만|불구하고|반면|그래도)/,
-    WAITING: /(웨이팅|대기|줄|입장|캐치테이블|테이블링)/
-};
-
-const SENTIMENT_PATTERNS = {
-    POSITIVE: /(맛있|존맛|꿀맛|최고|굿|좋았|강추|대박|예술|환상|친절|신선|부드러|잘|깔끔|만족|근본|엄청)/,
-    NEGATIVE: /(아쉽|별로|나쁘|사악|평범|쏘쏘|그닥|아니|창렬|없음|실패|후회|비싸|적다|작다|불친절|느리|최악|밍밍|비어|기대.*이하|느끼|기름진|기름기)/,
-    PRICE_COMPLAINT: /(비싸|사악|창렬|가성비)/
-};
-
-const ANALYSIS_PATTERNS = {
-    SENSORY: [
-        /(쫄깃|바삭|물컹|딱딱|싱거|짜|매워|육즙|부드|고소|담백|비린|잡내|아삭|탱글|꾸덕|촉촉|질기|퍽퍽|시원|얼큰|불맛|불향|식감)/,
-        /(두툼|마블링|기름진|느끼|야들|꼬들|쫀득|사르르|녹아|질겅|푸석|찰진)/,
-        /(깊은|신선|풍미|감칠맛|간이|양념|소스|국물|육수|재료|토핑|퀄리티|조절|구수|진한|깔끔)/,
-        /(존맛|꿀맛|맛있|맛나|미쳤|미친|도랏|개쩔|환상|예술|끝내|죽여|일품)/
-    ],
-    NARRATIVE: [
-        /(친구|엄마|남편|가족|부모님|아이|애들|회식|모임|지인|동료|비가|늦게|실수로|우연히|지나가다|옆테이블|직원분이|솔직히|개인적으로|의외로|오랜만)/,
-        /(n번째|재방문|또|단골|원픽|자주|인생|최애|벌써|매번|항상|예전|옛날|상륙|유명|본점)/
-    ],
-    ATMOSPHERE: [
-        /(분위기|인테리어|조명|음악|뷰|경치|감성|깔끔|깨끗|넓|쾌적|시끄|조용|데이트|소개팅|위생|청결|매장|홀|룸|방|화장실|주차|완비|제격|안성맞춤)/
-    ],
-    SERVICE: [
-        /(친절|응대|서비스|사장|직원|설명|구워|리필|인사|셀프바|반찬|제공|챙겨|주신|무한)/
-    ],
-    COMPARATIVE: [
-        /(신라면|불닭|엽떡|마라탕|진라면|교촌|BBQ|BHC)/,
-        /(보다|만큼|정도)[^]{0,10}(매워|맵|짜|달|맛있|괜찮|다르|않은)/
-    ],
-    CLICHE: [
-        /(겉바속촉|입에서 녹아|육즙이? (팡팡|가득)|잡내(가)? (1도|전혀|하나도) (없|안)|사장님(이)? (왕)?친절|재방문 (의사|각|100)|강추|존맛탱|비주얼 (대박|굿|미쳤))/
-    ]
-};
-
-const GIBBERISH_PATTERN = /([ㄱ-ㅎㅏ-ㅣ가-힣a-zA-Z])\1{2,}/g;
-
-export interface NeedsFineResult {
-    needsfine_score: number;
-    trust_level: number;
-    authenticity: boolean;
-    advertising_words: boolean;
-    tags: string[];
-    is_critical: boolean;
-    is_hidden: boolean;
-    is_malicious: boolean;
-    debug_reason: string;
-    logic_version: string;
-    entropy_score?: number;
+export interface ReviewInput {
+    text: string;
+    userRating?: number; // 1.0 ~ 5.0
+    hasPhoto?: boolean; // default false
 }
 
-// ==============================================================================
-// 2. 헬퍼 함수
-// ==============================================================================
-
-function calculateInformationDensity(text: string): number {
-    if (!text) return 0;
-    const words = text.split(/\s+/).filter(w => w.length > 1);
-    const totalWords = words.length;
-    if (totalWords < 3) return 0.5;
-    const uniqueWords = new Set(words).size;
-    let density = uniqueWords / totalWords;
-    return Math.min(1.0, density);
+export interface EvidenceHit {
+    aspect: AspectKey;
+    polarity: "POS" | "NEG";
+    weight: number;
+    cue: string;
+    snippet: string;
+    ruleId: string;
+    start: number;
+    end: number;
 }
 
-function isNegatedContext(text: string, keyword: string): boolean {
-    const index = text.indexOf(keyword);
-    if (index === -1) return false;
-    const start = Math.max(0, index - 5);
-    const end = Math.min(text.length, index + keyword.length + 15);
-    const substring = text.substring(start, end);
-    return /(안|않|없|못|잡았|잡혔|1도|일도|전혀|아니)/.test(substring);
+export interface TagResult {
+    aspect: AspectKey;
+    label: string;
+    mentioned: boolean;
+    polarity: Polarity;
+    strength: number;
 }
 
-export function extractReviewTags(text: string, isDeliveryFromApp: boolean): {
-    tags: string[],
-    isMalicious: boolean,
-    isQualityFail: boolean,
-    isServiceFail: boolean,
-    isPreferenceMismatch: boolean,
-    isPositiveSlang: boolean,
-    isIncentive: boolean,
-    isCriticalHygiene: boolean,
-    isAiSuspect: boolean,
-    isNegationPraise: boolean,
-    isAlcoholCraving: boolean,
-    isPersonalRegret: boolean
-} {
-    const normalizedText = (text || "").normalize("NFC");
-    const extractedTags: { word: string; priority: number }[] = [];
+export interface StrongNegativeInfo {
+    flag: boolean;
+    type:
+    | "HYGIENE_CRITICAL"
+    | "FRAUD_PRICE"
+    | "NEVER_AGAIN"
+    | "SERVICE_EXTREME"
+    | "GENERIC_EXTREME"
+    | "NONE";
+    ceiling: number;
+    matched: string[];
+}
 
-    let isMalicious = false;
-    let isQualityFail = false;
-    let isServiceFail = false;
-    let isPreferenceMismatch = false;
-    let isPositiveSlang = false;
-    let isIncentive = false;
-    let isCriticalHygiene = false;
-    let isAiSuspect = false;
-    let isNegationPraise = false;
-    let isAlcoholCraving = false;
-    let isPersonalRegret = false;
-
-    // Delivery: Only from App
-    if (isDeliveryFromApp) {
-        extractedTags.push({ word: '배달/포장', priority: 2 });
-    }
-
-    if (INCENTIVE_PATTERNS.some(p => p.test(normalizedText))) {
-        isIncentive = true;
-        extractedTags.push({ word: '리뷰이벤트', priority: 1 });
-    }
-    if (AI_PATTERNS.some(p => p.test(normalizedText))) {
-        isAiSuspect = true;
-    }
-    if (POSITIVE_SLANG_PATTERNS.some(p => p.test(normalizedText))) {
-        isPositiveSlang = true;
-        extractedTags.push({ word: '극찬(Slang)', priority: 3 });
-    }
-    if (ALCOHOL_CRAVING_PATTERNS.some(p => p.test(normalizedText))) {
-        isAlcoholCraving = true;
-        extractedTags.push({ word: '술도둑', priority: 3 });
-    }
-    else if (PERSONAL_REGRET_PATTERNS.some(p => p.test(normalizedText))) {
-        isPersonalRegret = true;
-    }
-
-    if (CRITICAL_HYGIENE_PATTERNS.some(p => p.test(normalizedText))) {
-        isCriticalHygiene = true;
-        extractedTags.push({ word: '위생 고발', priority: 0 });
-    }
-
-    if (SERVICE_FAIL_PATTERNS.some(p => p.test(normalizedText))) {
-        isServiceFail = true;
-        extractedTags.push({ word: '불친절/응대 불량', priority: 0 });
-    }
-
-    // Malicious
-    if (!isPositiveSlang && !isCriticalHygiene && !isServiceFail) {
-        if (MALICIOUS_PATTERNS.some(p => p.test(normalizedText))) {
-            isMalicious = true;
-            extractedTags.push({ word: '욕설/비방', priority: 0 });
-        }
-    }
-
-    // Quality Fail
-    QUALITY_FAIL_ABSOLUTE.forEach(p => {
-        if (p.test(normalizedText)) {
-            isQualityFail = true;
-            extractedTags.push({ word: '위생/품질 불량', priority: 0 });
-        }
-    });
-    QUALITY_FAIL_CONDITIONAL.forEach(keyword => {
-        if (normalizedText.includes(keyword)) {
-            if (isNegatedContext(normalizedText, keyword)) {
-                isNegationPraise = true; // "잡내 없고" -> Negation Praise
-            } else {
-                isQualityFail = true;
-                extractedTags.push({ word: '위생/품질 불량', priority: 0 });
-            }
-        }
-    });
-
-    // Preference Mismatch
-    KEYWORDS_PREFERENCE_MISMATCH.forEach(p => {
-        if (p.test(normalizedText)) {
-            isPreferenceMismatch = true;
-            extractedTags.push({ word: '취향 차이', priority: 1 });
-        }
-    });
-
-    const basicPatterns = [
-        { word: '웨이팅 있음', pattern: /(웨이팅|대기|줄)/ },
-        { word: '가성비 아쉽', pattern: /(비싸|창렬|사악)/ },
-        { word: '맛있음', pattern: /(맛있|존맛|최고)/ }
-    ];
-    basicPatterns.forEach(p => {
-        if (p.pattern.test(normalizedText)) extractedTags.push({ word: p.word, priority: 2 });
-    });
-
-    const seen = new Set<string>();
-    const uniqueTags = extractedTags
-        .filter(item => !seen.has(item.word) && seen.add(item.word))
-        .sort((a, b) => a.priority - b.priority)
-        .map(t => t.word)
-        .slice(0, 3);
-
-    return {
-        tags: uniqueTags, isMalicious, isQualityFail, isServiceFail, isPreferenceMismatch,
-        isPositiveSlang, isIncentive, isCriticalHygiene, isAiSuspect,
-        isNegationPraise, isAlcoholCraving, isPersonalRegret
+export interface NeedsFineAnalysis {
+    needsFineScore: number; // 1.0~5.0
+    trust: number; // 0~99
+    label: string;
+    tags: TagResult[];
+    evidence: {
+        positive: EvidenceHit[];
+        negative: EvidenceHit[];
+        strongNegative: StrongNegativeInfo;
+    };
+    debug?: {
+        normalized: string;
+        masked: string;
+        appliedCaps: string[];
+        baseScore: number;
+        scoreMode: "REGULAR" | "LONG_MIXED_POS_ONLY";
+        rawScore: number;
+        detailBonus: number;
+        synergyBonus: number;
+        caveatAttenuated: boolean;
+        userRating?: number;
+        userRatingCapApplied?: number;
+        trustCaps: string[];
+        posAxes: AspectKey[];
+        negAxes: AspectKey[];
+        feature: Record<string, unknown>;
     };
 }
 
-// ==============================================================================
-// 3. 메인 로직
-// ==============================================================================
+export interface AnalyzeOptions {
+    debug?: boolean;
+}
 
-export function calculateNeedsFineScore(reviewText: string, userRating: number, hasPhoto: boolean = false, isDelivery: boolean = false): NeedsFineResult {
-    const safeText = reviewText || "";
-    const safeRating = (typeof userRating === 'number' && !isNaN(userRating)) ? userRating : 3.0;
+export interface EngineConfig {
+    baseScore: number;
+    roundingStep: number;
+    snippetRadius: number;
 
-    let cleanText = safeText.normalize("NFC").replace(GIBBERISH_PATTERN, "").trim();
-    const textLen = cleanText.length;
+    posCoef: Record<AspectKey, number>;
+    negCoef: Record<AspectKey, number>;
+    posScale: Record<AspectKey, number>;
+    negScale: Record<AspectKey, number>;
 
-    // Debug Trace String
-    let trace = "";
+    aspectPosThreshold: number;
+    aspectNegThreshold: number;
 
-    // 1. Spam Filter (Strict)
-    if (SPAM_PATTERNS.some(p => p.test(cleanText))) {
-        return {
-            needsfine_score: 1.0, trust_level: 0, authenticity: false, advertising_words: true, tags: ['내용부적합'],
-            is_critical: false, is_hidden: true, is_malicious: false, debug_reason: "SPAM_DETECTED",
-            logic_version: "v15.7_TRACE", entropy_score: 0
-        };
+    // gates
+    minPosAxesFor4: number;
+    minPosEvidenceFor4: number;
+    requireCoreAxisFor4: boolean;
+    coreAxes: AspectKey[];
+    capIfGateFail4: number;
+
+    minPosAxesFor45: number;
+    capIfGateFail45: number;
+    maxScore: number;
+    minLenFor45: number;
+
+    // intensity/contrast
+    recencyBoost: number;
+    contrastPostBoost: number;
+    contrastPrePenalty: number;
+    intensityBoost: number;
+    hedgePenalty: number;
+    exclamBoost: number;
+    maxWeightMultiplier: number;
+
+    // detail bonus
+    maxDetailBonus: number;
+
+    // minor caveat attenuation (regular mode)
+    caveatAspects: AspectKey[];
+    caveatNegAttenuation: number;
+    caveatApplyTastePosMin: number;
+    caveatApplyNegNonCaveatMax: number;
+
+    // TRUST caps
+    trustMax: number; // 99
+    trustMaxNoPhoto: number; // 92
+
+    // SCORE caps by user rating (max caps)
+    scoreCapUserRatingLt2: number; // 2.2
+    scoreCapUserRatingLt3: number; // 3.6
+
+    // Optional lift
+    enableUserRatingLift: boolean;
+    ratingLiftPerStar: number;
+    ratingLiftMax: number;
+    ratingLiftMinLen: number;
+    ratingLiftMinPosEvidence: number;
+
+    // POLICY A: forced floor for high-rating
+    enableHighRatingFloor: boolean;
+    highRatingFloorMinUserRating: number; // 4.0
+    highRatingFloorMinScore: number; // 3.0
+
+    // POLICY B: long mixed
+    enableLongMixedMode: boolean;
+    longMixedMinLenNoSpace: number; // 장문 기준
+    longMixedRatingDelta: number; // 1.2
+    longMixedPosGainMultiplier: number; // 0.55~0.70 권장
+    longMixedMinPosEvidence: number;
+    longMixedMinNegEvidence: number;
+}
+
+export const DEFAULT_CONFIG: EngineConfig = {
+    baseScore: 2.78,
+    roundingStep: 0.1,
+    snippetRadius: 14,
+
+    // 가점 작게, 감점 크게(비대칭)
+    posCoef: {
+        taste: 0.74,
+        service: 0.42,
+        value: 0.32,
+        revisit: 0.28,
+        hygiene: 0.22,
+        ambience: 0.32,
+        wait: 0.14,
+        portion: 0.24,
+        overall: 0.28,
+    },
+    negCoef: {
+        taste: 0.95,
+        service: 0.68,
+        value: 0.50,
+        revisit: 0.80,
+        hygiene: 0.95,
+        ambience: 0.38,
+        wait: 0.40,
+        portion: 0.28,
+        overall: 0.40,
+    },
+
+    posScale: {
+        taste: 1.05,
+        service: 0.95,
+        value: 0.95,
+        revisit: 0.88,
+        hygiene: 0.85,
+        ambience: 0.95,
+        wait: 0.95,
+        portion: 0.95,
+        overall: 1.0,
+    },
+    negScale: {
+        taste: 1.25,
+        service: 1.05,
+        value: 1.10,
+        revisit: 1.05,
+        hygiene: 0.95,
+        ambience: 1.05,
+        wait: 1.0,
+        portion: 1.0,
+        overall: 1.10,
+    },
+
+    aspectPosThreshold: 0.45,
+    aspectNegThreshold: 0.45,
+
+    minPosAxesFor4: 2,
+    minPosEvidenceFor4: 2,
+    requireCoreAxisFor4: true,
+    coreAxes: ["taste", "service", "value", "hygiene"],
+    capIfGateFail4: 3.9,
+
+    minPosAxesFor45: 3,
+    capIfGateFail45: 4.4,
+    maxScore: 4.65,
+    minLenFor45: 120,
+
+    recencyBoost: 0.05,
+    contrastPostBoost: 0.12,
+    contrastPrePenalty: 0.12,
+    intensityBoost: 1.22,
+    hedgePenalty: 0.86,
+    exclamBoost: 1.08,
+    maxWeightMultiplier: 1.45,
+
+    maxDetailBonus: 0.28,
+
+    caveatAspects: ["wait", "ambience"],
+    caveatNegAttenuation: 0.62,
+    caveatApplyTastePosMin: 0.90,
+    caveatApplyNegNonCaveatMax: 0.35,
+
+    trustMax: 99,
+    trustMaxNoPhoto: 92,
+
+    scoreCapUserRatingLt2: 2.2,
+    scoreCapUserRatingLt3: 3.6,
+
+    enableUserRatingLift: true,
+    ratingLiftPerStar: 0.18,
+    ratingLiftMax: 0.38,
+    ratingLiftMinLen: 24,
+    ratingLiftMinPosEvidence: 2,
+
+    // ✅ POLICY A (forced)
+    enableHighRatingFloor: true,
+    highRatingFloorMinUserRating: 4.0,
+    highRatingFloorMinScore: 3.0,
+
+    // ✅ POLICY B
+    enableLongMixedMode: true,
+    longMixedMinLenNoSpace: 120,
+    longMixedRatingDelta: 1.2,
+    longMixedPosGainMultiplier: 0.65,
+    longMixedMinPosEvidence: 1,
+    longMixedMinNegEvidence: 1,
+};
+
+// -------------------------
+// Helpers
+// -------------------------
+function clamp(min: number, max: number, v: number): number {
+    return Math.max(min, Math.min(max, v));
+}
+
+function roundToStep(v: number, step: number): number {
+    const inv = 1 / step;
+    return Math.round(v * inv) / inv;
+}
+
+function satTanh(x: number): number {
+    return Math.tanh(x);
+}
+
+function normalizeText(input: string): string {
+    const t0 = String(input ?? "");
+    return t0
+        .replace(/\u200b/g, " ")
+        .toLowerCase()
+        .replace(/(ㅋ){3,}/g, "ㅋㅋ")
+        .replace(/(ㅎ){3,}/g, "ㅎㅎ")
+        .replace(/(ㅠ|ㅜ){2,}/g, "ㅠㅠ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function hangulRatio(text: string): number {
+    if (!text) return 0;
+    const h = (text.match(/[가-힣]/g) || []).length;
+    return h / Math.max(1, text.length);
+}
+
+function makeSnippet(text: string, start: number, end: number, radius: number): string {
+    const s = Math.max(0, start - radius);
+    const e = Math.min(text.length, end + radius);
+    return text.slice(s, e).trim();
+}
+
+function overlaps(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
+    return a.start < b.end && b.start < a.end;
+}
+
+function parseUserRating(v: unknown): number | undefined {
+    if (typeof v === "number" && Number.isFinite(v)) return clamp(0, 5, v);
+    const s = String(v ?? "").trim();
+    if (!s) return undefined;
+    const m = s.match(/(\d+(?:\.\d+)?)/);
+    if (!m) return undefined;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n)) return undefined;
+    return clamp(0, 5, n);
+}
+
+// -------------------------
+// Sentence + contrast
+// -------------------------
+const CONTRAST_WORDS: RegExp[] = [/하지만/g, /그런데/g, /다만/g, /근데/g, /반면/g, /대신/g, /그래도/g];
+
+function buildSentenceInfo(text: string) {
+    const starts: number[] = [0];
+    const boundaries = /[.!?]|[\n\r]+/g;
+    let m: RegExpExecArray | null;
+    while ((m = boundaries.exec(text)) !== null) {
+        const idx = m.index + m[0].length;
+        let j = idx;
+        while (j < text.length && text[j] === " ") j++;
+        if (j < text.length) starts.push(j);
+    }
+    const uniq = Array.from(new Set(starts)).sort((a, b) => a - b);
+
+    const sentences = uniq.map((s, i) => {
+        const e = i + 1 < uniq.length ? uniq[i + 1] : text.length;
+        const seg = text.slice(s, e);
+        let contrastAbs: number | null = null;
+        for (const rx of CONTRAST_WORDS) {
+            rx.lastIndex = 0;
+            const mm = rx.exec(seg);
+            if (mm) {
+                const abs = s + mm.index;
+                if (contrastAbs === null || abs < contrastAbs) contrastAbs = abs;
+            }
+        }
+        return { start: s, end: e, contrastAbs };
+    });
+
+    return { sentences };
+}
+
+function findSentenceIndex(sentences: { start: number; end: number }[], pos: number): number {
+    let lo = 0;
+    let hi = sentences.length - 1;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const s = sentences[mid];
+        if (pos < s.start) hi = mid - 1;
+        else if (pos >= s.end) lo = mid + 1;
+        else return mid;
+    }
+    return Math.max(0, Math.min(sentences.length - 1, lo));
+}
+
+// -------------------------
+// Neutralizers (meta negation masking)
+// -------------------------
+const NEUTRALIZERS: { key: string; rx: RegExp }[] = [
+    {
+        key: "meta_negated_taste_neg",
+        rx: /(맛없|노맛|비추|최악)\s*(?:다는|단)?\s*(?:얘기|말|소문|리뷰|후기|평)(?:가|는|도|은|이)?\s*(?:없|없었|없더|없는데|없다)/giu,
+    },
+    {
+        key: "meta_negated_service_neg",
+        rx: /(불\s*친절|불친절|서비스\s*최악)\s*(?:하다는|하단)?\s*(?:얘기|말|소문|리뷰|후기|평)(?:가|는|도|은|이)?\s*(?:없|없었|없더|없는데|없다)/giu,
+    },
+    {
+        key: "meta_negated_hygiene_neg",
+        rx: /(위생|더럽|벌레|이물질|오염|악취)\s*(?:관련|문제)?\s*(?:얘기|말|소문|리뷰|후기|평)(?:가|는|도|은|이)?\s*(?:없|없었|없더|없는데|없다)/giu,
+    },
+];
+
+function collectNeutralizedSpans(text: string) {
+    const spans: { start: number; end: number; key: string; txt: string }[] = [];
+    for (const n of NEUTRALIZERS) {
+        n.rx.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = n.rx.exec(text)) !== null) {
+            spans.push({ start: m.index, end: m.index + m[0].length, key: n.key, txt: m[0] });
+        }
+    }
+    return spans.sort((a, b) => a.start - b.start);
+}
+
+function maskSpans(text: string, spans: { start: number; end: number }[]): string {
+    if (spans.length === 0) return text;
+    const arr = text.split("");
+    for (const sp of spans) {
+        for (let i = sp.start; i < sp.end && i < arr.length; i++) arr[i] = " ";
+    }
+    return arr.join("");
+}
+
+// -------------------------
+// Aspect mention detection (tag detection only)
+// -------------------------
+const ASPECT_LABEL: Record<AspectKey, string> = {
+    taste: "맛",
+    service: "서비스",
+    value: "가격/가성비",
+    revisit: "재방문",
+    hygiene: "위생",
+    ambience: "분위기",
+    wait: "대기",
+    portion: "양",
+    overall: "전반",
+};
+
+const ASPECT_MENTIONS: { aspect: AspectKey; rx: RegExp }[] = [
+    { aspect: "taste", rx: /(맛|음식|메뉴|식사|요리)/giu },
+    { aspect: "service", rx: /(서비스|응대|직원|사장|서빙|태도)/giu },
+    { aspect: "value", rx: /(가격|가성비|비싸|저렴|돈|원|만원|값어치)/giu },
+    { aspect: "revisit", rx: /(재방문|또\s*갈|다시\s*갈|다음에도|자주\s*오|종종\s*오|매번\s*오|단골|정착|다신\s*안|절대\s*안)/giu },
+    { aspect: "hygiene", rx: /(위생|청결|깨끗|깔끔|더럽|이물질|벌레|오염|악취)/giu },
+    { aspect: "ambience", rx: /(분위기|인테리어|매장|공간|좌석|테이블|감성|뷰|조명|소음|연기)/giu },
+    { aspect: "wait", rx: /(웨이팅|대기|줄|기다리|늦게\s*나오|오래\s*걸리)/giu },
+    { aspect: "portion", rx: /(양|푸짐|넉넉|배부르|리필|무한)/giu },
+    { aspect: "overall", rx: /(만족|좋았|괜찮|별로|실망|후회|추천)/giu },
+];
+
+function detectAspectMentions(text: string): Set<AspectKey> {
+    const s = new Set<AspectKey>();
+    for (const m of ASPECT_MENTIONS) {
+        m.rx.lastIndex = 0;
+        if (m.rx.test(text)) s.add(m.aspect);
+    }
+    return s;
+}
+
+// -------------------------
+// Evidence rules
+// -------------------------
+const INTENSIFIERS = ["진짜", "너무", "완전", "엄청", "겁나", "개", "존", "찐", "레알", "대박", "최고", "미친", "핵"];
+const HEDGES = ["좀", "약간", "그냥", "무난", "나름", "뭐", "그럭저럭", "평범"];
+
+// ⚠️ .test() 상태성 버그 방지: g 제거
+const PREFERENCE_CONTEXT = /(취향|호불호|개인차|사람마다|개인적|주관)/iu;
+const ADJUSTABLE_CONTEXT = /(조절|요청|가능|말하(?:면|니)|덜\s*(맵|짜|달)게|간\s*조절)/iu;
+
+interface CueRule {
+    id: string;
+    aspect: AspectKey;
+    polarity: "POS" | "NEG";
+    baseWeight: number;
+    priority: number;
+    rx: RegExp;
+    preCheck?: (raw: string, start: number, matchText: string) => boolean;
+    skipIf?: (raw: string, start: number, end: number, matchText: string) => boolean;
+}
+
+const CUE_RULES: CueRule[] = [
+    // negated positives
+    {
+        id: "taste_negated_positive",
+        aspect: "taste",
+        polarity: "NEG",
+        baseWeight: 1.10,
+        priority: 130,
+        rx: /맛있(?:지(?:는|도|만|라도)?)?\s*않|맛있는\s*건\s*아니|맛이\s*별로/giu,
+    },
+    {
+        id: "service_negated_positive",
+        aspect: "service",
+        polarity: "NEG",
+        baseWeight: 1.05,
+        priority: 130,
+        rx: /친절(?:하)?(?:지(?:는|도|만|라도)?)?\s*않|친절함\s*없|서비스\s*(?:좋|괜찮)[\s\S]{0,3}않/giu,
+    },
+
+    // double negatives => mild POS
+    {
+        id: "taste_double_negative",
+        aspect: "taste",
+        polarity: "POS",
+        baseWeight: 0.35,
+        priority: 120,
+        rx: /(맛없|노맛)[\s\S]{0,3}않/giu,
+    },
+    {
+        id: "service_double_negative",
+        aspect: "service",
+        polarity: "POS",
+        baseWeight: 0.30,
+        priority: 120,
+        rx: /(불\s*친절|불친절)[\s\S]{0,3}않/giu,
+    },
+    {
+        id: "overall_not_bad",
+        aspect: "overall",
+        polarity: "POS",
+        baseWeight: 0.30,
+        priority: 118,
+        rx: /나쁘지\s*않/giu,
+    },
+
+    // strong negatives
+    {
+        id: "hygiene_critical",
+        aspect: "hygiene",
+        polarity: "NEG",
+        baseWeight: 1.60,
+        priority: 115,
+        rx: /(벌레|이물질|곰팡|오염|악취|식중독|철수세미)/giu,
+    },
+    {
+        id: "fraud_price",
+        aspect: "value",
+        polarity: "NEG",
+        baseWeight: 1.40,
+        priority: 115,
+        rx: /(사기|바가지|가격\s*다르게|강요|강매|계산\s*실수|결제\s*실수)/giu,
+    },
+    {
+        id: "never_again",
+        aspect: "revisit",
+        polarity: "NEG",
+        baseWeight: 1.35,
+        priority: 115,
+        rx: /(다신\s*안|다시는\s*안|두\s*번\s*다시\s*안|절대\s*안|강력\s*비추|먹지\s*마|가지\s*마|오지\s*마)/giu,
+    },
+    {
+        id: "service_extreme",
+        aspect: "service",
+        polarity: "NEG",
+        baseWeight: 1.30,
+        priority: 115,
+        rx: /(막말|하대|서비스\s*최악|불친절\s*최악|무시당|무시하|반말|던지|툭툭|째려|도끼눈)/giu,
+    },
+    {
+        id: "taste_strong_negative",
+        aspect: "taste",
+        polarity: "NEG",
+        baseWeight: 1.20,
+        priority: 110,
+        rx: /(맛없|노맛|최악|쓰레기|실망|후회|비추|별\s*한\s*개도\s*아까)/giu,
+    },
+
+    // negatives (mild~moderate)
+    {
+        id: "value_negative",
+        aspect: "value",
+        polarity: "NEG",
+        baseWeight: 0.90,
+        priority: 95,
+        rx: /(비싸|돈\s*아깝|가격대비\s*별로|창렬|가성비\s*(?:별로|최악)|값어치\s*의문)/giu,
+    },
+    {
+        id: "service_negative",
+        aspect: "service",
+        polarity: "NEG",
+        baseWeight: 0.85,
+        priority: 90,
+        rx: /(불\s*친절|불친절|무례|퉁명|불쾌|성의\s*없|태도\s*별로|응대\s*별로|엉망|개판|한숨|인상\s*쓰)/giu,
+    },
+    {
+        id: "ambience_negative",
+        aspect: "ambience",
+        polarity: "NEG",
+        baseWeight: 0.70,
+        priority: 88,
+        rx: /(시끄럽|소음|좁|불편|어수선|답답|연기|환기|냄새\s*배)/giu,
+    },
+    {
+        id: "wait_negative",
+        aspect: "wait",
+        polarity: "NEG",
+        baseWeight: 0.75,
+        priority: 88,
+        rx: /(웨이팅|대기|줄\s*길|기다리|늦게\s*나오|오래\s*걸리|한\s*시간|\b[3-9]\d\s*분\b)/giu,
+    },
+    {
+        id: "taste_texture_negative",
+        aspect: "taste",
+        polarity: "NEG",
+        baseWeight: 0.78,
+        priority: 85,
+        rx: /(질기|퍽퍽|눅눅|비리|누린내|잡내|밍밍|싱겁|짜다)/giu,
+        skipIf: (raw, start, end) => {
+            const wS = Math.max(0, start - 18);
+            const wE = Math.min(raw.length, end + 18);
+            const win = raw.slice(wS, wE);
+            if (/(맵|짜|달)/.test(win) && ADJUSTABLE_CONTEXT.test(win)) return true;
+            return false;
+        },
+    },
+
+    // positives (expanded)
+    {
+        id: "taste_positive_core",
+        aspect: "taste",
+        polarity: "POS",
+        baseWeight: 1.00,
+        priority: 70,
+        rx: /(맛있|존맛|jmt|꿀맛|풍미|육즙|고소|바삭|쫄깃|부드럽|신선)/giu,
+    },
+    {
+        id: "taste_positive_deep",
+        aspect: "taste",
+        polarity: "POS",
+        baseWeight: 0.95,
+        priority: 68,
+        rx: /(구수|진한\s*맛|깊은\s*맛|감칠맛|깔끔한\s*맛|근본|전통\s*맛)/giu,
+    },
+    {
+        id: "taste_strong_praise_phrase",
+        aspect: "taste",
+        polarity: "POS",
+        baseWeight: 1.10,
+        priority: 66,
+        rx: /(맛으로는\s*깔\s*수\s*없|배신하지\s*않아|찐맛집|검증된\s*맛집|레전드|끝내주|미친맛)/giu,
+    },
+    {
+        id: "service_positive",
+        aspect: "service",
+        polarity: "POS",
+        baseWeight: 0.75,
+        priority: 70,
+        rx: /(친절|응대\s*좋|서비스\s*(?:좋|최고)|배려|잘해주|유쾌|감사|고맙)/giu,
+        preCheck: (raw, start) => {
+            const prev = start > 0 ? raw[start - 1] : "";
+            if (prev === "불" || prev === "안") return false;
+            return true;
+        },
+    },
+    {
+        id: "hospitality_positive",
+        aspect: "overall",
+        polarity: "POS",
+        baseWeight: 0.95,
+        priority: 68,
+        rx: /(대접받|정성|흡족|기분\s*좋|즐거운\s*시간)/giu,
+    },
+    {
+        id: "value_positive",
+        aspect: "value",
+        polarity: "POS",
+        baseWeight: 0.70,
+        priority: 68,
+        rx: /(가성비\s*(?:좋|최고)|혜자|저렴|싸(?:다|요)|가격\s*(?:착|괜찮)|돈값|무한리필)/giu,
+    },
+    {
+        id: "revisit_positive",
+        aspect: "revisit",
+        polarity: "POS",
+        baseWeight: 0.70,
+        priority: 68,
+        rx: /(재방문|또\s*갈|다시\s*갈|다음에도|또\s*오|자주\s*오|종종\s*오|매번\s*오|단골|정착)/giu,
+    },
+    {
+        id: "hygiene_positive",
+        aspect: "hygiene",
+        polarity: "POS",
+        baseWeight: 0.60,
+        priority: 65,
+        rx: /(깨끗|청결|위생\s*좋|깔끔)/giu,
+    },
+    {
+        id: "ambience_positive",
+        aspect: "ambience",
+        polarity: "POS",
+        baseWeight: 0.65,
+        priority: 65,
+        rx: /(분위기\s*좋|인테리어\s*(?:예쁘|멋지)|쾌적|아늑|뷰\s*좋|조용|넓|개인룸)/giu,
+    },
+    {
+        id: "portion_positive",
+        aspect: "portion",
+        polarity: "POS",
+        baseWeight: 0.60,
+        priority: 62,
+        rx: /(양\s*많|푸짐|넉넉|배부르|리필\s*가능|무한리필)/giu,
+    },
+    {
+        id: "overall_positive",
+        aspect: "overall",
+        polarity: "POS",
+        baseWeight: 0.70,
+        priority: 55,
+        rx: /(만족|좋았|좋아요|추천|강추|최고|대박|훌륭)/giu,
+        skipIf: (raw, start, end) => {
+            const wS = Math.max(0, start - 12);
+            const wE = Math.min(raw.length, end + 18);
+            const win = raw.slice(wS, wE);
+            // ⚠️ g 제거
+            return /(만족하실\s*수\s*있도록|만족할\s*수\s*있도록|만족하길|만족되면)/iu.test(win);
+        },
+    },
+    {
+        id: "overall_negative",
+        aspect: "overall",
+        polarity: "NEG",
+        baseWeight: 0.70,
+        priority: 55,
+        rx: /(실망|후회|추천\s*안|안\s*추천)/giu,
+    },
+];
+
+function intensityMultiplier(raw: string, start: number, end: number, cfg: EngineConfig): number {
+    const wS = Math.max(0, start - 10);
+    const wE = Math.min(raw.length, end + 10);
+    const win = raw.slice(wS, wE);
+
+    let mult = 1.0;
+    if (INTENSIFIERS.some((t) => win.includes(t))) mult *= cfg.intensityBoost;
+    if (HEDGES.some((t) => win.includes(t))) mult *= cfg.hedgePenalty;
+    if (win.includes("!")) mult *= cfg.exclamBoost;
+    return clamp(0.6, cfg.maxWeightMultiplier, mult);
+}
+
+function preferenceMultiplier(raw: string, start: number, end: number): number {
+    const wS = Math.max(0, start - 18);
+    const wE = Math.min(raw.length, end + 18);
+    const win = raw.slice(wS, wE);
+    if (PREFERENCE_CONTEXT.test(win)) return 0.88;
+    return 1.0;
+}
+
+function extractEvidence(rawNormalized: string, cfg: EngineConfig) {
+    const spans = collectNeutralizedSpans(rawNormalized);
+    const masked = maskSpans(rawNormalized, spans);
+
+    const { sentences } = buildSentenceInfo(rawNormalized);
+    const nSent = Math.max(1, sentences.length);
+
+    type Candidate = EvidenceHit & { priority: number; absWeight: number };
+    const candidates: Candidate[] = [];
+
+    for (const rule of CUE_RULES) {
+        rule.rx.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = rule.rx.exec(masked)) !== null) {
+            const start = m.index;
+            const cue = m[0];
+            const end = start + cue.length;
+
+            if (rule.preCheck && !rule.preCheck(rawNormalized, start, cue)) continue;
+            if (rule.skipIf && rule.skipIf(rawNormalized, start, end, cue)) continue;
+
+            const sIdx = findSentenceIndex(sentences, start);
+            const recency = nSent <= 1 ? 1.0 : 1.0 + cfg.recencyBoost * (sIdx / (nSent - 1));
+
+            const sentence = sentences[sIdx];
+            let contrast = 1.0;
+            if (sentence.contrastAbs !== null) {
+                if (start >= sentence.contrastAbs) contrast *= 1.0 + cfg.contrastPostBoost;
+                else contrast *= 1.0 - cfg.contrastPrePenalty;
+            }
+
+            const intense = intensityMultiplier(rawNormalized, start, end, cfg);
+            const pref = preferenceMultiplier(rawNormalized, start, end);
+
+            const weight = rule.baseWeight * recency * contrast * intense * pref;
+
+            candidates.push({
+                aspect: rule.aspect,
+                polarity: rule.polarity,
+                weight,
+                cue,
+                snippet: makeSnippet(rawNormalized, start, end, cfg.snippetRadius),
+                ruleId: rule.id,
+                start,
+                end,
+                priority: rule.priority,
+                absWeight: Math.abs(weight),
+            });
+        }
     }
 
-    if (!hasPhoto && textLen < 3) {
-        return {
-            needsfine_score: 1.0, trust_level: 0, authenticity: false, advertising_words: false, tags: ['내용부적합'],
-            is_critical: false, is_hidden: true, is_malicious: false, debug_reason: "GRICE_QUANTITY_FAIL",
-            logic_version: "v15.7_TRACE", entropy_score: 0
-        };
+    candidates.sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return b.absWeight - a.absWeight;
+    });
+
+    const selected: Candidate[] = [];
+    for (const c of candidates) {
+        if (selected.some((s) => overlaps({ start: c.start, end: c.end }, { start: s.start, end: s.end }))) continue;
+        selected.push(c);
     }
 
-    // Keyword Counts
-    let mainCount = 0, subCount = 0;
-    KEYWORDS_MAIN.forEach(p => { if (p.test(cleanText)) mainCount++; });
-    KEYWORDS_SUB.forEach(p => { if (p.test(cleanText)) subCount++; });
-    const totalKeywords = mainCount + subCount;
+    return { masked, selected };
+}
 
-    if (!hasPhoto && textLen >= 30 && totalKeywords === 0) {
-        return {
-            needsfine_score: 3.0, trust_level: 10, authenticity: false, advertising_words: false, tags: [],
-            is_critical: false, is_hidden: true, is_malicious: false, debug_reason: "NO_CONTEXT",
-            logic_version: "v15.7_TRACE", entropy_score: 0
-        };
-    }
+// -------------------------
+// Strong negative ceiling
+// -------------------------
+function detectStrongNegative(textMasked: string): StrongNegativeInfo {
+    const matched: string[] = [];
 
-    const isMeaningfulShort = MEANINGFUL_SHORT_PATTERNS.some(p => p.test(cleanText));
+    const hygiene = /(벌레|이물질|곰팡|오염|악취|식중독|철수세미)/giu;
+    const fraud = /(사기|바가지|가격\s*다르게|강요|강매|계산\s*실수|결제\s*실수)/giu;
+    const neverAgain = /(다신\s*안|다시는\s*안|두\s*번\s*다시\s*안|절대\s*안|강력\s*비추|먹지\s*마|가지\s*마|오지\s*마)/giu;
+    const serviceExtreme = /(막말|하대|서비스\s*최악|불친절\s*최악|무시당|무시하|반말|던지|툭툭|도끼눈|째려)/giu;
+    const genericExtreme = /(최악|쓰레기|별\s*한\s*개도\s*아까|없어져도\s*되|절대\s*비추|안\s*추천|추천\s*안|후회합니다|후회됨)/giu;
 
-    // Short Text Anchor
-    if (!hasPhoto && textLen < 10 && !isMeaningfulShort) {
-        return {
-            needsfine_score: 3.0, trust_level: 20, authenticity: false, advertising_words: false, tags: ['단답형'],
-            is_critical: false, is_hidden: true, is_malicious: false, debug_reason: "SHORT_TEXT_ANCHOR",
-            logic_version: "v15.7_TRACE", entropy_score: 0
-        };
-    }
+    const hit = (rx: RegExp) => {
+        rx.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        let any = false;
+        while ((m = rx.exec(textMasked)) !== null) {
+            any = true;
+            matched.push(m[0]);
+        }
+        return any;
+    };
 
-    // Deep Analysis
-    let sensoryCount = 0, narrativeCount = 0, comparativeCount = 0, clicheCount = 0;
-    let atmosphereCount = 0, serviceCount = 0;
+    if (hit(hygiene)) return { flag: true, type: "HYGIENE_CRITICAL", ceiling: 1.8, matched };
+    if (hit(fraud)) return { flag: true, type: "FRAUD_PRICE", ceiling: 2.5, matched };
+    if (hit(neverAgain)) return { flag: true, type: "NEVER_AGAIN", ceiling: 2.9, matched };
+    if (hit(serviceExtreme)) return { flag: true, type: "SERVICE_EXTREME", ceiling: 2.8, matched };
+    if (hit(genericExtreme)) return { flag: true, type: "GENERIC_EXTREME", ceiling: 2.9, matched };
 
-    ANALYSIS_PATTERNS.SENSORY.forEach(p => { if (p.test(cleanText)) sensoryCount++; });
-    ANALYSIS_PATTERNS.NARRATIVE.forEach(p => { if (p.test(cleanText)) narrativeCount++; });
-    ANALYSIS_PATTERNS.ATMOSPHERE.forEach(p => { if (p.test(cleanText)) atmosphereCount++; });
-    ANALYSIS_PATTERNS.SERVICE.forEach(p => { if (p.test(cleanText)) serviceCount++; });
-    ANALYSIS_PATTERNS.COMPARATIVE.forEach(p => { if (p.test(cleanText)) comparativeCount++; });
-    ANALYSIS_PATTERNS.CLICHE.forEach(p => { if (p.test(cleanText)) clicheCount++; });
+    return { flag: false, type: "NONE", ceiling: 5.0, matched: [] };
+}
 
+// -------------------------
+// Score label mapping
+// -------------------------
+export function scoreToLabel(score: number): string {
+    if (score < 2.0) return "많이 노력해야하는 집";
+    if (score < 3.0) return "노력해야하는 집";
+    if (score < 3.4) return "먹을만한 집 / 호불호 갈리는 집";
+    if (score < 3.8) return "괜찮은 집";
+    if (score < 4.1) return "맛있는 집";
+    if (score < 4.5) return "로컬맛집";
+    return "웨이팅 찐맛집";
+}
+
+// -------------------------
+// Trust scoring (with caps)
+// -------------------------
+function computeTrustBase(params: {
+    normalized: string;
+    lenNoSpace: number;
+    sentenceCount: number;
+    hangulRatio: number;
+    mentionCount: number;
+    hasNumbers: boolean;
+    hasPrice: boolean;
+    hasTime: boolean;
+    evidenceCount: number;
+    strongNeg: StrongNegativeInfo;
+    userRating?: number;
+    posEvidenceCount: number;
+    negEvidenceCount: number;
+}): number {
     const {
-        tags, isMalicious, isQualityFail, isServiceFail, isPreferenceMismatch,
-        isPositiveSlang, isIncentive, isCriticalHygiene, isAiSuspect,
-        isNegationPraise, isAlcoholCraving, isPersonalRegret
-    } = extractReviewTags(cleanText, isDelivery);
+        normalized,
+        lenNoSpace,
+        sentenceCount,
+        hangulRatio: hr,
+        mentionCount,
+        hasNumbers,
+        hasPrice,
+        hasTime,
+        evidenceCount,
+        strongNeg,
+        userRating,
+        posEvidenceCount,
+        negEvidenceCount,
+    } = params;
 
-    let negativeWord = "";
-    const hasNegative = SENTIMENT_PATTERNS.NEGATIVE.test(cleanText);
-    if (hasNegative) {
-        negativeWord = cleanText.match(SENTIMENT_PATTERNS.NEGATIVE)?.[0] || "Found";
+    if (!normalized) return 0;
+    const onlyNoise = /^[ㅋㅎㅠㅜ!?.,\s]+$/.test(normalized) && lenNoSpace <= 6;
+    if (onlyNoise) return 0;
+
+    let trust = 0;
+    if (lenNoSpace <= 10) trust = 25;
+    else if (lenNoSpace <= 30) trust = 40;
+    else if (lenNoSpace <= 70) trust = 55;
+    else if (lenNoSpace <= 120) trust = 68;
+    else if (lenNoSpace <= 220) trust = 78;
+    else trust = 86;
+
+    trust += Math.min(15, mentionCount * 3);
+    if (sentenceCount >= 2) trust += 4;
+    if (hasNumbers) trust += 5;
+    if (hasPrice) trust += 5;
+    if (hasTime) trust += 4;
+
+    trust += Math.min(8, evidenceCount * 2);
+
+    if (hr < 0.25) trust -= 15;
+
+    const laugh = (normalized.match(/[ㅋㅎ]/g) || []).length;
+    if (laugh >= 10) trust -= 8;
+
+    const excl = (normalized.match(/!/g) || []).length;
+    if (excl >= 4) trust -= 5;
+
+    if (lenNoSpace < 25 && evidenceCount <= 1) {
+        if (strongNeg.flag && strongNeg.type === "HYGIENE_CRITICAL") trust = Math.min(trust, 65);
+        else trust = Math.min(trust, 50);
     }
 
-    const hasPositive = SENTIMENT_PATTERNS.POSITIVE.test(cleanText);
-    const isActualLoyal = LOYALTY_PATTERNS.ACTUAL.test(cleanText);
-    const isPromisedLoyal = LOYALTY_PATTERNS.PROMISED.test(cleanText);
-    const hasContrast = LOGIC_PATTERNS.CONTRAST.test(cleanText);
-    const hasWaiting = LOGIC_PATTERNS.WAITING.test(cleanText);
-
-    // ----------------------------------------------------------------------------
-    // 📡 Trust Calculation
-    // ----------------------------------------------------------------------------
-    const entropy = calculateInformationDensity(cleanText);
-
-    let rawTrust = Math.log(textLen + 1) * 0.7;
-    if (totalKeywords > 0) rawTrust += 0.8;
-    if (sensoryCount > 0) rawTrust += 1.0;
-    if (atmosphereCount > 0) rawTrust += 0.5;
-    if (hasPhoto) rawTrust += 1.5;
-
-    if (isActualLoyal) rawTrust += 1.5;
-    if (isMeaningfulShort) rawTrust += 0.5;
-
-    if (isCriticalHygiene || isServiceFail || isQualityFail) rawTrust += 5.0;
-    if (isPreferenceMismatch) rawTrust += 1.0;
-    if (isAlcoholCraving) rawTrust += 1.2;
-
-    if (clicheCount >= 2 && sensoryCount === 0) rawTrust -= 1.5;
-    if (entropy < 0.4) rawTrust -= 1.0;
-
-    const sigmoid = (x: number) => 1 / (1 + Math.exp(-0.7 * (x - 3.5)));
-    let trustScore = sigmoid(rawTrust);
-
-    // [New] Slang Trust Boost (User Feedback: "Trust them more")
-    if (isPositiveSlang) {
-        trustScore = Math.max(trustScore, 0.5); // 신뢰도 최소 50% 보장
+    if (typeof userRating === "number" && Number.isFinite(userRating)) {
+        if (userRating >= 4.5 && negEvidenceCount >= 2 && posEvidenceCount === 0) trust -= 10;
+        if (userRating <= 2.0 && posEvidenceCount >= 2 && negEvidenceCount === 0) trust -= 8;
     }
 
-    if (hasWaiting && sensoryCount === 0) trustScore = Math.min(trustScore, 0.6);
-    if (textLen < 20 && !isMeaningfulShort) trustScore = Math.min(trustScore, 0.3);
+    return clamp(0, 100, Math.round(trust));
+}
 
-    // AI Mercy
-    if (isAiSuspect) {
-        trustScore = Math.min(trustScore, 0.5);
+function applyTrustCaps(trust: number, hasPhoto: boolean, cfg: EngineConfig) {
+    const caps: string[] = [];
+    let t = trust;
+    if (t > cfg.trustMax) {
+        t = cfg.trustMax;
+        caps.push(`TRUST_CAP_GLOBAL(${cfg.trustMax})`);
     }
-    // Incentive Penalty
-    if (isIncentive) {
-        trustScore = Math.min(trustScore, 0.5);
+    if (!hasPhoto && t > cfg.trustMaxNoPhoto) {
+        t = cfg.trustMaxNoPhoto;
+        caps.push(`TRUST_CAP_NO_PHOTO(${cfg.trustMaxNoPhoto})`);
+    }
+    return { trust: t, trustCaps: caps };
+}
+
+// -------------------------
+// Score caps by user rating (policy max caps)
+// -------------------------
+function applyUserRatingScoreCaps(rawScore: number, userRating: number | undefined, cfg: EngineConfig) {
+    if (typeof userRating !== "number" || !Number.isFinite(userRating)) {
+        return { score: rawScore, capApplied: undefined as number | undefined };
     }
 
-    trustScore = Math.max(0.1, Math.min(0.99, trustScore));
+    let cap: number | undefined;
+    if (userRating < 2.0) cap = cfg.scoreCapUserRatingLt2;
+    else if (userRating < 3.0) cap = cfg.scoreCapUserRatingLt3;
 
-    if (!hasPhoto) {
-        trustScore = Math.min(trustScore, 0.9);
+    if (cap === undefined) return { score: rawScore, capApplied: undefined };
+
+    return { score: Math.min(rawScore, cap), capApplied: cap };
+}
+
+// -------------------------
+// POLICY A: High-rating forced floor
+// -------------------------
+function applyHighRatingFloorForced(score: number, userRating: number | undefined, cfg: EngineConfig) {
+    if (!cfg.enableHighRatingFloor) return score;
+    if (typeof userRating !== "number" || !Number.isFinite(userRating)) return score;
+    if (userRating < cfg.highRatingFloorMinUserRating) return score;
+    return Math.max(score, cfg.highRatingFloorMinScore);
+}
+
+// -------------------------
+// Main
+// -------------------------
+export function analyzeReview(
+    input: ReviewInput,
+    options: AnalyzeOptions = {},
+    cfg: EngineConfig = DEFAULT_CONFIG,
+): NeedsFineAnalysis {
+    const normalized = normalizeText(input.text || "");
+    const hasPhoto = Boolean(input.hasPhoto);
+    const userRating = parseUserRating(input.userRating);
+
+    const compact = normalized.replace(/\s+/g, "");
+    const lenNoSpace = compact.length;
+
+    // empty/noise
+    if (!normalized || lenNoSpace <= 1) {
+        const baseTrust = 0;
+        const { trust, trustCaps } = applyTrustCaps(baseTrust, hasPhoto, cfg);
+
+        const score0 = 1.0;
+        return {
+            needsFineScore: score0,
+            trust,
+            label: scoreToLabel(score0),
+            tags: [],
+            evidence: {
+                positive: [],
+                negative: [],
+                strongNegative: { flag: false, type: "NONE", ceiling: 5.0, matched: [] },
+            },
+            debug: options.debug
+                ? {
+                    normalized,
+                    masked: normalized,
+                    appliedCaps: ["EMPTY_OR_TOO_SHORT"],
+                    baseScore: cfg.baseScore,
+                    scoreMode: "REGULAR",
+                    rawScore: score0,
+                    detailBonus: 0,
+                    synergyBonus: 0,
+                    caveatAttenuated: false,
+                    userRating,
+                    userRatingCapApplied: undefined,
+                    trustCaps,
+                    posAxes: [],
+                    negAxes: [],
+                    feature: { lenNoSpace },
+                }
+                : undefined,
+        };
     }
 
-    // ----------------------------------------------------------------------------
-    // 💎 Score Calculation & Tracing
-    // ----------------------------------------------------------------------------
+    const mentionSet = detectAspectMentions(normalized);
+    const { masked, selected } = extractEvidence(normalized, cfg);
+    const strongNeg = detectStrongNegative(masked);
 
-    let predictedScore = 3.0;
-    let scoreEvidenceWeight = trustScore;
+    const allAspects: AspectKey[] = [
+        "taste",
+        "service",
+        "value",
+        "revisit",
+        "hygiene",
+        "ambience",
+        "wait",
+        "portion",
+        "overall",
+    ];
 
-    if (isMalicious || isCriticalHygiene || isQualityFail || isServiceFail) {
-        predictedScore = 1.0;
-        scoreEvidenceWeight = 0.95;
-    }
-    else if (isPositiveSlang || isAlcoholCraving) {
-        predictedScore = 4.8;
-    } else if (hasNegative) {
-        const priceKeywords = SENTIMENT_PATTERNS.PRICE_COMPLAINT;
-        const onlyPriceComplaint = priceKeywords.test(cleanText) && !/(맛없|별로|최악)/.test(cleanText);
-        const isActuallyPraise = isNegationPraise && !/(맛없|별로|최악)/.test(cleanText);
-        const isRegret = isPersonalRegret;
+    const aspects: Record<
+        AspectKey,
+        { pos: number; neg: number; posHits: EvidenceHit[]; negHits: EvidenceHit[] }
+    > = Object.create(null);
 
-        if (isActuallyPraise || isAlcoholCraving) predictedScore = 4.5;
-        else if (isRegret) predictedScore = 4.0;
-        else if (onlyPriceComplaint && hasPositive) predictedScore = 4.0;
-        else if (tags.includes('가성비 아쉽') && hasPositive) predictedScore = 3.8;
-        else if (isActualLoyal && hasContrast) predictedScore = 3.5;
-        else predictedScore = 2.0;
-    } else if (hasPositive) {
-        if (isActualLoyal) predictedScore = 4.9;
-        else if (isPromisedLoyal) predictedScore = 4.2;
-        else {
-            const basePositive = (trustScore >= 0.7 || hasPhoto) ? 4.2 : 3.5;
-            predictedScore = (atmosphereCount > 0 && sensoryCount === 0) ? 4.0 : basePositive;
+    for (const a of allAspects) aspects[a] = { pos: 0, neg: 0, posHits: [], negHits: [] };
+
+    for (const hit of selected) {
+        if (hit.polarity === "POS") {
+            aspects[hit.aspect].pos += hit.weight;
+            aspects[hit.aspect].posHits.push(hit);
+        } else {
+            aspects[hit.aspect].neg += hit.weight;
+            aspects[hit.aspect].negHits.push(hit);
         }
     }
 
-    trace += `Pred[${predictedScore}]`;
+    // per-aspect polarity -> tags
+    const tagsAll: TagResult[] = [];
+    const posAxes: AspectKey[] = [];
+    const negAxes: AspectKey[] = [];
 
-    // 🌟 [Safety Net] 장문(70자 이상)이면 기본 점수 4.0 보장 (황금코다리 구제)
-    // [Modified] 단골(ActualLoyal)이거나, 부정어가 있어도 장문이면 4.0 보장 (단, 품질 불량 제외)
-    const isLongReview = textLen >= 70;
-    if (isLongReview && (!hasNegative || isActualLoyal) && !isQualityFail && predictedScore < 4.0) {
-        predictedScore = 4.0;
-        trace += `->LongBoost[4.0]`;
-    }
+    for (const a of allAspects) {
+        const mentioned = mentionSet.has(a) || aspects[a].posHits.length > 0 || aspects[a].negHits.length > 0;
+        const pos = aspects[a].pos;
+        const neg = aspects[a].neg;
+        const net = pos - neg;
 
-    // Bayesian Mixing
-    let finalScore = 0;
-    const isMismatch = Math.abs(safeRating - predictedScore) >= 1.5;
-
-    // 1. Calculate weighted average first
-    if (isMismatch && trustScore > 0.6) {
-        finalScore = (safeRating * 0.2) + (predictedScore * 0.8);
-    } else {
-        finalScore = (safeRating * (1 - scoreEvidenceWeight)) + (predictedScore * scoreEvidenceWeight);
-    }
-
-    // 2. Apply Overrides/Floors
-    if (isPreferenceMismatch && !isActualLoyal) {
-        finalScore = 3.2;
-    }
-    else if (isActualLoyal && finalScore < 3.2 && predictedScore > 2.5) {
-        finalScore = 3.2; // Floor for loyal
-    }
-
-    trace += `->Mix[${finalScore.toFixed(2)}]`;
-
-    // ----------------------------------------------------------------------------
-    // 🚧 [Cap Logic]
-    // ----------------------------------------------------------------------------
-
-    // 🚨 [Correct Scope Fix] 이 변수들을 외부 스코프로 빼야 ReferenceError가 발생하지 않습니다.
-    const isFlavorless = sensoryCount === 0 && atmosphereCount === 0 && serviceCount === 0 && !isPositiveSlang;
-    const isGratitudeOnly = GRATITUDE_PATTERNS.some(p => p.test(cleanText)) && sensoryCount === 0;
-
-    // 1. Zero Tolerance
-    if (isQualityFail || isCriticalHygiene || isServiceFail) {
-        finalScore = Math.min(finalScore, 2.5);
-        trace += `->ZeroTol[2.5]`;
-    }
-    else {
-        // 2. FLAVORLESS DEFENSE + GRATITUDE CHECK + LENGTH SAFETY
-        if ((isFlavorless || isGratitudeOnly) && !isActualLoyal && !isAlcoholCraving && !isLongReview) {
-            finalScore = hasPhoto ? 3.2 : 3.0;
-            trace += `->FlavorCap[${finalScore}]`;
+        let polarity: Polarity = "NEUTRAL";
+        if (pos > 0.2 || neg > 0.2) {
+            if (net >= cfg.aspectPosThreshold) polarity = "POS";
+            else if (net <= -cfg.aspectNegThreshold) polarity = "NEG";
+            else polarity = "MIXED";
         }
-        else {
-            // [Modified] Mixed Feeling Cap: 부정어 섞인 긍정 리뷰는 3.5점 제한 (User: "Mid-3s")
-            if (hasNegative && hasPositive && finalScore > 3.5 && !isActualLoyal) {
-                finalScore = 3.5;
-                trace += `->MixedCap[3.5]`;
-            }
-            // Slang Cap: 신뢰도 낮은 슬랭은 3.8점 제한 (신뢰도 자체는 위에서 0.5로 상향됨)
-            else if (isPositiveSlang && textLen < 50 && finalScore > 3.8) {
-                finalScore = 3.8;
-                trace += `->SlangCap[3.8]`;
-            }
-            // Incentive Cap
-            else if (isIncentive && !isActualLoyal) {
-                if (finalScore > 3.9) finalScore = 3.9;
-                trace += `->IncentiveCap[3.9]`;
-            }
-            // Delivery Cap
-            else if (isDelivery && sensoryCount === 0 && !isActualLoyal) {
-                if (finalScore > 4.0) finalScore = 4.0;
-                trace += `->DeliCap[4.0]`;
-            }
-            // Generic Cap (단문 긍정)
-            else if (!isPositiveSlang && !isAlcoholCraving && !isNegationPraise && sensoryCount === 0 && atmosphereCount === 0 && !isActualLoyal && !isLongReview) {
-                if (finalScore > 3.8) finalScore = 3.8;
-                trace += `->GenericCap[3.8]`;
-            }
-            // Normal Positive Cap
-            else if (!isPositiveSlang && !isAlcoholCraving && !isNegationPraise && !isActualLoyal) {
-                if (finalScore > 4.6) finalScore = 4.6;
-                trace += `->NormalCap[4.6]`;
-            }
+
+        const strength = clamp(0, 1, Math.abs(net) / 2.0);
+
+        tagsAll.push({ aspect: a, label: ASPECT_LABEL[a], mentioned, polarity, strength });
+
+        if (mentioned && polarity === "POS") posAxes.push(a);
+        if (mentioned && polarity === "NEG") negAxes.push(a);
+    }
+
+    const evidencePosAll = selected.filter((h) => h.polarity === "POS");
+    const evidenceNegAll = selected.filter((h) => h.polarity === "NEG");
+
+    // -------------------------
+    // SCORE computation
+    // -------------------------
+    // regular mode
+    let scoreRegular = cfg.baseScore;
+    let posContrib = 0; // sum of positive parts (coef*tanh)
+    let negContrib = 0;
+
+    const negNonCaveatSum = allAspects
+        .filter((a) => !cfg.caveatAspects.includes(a))
+        .reduce((acc, a) => acc + aspects[a].neg, 0);
+
+    const tastePos = aspects.taste.pos;
+    const caveatAttenuated =
+        tastePos >= cfg.caveatApplyTastePosMin && negNonCaveatSum <= cfg.caveatApplyNegNonCaveatMax;
+
+    for (const a of allAspects) {
+        const pos = aspects[a].pos;
+        let neg = aspects[a].neg;
+
+        if (caveatAttenuated && cfg.caveatAspects.includes(a)) {
+            neg = neg * cfg.caveatNegAttenuation;
+        }
+
+        const posPart = cfg.posCoef[a] * satTanh(pos / cfg.posScale[a]);
+        const negPart = cfg.negCoef[a] * satTanh(neg / cfg.negScale[a]);
+
+        scoreRegular += posPart;
+        scoreRegular -= negPart;
+
+        posContrib += posPart;
+        negContrib += negPart;
+    }
+
+    // synergy bonus
+    const distinctPosAxesCount = new Set(posAxes.filter((a) => a !== "overall")).size;
+    let synergyBonus = 0;
+    if (distinctPosAxesCount >= 2) synergyBonus += 0.12;
+    if (distinctPosAxesCount >= 3) synergyBonus += 0.08;
+    scoreRegular += synergyBonus;
+
+    // detail bonus (only if there is positive evidence)
+    const hasNumbers = /\d/.test(normalized);
+    const hasPrice = /(\d+\s*원|만원)/iu.test(normalized); // g 제거
+    const hasTime = /(\b\d+\s*(분|시간)\b|한\s*시간)/iu.test(normalized); // g 제거
+    const sentenceCount = buildSentenceInfo(normalized).sentences.length;
+
+    const detailSignals =
+        (sentenceCount >= 2 ? 1 : 0) +
+        (hasNumbers ? 1 : 0) +
+        (hasPrice ? 1 : 0) +
+        (hasTime ? 1 : 0) +
+        (/(주차|예약|포장|배달|매장|좌석|룸|웨이팅|대기|리필|무한리필)/iu.test(normalized) ? 1 : 0);
+
+    let detailBonus = 0;
+    if (evidencePosAll.length >= 1) {
+        if (lenNoSpace >= 80) detailBonus += 0.12;
+        if (lenNoSpace >= 140) detailBonus += 0.07;
+        detailBonus += Math.min(0.07, detailSignals * 0.016);
+        detailBonus = Math.min(cfg.maxDetailBonus, detailBonus);
+        scoreRegular += detailBonus;
+    }
+
+    const appliedCaps: string[] = [];
+    let scoreMode: "REGULAR" | "LONG_MIXED_POS_ONLY" = "REGULAR";
+
+    // brevity caps
+    if (lenNoSpace <= 6) {
+        scoreRegular = Math.min(scoreRegular, 3.1);
+        appliedCaps.push("BREVITY_CAP_LEN<=6 => 3.1");
+    } else if (lenNoSpace <= 12) {
+        scoreRegular = Math.min(scoreRegular, 3.4);
+        appliedCaps.push("BREVITY_CAP_LEN<=12 => 3.4");
+    }
+
+    // optional lift (regular mode only)
+    let ratingLift = 0;
+    if (cfg.enableUserRatingLift && typeof userRating === "number" && userRating >= 3.0) {
+        if (!strongNeg.flag && lenNoSpace >= cfg.ratingLiftMinLen && evidencePosAll.length >= cfg.ratingLiftMinPosEvidence) {
+            const quality = clamp(0, 1, evidencePosAll.length / 4 + distinctPosAxesCount / 4);
+            ratingLift = Math.min(cfg.ratingLiftMax, (userRating - 3.0) * cfg.ratingLiftPerStar * quality);
+            scoreRegular += ratingLift;
+            appliedCaps.push(`USER_RATING_LIFT(+${ratingLift.toFixed(2)})`);
         }
     }
 
-    if (isMalicious) {
-        finalScore = 1.0;
-        trustScore = 0.05;
-        trace += `->Malicious[1.0]`;
+    // ✅ POLICY B: long mixed candidate
+    let scoreLongMixed: number | undefined = undefined;
+    const isLongMixed =
+        cfg.enableLongMixedMode &&
+        typeof userRating === "number" &&
+        !strongNeg.flag &&
+        lenNoSpace >= cfg.longMixedMinLenNoSpace &&
+        evidencePosAll.length >= cfg.longMixedMinPosEvidence &&
+        evidenceNegAll.length >= cfg.longMixedMinNegEvidence;
+
+    if (isLongMixed) {
+        const baseline = userRating - cfg.longMixedRatingDelta;
+        const posGainBase = posContrib + synergyBonus + detailBonus;
+        const posGain = cfg.longMixedPosGainMultiplier * posGainBase;
+
+        scoreLongMixed = baseline + posGain;
+
+        appliedCaps.push(
+            `POLICY_B_LONG_MIXED: baseline(userRating-${cfg.longMixedRatingDelta})=${baseline.toFixed(
+                2,
+            )}, +posOnly*${cfg.longMixedPosGainMultiplier}(${posGainBase.toFixed(2)})`,
+        );
     }
 
-    finalScore = parseFloat(Math.max(1.0, Math.min(5.0, finalScore)).toFixed(1));
-    const trustLevel = Math.round(trustScore * 100);
-    const isHidden = trustLevel < 30;
+    // choose max (prevents “mixed long collapse” while never lowering good cases)
+    let score = scoreRegular;
+    if (scoreLongMixed !== undefined) {
+        if (scoreLongMixed > scoreRegular) {
+            score = scoreLongMixed;
+            scoreMode = "LONG_MIXED_POS_ONLY";
+        }
+    }
 
-    // [Restored Debug Classification Logic]
-    let debugTag = "NORMAL";
-    const lenTag = `(Len: ${textLen})`;
-    const negTag = negativeWord ? `[Neg:${negativeWord}] ` : "";
+    // strong negative ceiling (still applied here)
+    if (strongNeg.flag) {
+        score = Math.min(score, strongNeg.ceiling);
+        appliedCaps.push(`STRONG_NEG_CEILING(${strongNeg.type}) => ${strongNeg.ceiling}`);
+    }
 
-    if (isMalicious) debugTag = `MALICIOUS`;
-    else if (isCriticalHygiene) debugTag = `CRITICAL_HYGIENE`;
-    else if (isServiceFail) debugTag = `SERVICE_FAIL`;
-    else if (isQualityFail) debugTag = `QUALITY_FAIL`;
-    else if (isFlavorless && !isLongReview) debugTag = `FLAVORLESS_CAP`;
-    else if (isGratitudeOnly && !isLongReview) debugTag = `GRATITUDE_CAP`;
-    else if (isAiSuspect) debugTag = `TURING_SUSPECT`;
-    else if (isIncentive) debugTag = `INCENTIVE_CAP`;
-    else if (isAlcoholCraving) debugTag = `ALCOHOL_CRAVING`;
-    else if (isNegationPraise) debugTag = `NEGATION_PRAISE`;
-    else if (isPositiveSlang && textLen < 50) debugTag = `SHORT_SLANG_CAP`;
-    else if (isPositiveSlang) debugTag = `POSITIVE_SLANG`;
-    else if (isPreferenceMismatch) debugTag = `PREFERENCE_RESPECT`;
-    else if (isActualLoyal) debugTag = `ACTUAL_LOYALTY`;
-    else if (isDelivery && sensoryCount === 0) debugTag = `DELIVERY_CAP`;
-    else if (hasNegative && hasPositive && finalScore === 3.5) debugTag = `MIXED_CAP`;
-    else if (!hasPhoto && trustLevel === 90) debugTag = `PHOTO_CONSTRAINT_CAP`;
-    else if (isHidden) debugTag = `LOW_TRUST`;
+    // 4.0 / 4.5 gates
+    const distinctPosEvidence = new Set(evidencePosAll.map((e) => `${e.aspect}:${e.ruleId}`)).size;
+    const hasCorePos = posAxes.some((a) => cfg.coreAxes.includes(a));
 
-    const debugReason = `TRACE: ${trace} | TAG: ${debugTag} ${negTag}${lenTag}`;
+    if (score >= 4.0) {
+        const gateFail =
+            distinctPosAxesCount < cfg.minPosAxesFor4 ||
+            distinctPosEvidence < cfg.minPosEvidenceFor4 ||
+            (cfg.requireCoreAxisFor4 && !hasCorePos);
+
+        if (gateFail) {
+            score = Math.min(score, cfg.capIfGateFail4);
+            appliedCaps.push("GATE_4.0_FAIL => cap 3.9");
+        }
+    }
+
+    if (score >= 4.5) {
+        const gateFail45 = distinctPosAxesCount < cfg.minPosAxesFor45 || lenNoSpace < cfg.minLenFor45;
+        if (gateFail45) {
+            score = Math.min(score, cfg.capIfGateFail45);
+            appliedCaps.push("GATE_4.5_FAIL => cap 4.4");
+        }
+    }
+
+    // global max cap
+    score = Math.min(score, cfg.maxScore);
+
+    // clamp
+    let rawScore = clamp(1.0, 5.0, score);
+
+    // userRating max caps (<2, <3)
+    const { score: cappedByUserRating, capApplied } = applyUserRatingScoreCaps(rawScore, userRating, cfg);
+    rawScore = cappedByUserRating;
+    if (capApplied !== undefined) appliedCaps.push(`USER_RATING_CAP => ${capApplied}`);
+
+    // ✅ POLICY A: forced 4~5 rating floor (UNCONDITIONAL)
+    const beforeFloor = rawScore;
+    rawScore = applyHighRatingFloorForced(rawScore, userRating, cfg);
+    if (rawScore !== beforeFloor && typeof userRating === "number" && userRating >= cfg.highRatingFloorMinUserRating) {
+        appliedCaps.push(`POLICY_A_HIGH_RATING_FLOOR => ${cfg.highRatingFloorMinScore}`);
+    }
+
+    // round
+    let finalScore = roundToStep(rawScore, cfg.roundingStep);
+    if (capApplied !== undefined) finalScore = Math.min(finalScore, capApplied);
+
+    // evidence minimal output
+    const topPos = [...evidencePosAll].sort((a, b) => b.weight - a.weight).slice(0, 2);
+    const topNeg = [...evidenceNegAll].sort((a, b) => b.weight - a.weight).slice(0, 2);
+
+    // trust
+    const baseTrust = computeTrustBase({
+        normalized,
+        lenNoSpace,
+        sentenceCount,
+        hangulRatio: hangulRatio(normalized),
+        mentionCount: mentionSet.size,
+        hasNumbers,
+        hasPrice,
+        hasTime,
+        evidenceCount: selected.length,
+        strongNeg,
+        userRating,
+        posEvidenceCount: evidencePosAll.length,
+        negEvidenceCount: evidenceNegAll.length,
+    });
+
+    const { trust, trustCaps } = applyTrustCaps(baseTrust, hasPhoto, cfg);
+
+    const uiTags = tagsAll.filter((t) => t.mentioned);
 
     return {
-        needsfine_score: finalScore,
-        trust_level: trustLevel,
-        authenticity: trustLevel >= 75,
-        advertising_words: false,
-        tags: tags,
-        is_critical: (finalScore <= 3.0 || isQualityFail || isCriticalHygiene || isServiceFail) && trustLevel >= 40,
-        is_hidden: isHidden,
-        is_malicious: isMalicious,
-        debug_reason: debugReason,
-        logic_version: "v15.7_TRACE",
-        entropy_score: parseFloat(entropy.toFixed(2))
+        needsFineScore: finalScore,
+        trust,
+        label: scoreToLabel(finalScore),
+        tags: uiTags,
+        evidence: {
+            positive: topPos,
+            negative: topNeg,
+            strongNegative: strongNeg,
+        },
+        debug: options.debug
+            ? {
+                normalized,
+                masked,
+                appliedCaps,
+                baseScore: cfg.baseScore,
+                scoreMode,
+                rawScore,
+                detailBonus,
+                synergyBonus,
+                caveatAttenuated,
+                userRating,
+                userRatingCapApplied: capApplied,
+                trustCaps,
+                posAxes,
+                negAxes,
+                feature: {
+                    lenNoSpace,
+                    sentenceCount,
+                    hasNumbers,
+                    hasPrice,
+                    hasTime,
+                    detailSignals,
+                    distinctPosAxesCount,
+                    distinctPosEvidence,
+                    tastePos,
+                    negNonCaveatSum,
+                    hasPhoto,
+                    posContrib,
+                    negContrib,
+                    ratingLift,
+                    scoreRegular,
+                    scoreLongMixed,
+                },
+            }
+            : undefined,
     };
 }

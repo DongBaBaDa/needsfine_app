@@ -16,6 +16,7 @@ import 'package:needsfine_app/core/search_trigger.dart';
 // ✅ 다국어 패키지 임포트
 import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/widgets/draggable_fab.dart';
+import 'package:geolocator/geolocator.dart'; // ✅ 위치 패키지 추가
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
@@ -31,6 +32,8 @@ class _RankingScreenState extends State<RankingScreen> {
   bool _isLoading = true;
   bool _isMoreLoading = false;
   bool _hasMore = true;
+  double? _lat;
+  double? _lng;
 
   // 내부 로직용 변수
   String _reviewSortOption = '최신순';
@@ -41,14 +44,10 @@ class _RankingScreenState extends State<RankingScreen> {
   final ScrollController _scrollController = ScrollController();
   final int _limit = 20;
 
-  // ✅ 팝업 위치를 잡기 위한 링크
-  final LayerLink _layerLink = LayerLink();
-  OverlayEntry? _overlayEntry;
-
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    _checkLocationAndLoad();
 
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.9 &&
@@ -62,120 +61,31 @@ class _RankingScreenState extends State<RankingScreen> {
 
   @override
   void dispose() {
-    _removeOverlay(); // 화면 종료 시 팝업 닫기
     _scrollController.dispose();
     super.dispose();
   }
 
-  // ✅ 팝업 닫기 함수
-  void _removeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
 
-  // ✅ 도움말 팝업 표시 함수
-  void _showInfoPopup() {
-    if (_overlayEntry != null) {
-      _removeOverlay();
-      return;
+
+  Future<void> _checkLocationAndLoad() async {
+    try {
+       LocationPermission permission = await Geolocator.checkPermission();
+       if (permission == LocationPermission.denied) {
+         permission = await Geolocator.requestPermission();
+       }
+       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+         final position = await Geolocator.getCurrentPosition();
+         if (mounted) {
+           setState(() {
+             _lat = position.latitude;
+             _lng = position.longitude;
+           });
+         }
+       }
+    } catch (e) {
+      debugPrint("Location error: $e");
     }
-
-    final l10n = AppLocalizations.of(context)!;
-
-    // 언어별 위치 조정
-    final currentLang = Localizations.localeOf(context).languageCode;
-    final double xOffset = (currentLang == 'my') ? -150.0 : -60.0;
-
-    _overlayEntry = OverlayEntry(
-      builder: (context) {
-        return Stack(
-          children: [
-            // 1. 배경을 터치하면 팝업 닫기
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _removeOverlay,
-                behavior: HitTestBehavior.translucent,
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-            // 2. 실제 말풍선 팝업
-            CompositedTransformFollower(
-              link: _layerLink,
-              showWhenUnlinked: false,
-              offset: Offset(xOffset, 30),
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  width: 300,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildInfoTitle(l10n.whatIsScore),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.scoreDesc,
-                        style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.4),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildScoreTier("4.5 ~ ", l10n.waitingSpot),
-                      _buildScoreTier("4.0 ~ ", l10n.localSpot),
-                      _buildScoreTier("3.5 ~ ", l10n.goodSpot),
-                      _buildScoreTier("3.0 ~ ", l10n.polarizingSpot),
-                      const Divider(height: 24),
-                      _buildInfoTitle(l10n.whatIsReliability),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.reliabilityDesc,
-                        style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.4),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-
-  Widget _buildInfoTitle(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF9C7CFF),
-      ),
-    );
-  }
-
-  Widget _buildScoreTier(String score, String desc) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Text("• $score : ", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-          Expanded(child: Text(desc, style: const TextStyle(fontSize: 12, color: Colors.grey))),
-        ],
-      ),
-    );
+    _loadInitialData();
   }
 
   Future<void> _loadInitialData({bool isRefresh = false}) async {
@@ -204,8 +114,28 @@ class _RankingScreenState extends State<RankingScreen> {
           } else {
             _stats = Stats(total: reviews.length, average: 0, avgTrust: 0);
           }
-          _reviews = reviews;
-          _storeRankings = rankings;
+          
+          // ✅ 거리 계산 및 주입
+          if (_lat != null && _lng != null) {
+            for (var r in reviews) {
+              r = _injectDistanceToReview(r);
+            }
+            for (int i=0; i<rankings.length; i++) {
+              rankings[i] = _injectDistanceToRanking(rankings[i]);
+            }
+          }
+          
+          _reviews = reviews; // Note: In Dart, objects are references, but Review is final fields. 
+                              // Actually Review fields are final. using `r = ...` above didn't change list content.
+                              // Need to Map.
+          if (_lat != null && _lng != null) {
+             _reviews = reviews.map((r) => _injectDistanceToReview(r)).toList();
+             _storeRankings = rankings.map((r) => _injectDistanceToRanking(r)).toList();
+          } else {
+             _reviews = reviews;
+             _storeRankings = rankings;
+          }
+          
           _hasMore = reviews.length >= _limit;
         });
       }
@@ -231,6 +161,15 @@ class _RankingScreenState extends State<RankingScreen> {
               _reviews.add(newReview);
             }
           }
+          for (var newReview in moreReviews) {
+            if (!_reviews.any((existing) => existing.id == newReview.id)) {
+               // 거리 주입
+               if (_lat != null && _lng != null) {
+                 newReview = _injectDistanceToReview(newReview);
+               }
+              _reviews.add(newReview);
+            }
+          }
           _hasMore = moreReviews.length >= _limit;
         });
       }
@@ -253,6 +192,9 @@ class _RankingScreenState extends State<RankingScreen> {
       case '쓴소리':
         reviews = reviews.where((r) => r.isCritical).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         break;
+      case '거리순': // ✅ 거리순 로직
+        reviews.sort((a, b) => (a.distance ?? 99999).compareTo(b.distance ?? 99999));
+        break;
       case '최신순':
       default:
         reviews.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -274,8 +216,22 @@ class _RankingScreenState extends State<RankingScreen> {
         }
         return compare;
       });
+    } else if (_rankingSortOption == '거리순') { // ✅ 거리순 로직
+      rankings.sort((a, b) => (a.distance ?? 99999).compareTo(b.distance ?? 99999));
     } else {
-      rankings.sort((a, b) => b.avgScore.compareTo(a.avgScore));
+      // ✅ [업데이트] 니즈파인 순 (Score > Review Count > Trust Level)
+      rankings.sort((a, b) {
+        // 1. 니즈파인 점수 (내림차순)
+        int scoreCompare = b.avgScore.compareTo(a.avgScore);
+        if (scoreCompare != 0) return scoreCompare;
+
+        // 2. 리뷰 개수 (내림차순)
+        int countCompare = b.reviewCount.compareTo(a.reviewCount);
+        if (countCompare != 0) return countCompare;
+
+        // 3. 신뢰도 (내림차순)
+        return b.avgTrust.compareTo(a.avgTrust);
+      });
     }
 
     // ✅ [핵심] 정렬 후 순위를 다시 매길 때, 주소/좌표/태그 정보 유실 방지
@@ -292,6 +248,7 @@ class _RankingScreenState extends State<RankingScreen> {
         address: rankings[i].address,
         lat: rankings[i].lat,
         lng: rankings[i].lng,
+        distance: rankings[i].distance, // ✅ 유지
       );
     }
     return rankings;
@@ -306,6 +263,7 @@ class _RankingScreenState extends State<RankingScreen> {
       case '사용자 별점 순': return l10n.sortByUserRating;
       case '리뷰 개수 순': return l10n.sortByReviewCount;
       case '최신순': return l10n.latestOrder;
+      case '거리순': return l10n.sortByDistance ?? '거리순'; // ✅ 다국어
       default: return value;
     }
   }
@@ -322,22 +280,19 @@ class _RankingScreenState extends State<RankingScreen> {
           children: [
             Text(l10n.reviewRanking, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(width: 8),
-            CompositedTransformTarget(
-              link: _layerLink,
-              child: GestureDetector(
-                onTap: _showInfoPopup,
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.question_mark,
-                    size: 12,
-                    color: Colors.black,
-                  ),
+            GestureDetector(
+              onTap: _showInfoPopup,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.question_mark,
+                  size: 12,
+                  color: Colors.black,
                 ),
               ),
             ),
@@ -441,8 +396,8 @@ class _RankingScreenState extends State<RankingScreen> {
           value: _tabIndex == 0 ? _reviewSortOption : _rankingSortOption,
           underline: const SizedBox(),
           items: (_tabIndex == 0
-              ? ['최신순', '니즈파인 점수순', '신뢰도순', '쓴소리']
-              : ['니즈파인 순', '사용자 별점 순', '리뷰 개수 순']
+              ? ['최신순', '니즈파인 점수순', '신뢰도순', '쓴소리', '거리순'] // ✅ 추가
+              : ['니즈파인 순', '사용자 별점 순', '리뷰 개수 순', '거리순'] // ✅ 추가
           ).map((String value) {
             return DropdownMenuItem<String>(
               value: value,
@@ -632,6 +587,123 @@ class _RankingScreenState extends State<RankingScreen> {
           ),
         ],
       ),
+    );
+  }
+  void _showInfoPopup() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '랭킹 기준 안내',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              _buildInfoItem(
+                '니즈파인 점수',
+                '단순 평점이 아닌, 사용자가 작성한 리뷰 텍스트만을 AI가 심층 분석하여 매장의 종합적인 느낌과 만족도를 수치화한 점수입니다.',
+                Icons.star_rounded,
+                const Color(0xFFFFD700),
+              ),
+              const SizedBox(height: 16),
+              _buildInfoItem(
+                '신뢰도',
+                '리뷰 작성자의 활동 내역과 영수증 인증 여부 등을 종합하여 1~100%로 산정한 리뷰의 신뢰 수준입니다.',
+                Icons.verified_user_rounded,
+                const Color(0xFF4CAF50),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9C7CFF),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('닫기', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoItem(String title, String description, IconData icon, Color color) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF666666), height: 1.4),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- Helpers for Distance ---
+  double _calcDist(double lat1, double lng1, double lat2, double lng2) {
+    double dLat = (lat2 - lat1).abs();
+    double dLng = (lng2 - lng1).abs();
+    // Simple Eucledian for display approximation (or use Geolocator.distanceBetween)
+    // To be accurate with "km" display, we should use Geolocator or Haversine.
+    // Since we imported geolocator, let's use it.
+    final distMeters = Geolocator.distanceBetween(lat1, lng1, lat2, lng2);
+    return distMeters / 1000.0; // km
+  }
+
+  Review _injectDistanceToReview(Review r) {
+    // Review model has storeLat, storeLng
+    if (r.storeLat == 0 && r.storeLng == 0) return r;
+    // Copy with distance
+    return Review(
+      id: r.id, storeName: r.storeName, storeAddress: r.storeAddress, 
+      reviewText: r.reviewText, userRating: r.userRating, photoUrls: r.photoUrls, 
+      userId: r.userId, nickname: r.nickname, userProfileUrl: r.userProfileUrl, 
+      storeLat: r.storeLat, storeLng: r.storeLng, createdAt: r.createdAt, 
+      likeCount: r.likeCount, commentCount: r.commentCount, saveCount: r.saveCount, 
+      viewCount: r.viewCount, userEmail: r.userEmail, myCommentText: r.myCommentText, 
+      myCommentCreatedAt: r.myCommentCreatedAt, needsfineScore: r.needsfineScore, 
+      trustLevel: r.trustLevel, isCritical: r.isCritical, isHidden: r.isHidden, 
+      dbTags: r.tags,
+      distance: _calcDist(_lat!, _lng!, r.storeLat, r.storeLng),
+    );
+  }
+
+  StoreRanking _injectDistanceToRanking(StoreRanking r) {
+    if (r.lat == null || r.lng == null) return r;
+    return StoreRanking(
+      storeName: r.storeName, avgScore: r.avgScore, avgUserRating: r.avgUserRating, 
+      reviewCount: r.reviewCount, avgTrust: r.avgTrust, rank: r.rank, 
+      topTags: r.topTags, address: r.address, lat: r.lat, lng: r.lng,
+      distance: _calcDist(_lat!, _lng!, r.lat!, r.lng!),
     );
   }
 }

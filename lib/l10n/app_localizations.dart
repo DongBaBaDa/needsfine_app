@@ -280,6 +280,18 @@ abstract class AppLocalizations {
   /// **'신뢰도순'**
   String get sortByReliability;
 
+  /// No description provided for @sortByDistance.
+  ///
+  /// In ko, this message translates to:
+  /// **'거리순'**
+  String get sortByDistance;
+
+  /// No description provided for @distanceUnit.
+  ///
+  /// In ko, this message translates to:
+  /// **'{distance}km'**
+  String distanceUnit(Object distance);
+
   /// No description provided for @bitterCriticism.
   ///
   /// In ko, this message translates to:

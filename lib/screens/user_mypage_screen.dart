@@ -24,6 +24,7 @@ import 'package:needsfine_app/screens/onboarding/taste_survey_modal.dart';
 import 'package:needsfine_app/screens/user_inquiry_history_screen.dart'; // ✅ 문의 내역 추가
 import 'package:needsfine_app/screens/store_management_screen.dart'; // ✅ 매장 관리 추가
 import 'package:needsfine_app/screens/request_store_registration_screen.dart'; // ✅ 매장 등록 요청 추가
+import 'package:needsfine_app/screens/referral_screen.dart'; // ✅ 친구 초대 화면 추가
 
 import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
@@ -557,6 +558,21 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
+          _MenuSectionCard(
+            title: "이벤트 & 혜택",
+            borderColor: const Color(0xFF8A2BE2).withOpacity(0.3),
+            children: [
+              _MenuItem(
+                  icon: Icons.card_giftcard_rounded,
+                  iconColor: const Color(0xFF8A2BE2),
+                  title: "친구 초대하고 점수 받기",
+                  isLast: true,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferralScreen()))
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
           _MenuSectionCard(
             title: l10n.myActivity,
             children: [
