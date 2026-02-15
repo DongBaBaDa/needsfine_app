@@ -1,0 +1,48 @@
+
+  Widget _buildTierBadge(StoreRanking ranking) {
+    String? label;
+    Color color;
+    Color textColor = Colors.white;
+    bool isCandidate = ranking.avgTrust <= 65;
+
+    // 1. Determine Base Tier
+    if (ranking.avgScore >= 4.5) {
+      label = "웨이팅 맛집";
+      color = const Color(0xFF9C7CFF); // Theme Purple for highest tier
+    } else if (ranking.avgScore >= 4.0) {
+      label = "지역 맛집";
+      color = const Color(0xFF536DFE); // Indigo Accent
+    } else if (ranking.avgScore >= 3.5) {
+      label = "실패없는 식당";
+      color = const Color(0xFF00BFA5); // Teal Accent
+    } else if (ranking.avgScore >= 3.0) {
+      label = "괜찮은 집";
+      color = const Color(0xFFFFAB00); // Amber Accent
+    } else {
+      return const SizedBox.shrink(); // No badge for low scores
+    }
+
+    // 2. Adjust for Candidate Status
+    if (isCandidate) {
+      label = "$label 후보";
+      color = const Color(0xFF9E9E9E); // Grey
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1), // Light background
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color, width: 1), // Colored border
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: color, // Colored text matching border
+        ),
+      ),
+    );
+  }
+}
