@@ -41,6 +41,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Custom URI Scheme for NeedsFine Deep Links (e.g., needsfine://list/123) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="needsfine" android:host="list" />
+                <data android:scheme="needsfine" android:host="login-callback" />
+            </intent-filter>
         </activity>
 
         <activity
