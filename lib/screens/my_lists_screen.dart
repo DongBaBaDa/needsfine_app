@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
 
@@ -492,9 +493,17 @@ class _MyListsScreenState extends State<MyListsScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      onSelected: (value) {
-                        if (value == 'share') {
+                      onSelected: (value) async {
+                        if (value == 'toggle_public') {
                           _togglePublicState(id);
+                        } else if (value == 'share_external') {
+                          // 공유 시 자동으로 공개 처리
+                          final isPublic = _publicStates[id] ?? false;
+                          if (!isPublic) {
+                            await _togglePublicState(id);
+                          }
+                          final text = '니즈파인 맛집 리스트 대공개! ✨\n[$name]\n지금 바로 확인해보세요:\nhttps://needsfine.com/list?id=$id';
+                          Share.share(text);
                         } else if (value == 'delete') {
                           _deleteList(id, name);
                         }
@@ -503,16 +512,26 @@ class _MyListsScreenState extends State<MyListsScreen> {
                         final isPublic = _publicStates[id] ?? false;
                         return [
                           PopupMenuItem(
-                            value: 'share',
+                            value: 'toggle_public',
                             child: Row(
                               children: [
                                 Icon(
-                                  isPublic ? Icons.lock : Icons.share,
+                                  isPublic ? Icons.lock : Icons.public,
                                   size: 20,
                                   color: const Color(0xFF8A2BE2),
                                 ),
                                 const SizedBox(width: 12),
-                                Text(isPublic ? l10n.makePrivate : l10n.shareList),
+                                Text(isPublic ? l10n.makePrivate : '공개로 전환'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'share_external',
+                            child: Row(
+                              children: [
+                                Icon(Icons.share, size: 20, color: Colors.blueAccent),
+                                SizedBox(width: 12),
+                                Text('공유하기'),
                               ],
                             ),
                           ),

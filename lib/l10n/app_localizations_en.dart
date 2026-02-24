@@ -1625,4 +1625,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get storePhoto => 'Store Photo (Max 1)';
+
+  @override
+  String get guideNearbyTitle => 'Nearby';
+
+  @override
+  String get guideNearbyContent =>
+      '• **Number Marker**: Shows the number of restaurants in that area. Zoom in to see individual stores.\n• **Filter (All/Personal)**:\n  - **All**: Shows all restaurants with reviews from others.\n  - **Personal**: Shows only restaurants where you left a review. Build your own food map!';
+
+  @override
+  String get guideRankTitle => 'Store Ranking';
+
+  @override
+  String get guideRankContent =>
+      '• **NeedsFine Score**: A comprehensive gourmet score analyzed by NeedsFine Logic based on taste, service, hygiene, and vibe. (Max 5.0)\n• **Reliability**: NeedsFine\'s standard to filter out ads and find real gourmet spots.\n• **Sort By**:\n  - **NeedsFine Rank**: Recommended order based on Score & Reliability.\n  - **Most Reviews**: Popular stores with many reviews.\n  - **Distance**: Closest to your current location.';
+
+  @override
+  String get guideReviewTitle => 'Writing Reviews';
+
+  @override
+  String get guideReviewContent =>
+      '• **NeedsFine Logic Analysis**: When you write a review, NeedsFine Logic analyzes text and photos to extract keywords like taste, hygiene, and service, and calculates a score.\n• **Photo Upload**: Share vivid info by uploading photos of the store, food, and menu.\n• **Honest Review**: NeedsFine aims for honest and trustworthy reviews.';
+
+  @override
+  String get guideMyPageTitle => 'My Fine';
+
+  @override
+  String get guideMyPageContent =>
+      '• **My Info**: Edit your nickname, bio, and activity region.\n• **My Lists**: Curate and manage your favorite restaurants by theme.\n• **Invite Friends**: Invite friends to enjoy NeedsFine together!';
+
+  @override
+  String get guideSearchTitle => 'Search';
+
+  @override
+  String get guideSearchContent =>
+      '• **Store Search**: Find restaurants by name or address.\n• **Auto-complete**: Get recommendations for stores or addresses as you type.';
 }

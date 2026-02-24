@@ -625,5 +625,16 @@
   "openTime": "Open Time",
   "closeTime": "Close Time",
   "addPhoto": "Add Photo",
-  "storePhoto": "Store Photo (Max 1)"
+  "storePhoto": "Store Photo (Max 1)",
+
+  "guideNearbyTitle": "Nearby",
+  "guideNearbyContent": "• **Number Marker**: Shows the number of restaurants in that area. Zoom in to see individual stores.\n• **Filter (All/Personal)**:\n  - **All**: Shows all restaurants with reviews from others.\n  - **Personal**: Shows only restaurants where you left a review. Build your own food map!",
+  "guideRankTitle": "Store Ranking",
+  "guideRankContent": "• **NeedsFine Score**: A comprehensive gourmet score analyzed by NeedsFine Logic based on taste, service, hygiene, and vibe. (Max 5.0)\n• **Reliability**: NeedsFine's standard to filter out ads and find real gourmet spots.\n• **Sort By**:\n  - **NeedsFine Rank**: Recommended order based on Score & Reliability.\n  - **Most Reviews**: Popular stores with many reviews.\n  - **Distance**: Closest to your current location.",
+  "guideReviewTitle": "Writing Reviews",
+  "guideReviewContent": "• **NeedsFine Logic Analysis**: When you write a review, NeedsFine Logic analyzes text and photos to extract keywords like taste, hygiene, and service, and calculates a score.\n• **Photo Upload**: Share vivid info by uploading photos of the store, food, and menu.\n• **Honest Review**: NeedsFine aims for honest and trustworthy reviews.",
+  "guideMyPageTitle": "My Fine",
+  "guideMyPageContent": "• **My Info**: Edit your nickname, bio, and activity region.\n• **My Lists**: Curate and manage your favorite restaurants by theme.\n• **Invite Friends**: Invite friends to enjoy NeedsFine together!",
+  "guideSearchTitle": "Search",
+  "guideSearchContent": "• **Store Search**: Find restaurants by name or address.\n• **Auto-complete**: Get recommendations for stores or addresses as you type."
 }

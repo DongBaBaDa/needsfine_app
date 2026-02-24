@@ -25,72 +25,173 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
   List<Review> _likedReviews = [];
   List<Review> _commentedReviews = [];
 
+  final ScrollController _myReviewsScroll = ScrollController();
+  final ScrollController _likedReviewsScroll = ScrollController();
+  final ScrollController _commentedReviewsScroll = ScrollController();
+
+  final int _pageSize = 20;
+  bool _hasMoreMyReviews = true;
+  bool _hasMoreLikedReviews = true;
+  bool _hasMoreCommentedReviews = true;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    
+    _myReviewsScroll.addListener(() {
+      if (_myReviewsScroll.position.pixels >= _myReviewsScroll.position.maxScrollExtent - 200 && !_isLoading && _hasMoreMyReviews) {
+        _fetchMyReviews(loadMore: true);
+      }
+    });
+    _likedReviewsScroll.addListener(() {
+      if (_likedReviewsScroll.position.pixels >= _likedReviewsScroll.position.maxScrollExtent - 200 && !_isLoading && _hasMoreLikedReviews) {
+        _fetchLikedReviews(loadMore: true);
+      }
+    });
+    _commentedReviewsScroll.addListener(() {
+      if (_commentedReviewsScroll.position.pixels >= _commentedReviewsScroll.position.maxScrollExtent - 200 && !_isLoading && _hasMoreCommentedReviews) {
+        _fetchCommentedReviews(loadMore: true);
+      }
+    });
+
     _fetchData();
   }
 
+  @override
+  void dispose() {
+    _myReviewsScroll.dispose();
+    _likedReviewsScroll.dispose();
+    _commentedReviewsScroll.dispose();
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<void> _fetchData() async {
-    if (!mounted) return;
     setState(() => _isLoading = true);
+    await Future.wait([
+      _fetchMyReviews(),
+      _fetchLikedReviews(),
+      _fetchCommentedReviews(),
+    ]);
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _fetchMyReviews({bool loadMore = false}) async {
+    if (!mounted) return;
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return;
+    
+    if (loadMore) {
+      if (!_hasMoreMyReviews) return;
+      setState(() => _isLoading = true);
+    } else {
+      _myReviews.clear();
+      _hasMoreMyReviews = true;
+    }
 
     try {
-      // 1. 내가 쓴 리뷰 로드
-      final myReviewsData = await _supabase
+      final data = await _supabase
           .from('reviews')
           .select('*, profiles(*)')
           .eq('user_id', userId)
           .eq('is_hidden', false)
-          .order('created_at', ascending: false);
-
-      // 2. 도움이 됐어요 (좋아요한 리뷰) 로드
-      final likedReviewsData = await _supabase
-          .from('review_votes')
-          .select('reviews(*, profiles(*))')
-          .eq('user_id', userId)
-          .eq('vote_type', 'like');
-
-      // 3. 내가 댓글을 단 리뷰 로드
-      final commentedData = await _supabase
-          .from('comments')
-          .select('content, created_at, reviews(*, profiles(*))')
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .range(_myReviews.length, _myReviews.length + _pageSize - 1);
 
       if (mounted) {
         setState(() {
-          _myReviews = (myReviewsData as List).map((json) => Review.fromJson(json)).toList();
-
-          _likedReviews = (likedReviewsData as List).map((item) {
-            final reviewJson = item['reviews'];
-            if (reviewJson == null) return null;
-            try {
-              return Review.fromJson(reviewJson);
-            } catch (e) {
-              return null;
-            }
-          }).whereType<Review>().toList();
-
-          _commentedReviews = (commentedData as List).map((item) {
-            final reviewJson = item['reviews'];
-            if (reviewJson == null) return null;
-
-            final combinedJson = Map<String, dynamic>.from(reviewJson);
-            combinedJson['comment_content'] = item['content'];
-            combinedJson['comment_created_at'] = item['created_at'];
-
-            return Review.fromJson(combinedJson);
-          }).whereType<Review>().toList();
-
+          final newItems = (data as List).map((json) => Review.fromJson(json)).toList();
+          _myReviews.addAll(newItems);
+          if (newItems.length < _pageSize) _hasMoreMyReviews = false;
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint("데이터 로드 실패: $e");
+      debugPrint("내가 쓴 리뷰 로드 실패: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _fetchLikedReviews({bool loadMore = false}) async {
+    if (!mounted) return;
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    
+    if (loadMore) {
+      if (!_hasMoreLikedReviews) return;
+      setState(() => _isLoading = true);
+    } else {
+      _likedReviews.clear();
+      _hasMoreLikedReviews = true;
+    }
+
+    try {
+      final data = await _supabase
+          .from('review_votes')
+          .select('reviews(*, profiles(*))')
+          .eq('user_id', userId)
+          .eq('vote_type', 'like')
+          .range(_likedReviews.length, _likedReviews.length + _pageSize - 1);
+
+      if (mounted) {
+        setState(() {
+          final newItems = (data as List).map((item) {
+            final reviewJson = item['reviews'];
+            if (reviewJson == null) return null;
+            try { return Review.fromJson(reviewJson); } catch (e) { return null; }
+          }).whereType<Review>().toList();
+          
+          _likedReviews.addAll(newItems);
+          if (newItems.length < _pageSize) _hasMoreLikedReviews = false;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("좋아요한 리뷰 로드 실패: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _fetchCommentedReviews({bool loadMore = false}) async {
+    if (!mounted) return;
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    
+    if (loadMore) {
+      if (!_hasMoreCommentedReviews) return;
+      setState(() => _isLoading = true);
+    } else {
+      _commentedReviews.clear();
+      _hasMoreCommentedReviews = true;
+    }
+
+    try {
+      final data = await _supabase
+          .from('comments')
+          .select('content, created_at, reviews(*, profiles(*))')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .range(_commentedReviews.length, _commentedReviews.length + _pageSize - 1);
+
+      if (mounted) {
+        setState(() {
+          final newItems = (data as List).map((item) {
+            final reviewJson = item['reviews'];
+            if (reviewJson == null) return null;
+            final combinedJson = Map<String, dynamic>.from(reviewJson);
+            combinedJson['comment_content'] = item['content'];
+            combinedJson['comment_created_at'] = item['created_at'];
+            return Review.fromJson(combinedJson);
+          }).whereType<Review>().toList();
+          
+          _commentedReviews.addAll(newItems);
+          if (newItems.length < _pageSize) _hasMoreCommentedReviews = false;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("댓글 단 리뷰 로드 실패: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -114,49 +215,81 @@ class _ReviewCollectionScreenState extends State<ReviewCollectionScreen> with Si
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
+      body: TabBarView(
         controller: _tabController,
         children: [
-          _buildReviewList(_myReviews, l10n.noReviewsWritten, false),
-          _buildReviewList(_likedReviews, l10n.noLikedReviews, false),
-          _buildReviewList(_commentedReviews, l10n.noCommentedReviews, true),
+          _buildReviewList(_myReviews, l10n.noReviewsWritten, false, _myReviewsScroll, () => _fetchMyReviews()),
+          _buildReviewList(_likedReviews, l10n.noLikedReviews, false, _likedReviewsScroll, () => _fetchLikedReviews()),
+          _buildReviewList(_commentedReviews, l10n.noCommentedReviews, true, _commentedReviewsScroll, () => _fetchCommentedReviews()),
         ],
       ),
     );
   }
 
-  Widget _buildReviewList(List<Review> reviews, String emptyMessage, bool isCommentMode) {
-    if (reviews.isEmpty) {
-      return Center(child: Text(emptyMessage, style: const TextStyle(color: Colors.grey)));
+  Widget _buildReviewList(List<Review> reviews, String emptyMessage, bool isCommentMode, ScrollController controller, Future<void> Function() onRefresh) {
+    if (_isLoading && reviews.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
     }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16), // Padding all 16
-      itemCount: reviews.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12), // Spacing 12
-      itemBuilder: (context, index) {
-        final review = reviews[index];
-        return ReviewCard(
-          review: isCommentMode ? _convertToCommentUi(review) : review,
-          onTap: () async {
-            final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: review))
-            );
-            if (result == true) _fetchData();
-          },
-          onTapStore: () {},
-          onTapProfile: () {
-            if (review.userId != null) {
-              Navigator.push(
+    if (reviews.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        color: kNeedsFinePurple,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: Center(child: Text(emptyMessage, style: const TextStyle(color: Colors.grey))),
+            ),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      color: kNeedsFinePurple,
+      child: ListView.separated(
+        controller: controller,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16), // Padding all 16
+        itemCount: reviews.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(height: 12), // Spacing 12
+        itemBuilder: (context, index) {
+          if (index == reviews.length) {
+            bool hasMore = false;
+            if (controller == _myReviewsScroll) hasMore = _hasMoreMyReviews;
+            if (controller == _likedReviewsScroll) hasMore = _hasMoreLikedReviews;
+            if (controller == _commentedReviewsScroll) hasMore = _hasMoreCommentedReviews;
+            
+            return hasMore
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : const SizedBox(height: 40);
+          }
+          final review = reviews[index];
+          return ReviewCard(
+            review: isCommentMode ? _convertToCommentUi(review) : review,
+            onTap: () async {
+              final result = await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => UserProfileScreen(userId: review.userId!))
+                  MaterialPageRoute(builder: (_) => ReviewDetailScreen(review: review))
               );
-            }
-          },
-        );
-      },
+              if (result == true) _fetchData();
+            },
+            onTapStore: () {},
+            onTapProfile: () {
+              if (review.userId != null) {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => UserProfileScreen(userId: review.userId!))
+                );
+              }
+            },
+          );
+        },
+      ),
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:needsfine_app/core/needsfine_theme.dart';
 import 'package:needsfine_app/screens/admin/admin_inquiry_detail_screen.dart';
+import 'package:needsfine_app/screens/admin/admin_term_management_screen.dart';
 import 'notice_write_screen.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
 
@@ -41,6 +42,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> with Single
         title: Text(l10n.adminDashboard, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.library_books),
+            tooltip: '단어 풀 관리',
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminTermManagementScreen()));
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: _brand,

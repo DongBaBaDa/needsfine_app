@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:needsfine_app/models/ranking_models.dart';
 import 'package:needsfine_app/core/search_trigger.dart';
@@ -416,6 +417,25 @@ class _MyListDetailScreenState extends State<MyListDetailScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
         actions: [
+          IconButton(
+            onPressed: () async {
+              // 1. 공유 시 자동으로 공개 처리
+              try {
+                await _supabase
+                    .from('user_lists')
+                    .update({'is_public': true})
+                    .eq('id', widget.listId);
+              } catch (e) {
+                debugPrint('공개 자동 전환 실패: $e');
+              }
+              
+              // 2. 링크 공유
+              final text = '니즈파인 맛집 리스트 대공개! ✨\n[${widget.listName}]\n지금 바로 확인해보세요:\nhttps://needsfine.com/list?id=${widget.listId}';
+              Share.share(text);
+            },
+            icon: const Icon(Icons.share, color: Colors.blueAccent),
+            tooltip: '공유하기',
+          ),
           IconButton(
             onPressed: _openAddBottomSheet, // ✅ (요청 1) 리스트에서 +로 저장한 매장 추가
             icon: const Icon(Icons.add, color: Colors.black),

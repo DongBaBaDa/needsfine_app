@@ -1,7 +1,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
-import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/screens/feed/feed_write_screen.dart';
 import 'package:needsfine_app/screens/feed/feed_list_screen.dart';
 import 'package:needsfine_app/widgets/draggable_fab.dart';
@@ -27,6 +26,16 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _openFeedWriteScreen() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const FeedWriteScreen()),
+    );
+    if (result == true && mounted) {
+      setState(() => _refreshKey++);
+    }
   }
 
   @override
@@ -68,12 +77,7 @@ class _FeedScreenState extends State<FeedScreen> with SingleTickerProviderStateM
                 heroTag: 'feed_write_fab',
                 initialOffset: Offset(constraints.maxWidth - 80, constraints.maxHeight - 100), 
                 parentHeight: constraints.maxHeight,
-                onPressed: () async {
-                  final result = await Navigator.push(context, MaterialPageRoute(builder: (context) => const FeedWriteScreen()));
-                  if (result == true) {
-                    setState(() => _refreshKey++);
-                  }
-                },
+                onPressed: _openFeedWriteScreen,
                 child: const Icon(Icons.edit, color: Colors.white),
               ),
             ],

@@ -25,6 +25,7 @@ import 'package:needsfine_app/screens/user_inquiry_history_screen.dart'; // ✅ 
 import 'package:needsfine_app/screens/store_management_screen.dart'; // ✅ 매장 관리 추가
 import 'package:needsfine_app/screens/request_store_registration_screen.dart'; // ✅ 매장 등록 요청 추가
 import 'package:needsfine_app/screens/referral_screen.dart'; // ✅ 친구 초대 화면 추가
+import 'package:needsfine_app/screens/app_guide_screen.dart'; // ✅ 도움말 화면 추가
 
 import 'package:needsfine_app/widgets/notification_badge.dart';
 import 'package:needsfine_app/l10n/app_localizations.dart';
@@ -234,7 +235,8 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
+            child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -267,6 +269,16 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                 ),
                 const SizedBox(height: 12),
                 _ModalButton(
+                  icon: Icons.help_outline_rounded,
+                  text: "도움말 (App Guide)",
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const AppGuideScreen()));
+                  },
+                ),
+                const SizedBox(height: 12),
+                _ModalButton(
+
                   icon: Icons.history_rounded,
                   text: l10n.inquiryHistory,
                   onTap: () {
@@ -286,6 +298,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
                 const SizedBox(height: 12),
               ],
             ),
+            ),
           ),
         ),
       ),
@@ -302,7 +315,7 @@ class _UserMyPageScreenState extends State<UserMyPageScreen> {
     return Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: Text(l10n.myFine, style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black, fontSize: 20)),
+        title: const Text("My Fine", style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black, fontSize: 20)),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,

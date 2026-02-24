@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-// import 'package:crypto/crypto.dart'; // [심사 대비] 주석 처리
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-// import 'package:sign_in_with_apple/sign_in_with_apple.dart'; // [심사 대비] 주석 처리
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 import 'package:needsfine_app/screens/signup/user_join_screen.dart';
 import 'package:needsfine_app/screens/main_shell.dart';
 import 'package:needsfine_app/screens/email_login_screen.dart';
@@ -22,10 +25,29 @@ class _InitialScreenState extends State<InitialScreen> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = false;
 
+  late final StreamSubscription<AuthState> _authStateSubscription;
+
   @override
   void initState() {
     super.initState();
     _checkLoginStatus();
+    
+    // ✅ 앱 링크(Deep Link)로 돌아왔을 때 인증 상태 변경을 감지하고 화면을 전환합니다.
+    _authStateSubscription = _supabase.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+      
+      // signedIn 이벤트 발생 시 (OAuth 로그인 성공 후 돌아왔을 때)
+      if (event == AuthChangeEvent.signedIn && session != null) {
+        _navigateIfProfileCompleted(session.user.id);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription.cancel();
+    super.dispose();
   }
 
   Future<void> _checkLoginStatus() async {
@@ -45,24 +67,25 @@ class _InitialScreenState extends State<InitialScreen> {
 
       if (!mounted) return;
 
-      if (profile != null && profile['nickname'] != null) {
-        Navigator.of(context).pushAndRemoveUntil(
+      if (profile != null && profile['nickname'] != null && profile['nickname'].toString().isNotEmpty) {
+        Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const MainShell()),
-              (route) => false,
         );
       } else {
-        // 프로필 미완성 시 처리 (필요시 구현)
+        // 프로필 미완성 시 (또는 닉네임이 없을 시) 회원가입(약관, 닉네임 등) 화면으로 이동
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const UserJoinScreen()),
+        );
       }
     } catch (e) {
       debugPrint("프로필 확인 중 에러: $e");
+      // 에러 시에도 기본적으로 회원가입으로 넘겨서 정보 완성 유도
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const UserJoinScreen()),
+      );
     }
   }
 
-  // ------------------------------------------------------------------
-  // 🔒 [심사 대비] 소셜 로그인 로직 전체 주석 처리
-  // 나중에 기능을 완벽히 구현한 뒤 주석을 해제하세요.
-  // ------------------------------------------------------------------
-  /*
   Future<void> _signInWithApple() async {
     setState(() => _isLoading = true);
     try {
@@ -98,7 +121,7 @@ class _InitialScreenState extends State<InitialScreen> {
         // 🤖 2. Android: 웹 OAuth 방식 (Supabase 리다이렉트)
         await _supabase.auth.signInWithOAuth(
           OAuthProvider.apple,
-          redirectTo: 'my-app-scheme://login-callback',
+          redirectTo: 'needsfine://login-callback',
         );
       }
     } on AuthException catch (e) {
@@ -110,16 +133,84 @@ class _InitialScreenState extends State<InitialScreen> {
     }
   }
 
-  Future<void> _signInWithNaver() async {
-    _showError('네이버 로그인 준비 중입니다.');
-  }
-  Future<void> _signInWithKakao() async {
-    _showError('카카오 로그인 준비 중입니다.');
-  }
   Future<void> _signInWithGoogle() async {
-    _showError('구글 로그인 준비 중입니다.');
+    setState(() => _isLoading = true);
+    try {
+      final googleSignIn = GoogleSignIn(
+        // 구글 클라우드 콘솔의 '웹 애플리케이션' 클라이언트 ID 하드코딩
+        serverClientId: '197198961843-u83rfkl7a00v1hooskodgjv88ijrknhs.apps.googleusercontent.com',
+        scopes: ['email', 'profile'],
+      );
+      // 기존 로그인 세션을 지워 무조건 계정 선택 창이 뜨게 강제함
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn();
+      final googleAuth = await googleUser?.authentication;
+
+      if (googleAuth?.idToken != null) {
+        final AuthResponse res = await _supabase.auth.signInWithIdToken(
+          provider: OAuthProvider.google,
+          idToken: googleAuth!.idToken!,
+          accessToken: googleAuth.accessToken,
+        );
+        if (res.user != null && mounted) _navigateIfProfileCompleted(res.user!.id);
+      } else {
+         // Fallback to web OAuth if native Google Sign-In isn't fully configured
+         await _supabase.auth.signInWithOAuth(
+          OAuthProvider.google,
+          redirectTo: 'needsfine://login-callback',
+        );
+      }
+    } catch (e) {
+      _showError('구글 로그인 실패: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
-  */
+
+  Future<void> _signInWithKakao() async {
+    setState(() => _isLoading = true);
+    try {
+      // ✅ 현재 폰에서 사용 중인 카카오 키 해시를 콘솔에 출력 (디버깅용)
+      try {
+        final String origin = await KakaoSdk.origin;
+        print("💡 [디버깅] 현재 기기의 카카오 키 해시: $origin");
+      } catch (e) {
+        print("💡 [디버깅] 키 해시 확인 실패: $e");
+      }
+
+      // 1. 카카오톡 실행 가능 여부 확인 후 카카오 로그인 시도
+      OAuthToken token;
+      if (await isKakaoTalkInstalled()) {
+        try {
+          token = await UserApi.instance.loginWithKakaoTalk();
+        } catch (error) {
+          // 카카오톡에 연결된 카카오계정이 없는 경우, 카카오계정으로 로그인 시도
+          token = await UserApi.instance.loginWithKakaoAccount(prompts: [Prompt.login]);
+        }
+      } else {
+        token = await UserApi.instance.loginWithKakaoAccount(prompts: [Prompt.login]);
+      }
+
+      // 2. 발급받은 token.idToken 으로 Supabase 인증 시도 
+      if (token.idToken != null) {
+        final AuthResponse res = await _supabase.auth.signInWithIdToken(
+          provider: OAuthProvider.kakao,
+          idToken: token.idToken!,
+        );
+        if (res.user != null && mounted) _navigateIfProfileCompleted(res.user!.id);
+      } else {
+         // Fallback OIDC if native token lacks idToken
+         await _supabase.auth.signInWithOAuth(
+          OAuthProvider.kakao,
+          redirectTo: 'needsfine://login-callback',
+        );
+      }
+    } catch (e) {
+      _showError('카카오 로그인 실패: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -167,49 +258,44 @@ class _InitialScreenState extends State<InitialScreen> {
                     const SizedBox(height: 120), // 중앙 공백 확보
 
                     // ------------------------------------------------
-                    // 🔒 [심사 대비] 소셜 로그인 UI 숨김 (주석 처리)
+                    // 🔓 소셜 로그인 UI 임시 비활성화 (애플 콘솔 설정 완료 전까지)
                     // ------------------------------------------------
                     /*
-                      const Row(
-                        children: [
-                          Expanded(child: Divider(color: Color(0xFFEEEEEE))),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
-                            child: Text("SNS 계정으로 시작하기",
-                                style: TextStyle(color: Colors.grey, fontSize: 13)),
-                          ),
-                          Expanded(child: Divider(color: Color(0xFFEEEEEE))),
-                        ],
-                      ),
+                    const Row(
+                      children: [
+                        Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text("SNS 계정으로 시작하기",
+                              style: TextStyle(color: Colors.grey, fontSize: 13)),
+                        ),
+                        Expanded(child: Divider(color: Color(0xFFEEEEEE))),
+                      ],
+                    ),
 
-                      const SizedBox(height: 30),
+                    const SizedBox(height: 30),
 
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildSocialButton(
-                              'assets/images/naver_login.png',
-                              _signInWithNaver
-                          ),
-                          const SizedBox(width: 20),
-                          _buildSocialButton(
-                              'assets/images/kakao_logo.png',
-                              _signInWithKakao
-                          ),
-                          const SizedBox(width: 20),
-                          _buildSocialButton(
-                            'assets/images/google_g_logo.png',
-                            _signInWithGoogle,
-                          ),
-                          const SizedBox(width: 20),
-                          _buildSocialButton(
-                            'assets/images/apple_login.png',
-                            _signInWithApple,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 60),
-                      */
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildSocialButton(
+                            'assets/images/kakao_logo.png',
+                            _signInWithKakao
+                        ),
+                        const SizedBox(width: 20),
+                        _buildSocialButton(
+                          'assets/images/google_g_logo.png',
+                          _signInWithGoogle,
+                        ),
+                        const SizedBox(width: 20),
+                        _buildSocialButton(
+                          'assets/images/apple_login.png',
+                          _signInWithApple,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 60),
+                    */
                     // ------------------------------------------------
 
                     // ✅ 이메일 로그인을 메인 버튼으로 변경 (심사 통과용 UI 개선)
@@ -282,8 +368,7 @@ class _InitialScreenState extends State<InitialScreen> {
     );
   }
 
-// 소셜 버튼 위젯도 일단 주석 처리 (사용하지 않음 경고 방지)
-/*
+// 소셜 버튼 위젯
   Widget _buildSocialButton(String assetName, VoidCallback onTap) {
     return GestureDetector(
       onTap: _isLoading ? null : onTap,
@@ -301,15 +386,17 @@ class _InitialScreenState extends State<InitialScreen> {
           ],
         ),
         child: ClipOval(
-          child: Image.asset(
-            assetName,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                Container(color: Colors.grey[200], child: const Icon(Icons.error, color: Colors.grey)),
+          child: Container(
+            color: Colors.white, // Ensure white background for Apple/Google
+            child: Image.asset(
+              assetName,
+              fit: BoxFit.fill, // fill or contain
+              errorBuilder: (context, error, stackTrace) =>
+                  Container(color: Colors.grey[200], child: const Icon(Icons.error, color: Colors.grey)),
+            ),
           ),
         ),
       ),
     );
   }
-  */
 }

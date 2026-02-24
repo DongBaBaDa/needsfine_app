@@ -601,23 +601,33 @@ class _RankingScreenState extends State<RankingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '랭킹 기준 안내',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                '니즈파인 점수란?',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF9C7CFF)),
               ),
-              const SizedBox(height: 20),
-              _buildInfoItem(
-                '니즈파인 점수',
-                '단순 평점이 아닌, 사용자가 작성한 리뷰 텍스트만을 AI가 심층 분석하여 매장의 종합적인 느낌과 만족도를 수치화한 점수입니다.',
-                Icons.star_rounded,
-                const Color(0xFFFFD700),
+              const SizedBox(height: 8),
+              const Text(
+                '리뷰를 읽은 다른 사람이 그 가게에 대해 느낄 가능성을 점수로 수치화한 값',
+                style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
               ),
-              const SizedBox(height: 16),
-              _buildInfoItem(
-                '신뢰도',
-                '리뷰 작성자의 활동 내역과 영수증 인증 여부 등을 종합하여 1~100%로 산정한 리뷰의 신뢰 수준입니다.',
-                Icons.verified_user_rounded,
-                const Color(0xFF4CAF50),
+              const SizedBox(height: 12),
+              _buildScoreTier("4.5점 이상", "웨이팅 맛집"),
+              _buildScoreTier("4.0점 이상", "지역 맛집"),
+              _buildScoreTier("3.5점 이상", "맛있는 식당"),
+              _buildScoreTier("3.0점 이상", "호불호 있는 식당"),
+              const SizedBox(height: 24),
+              const Text(
+                '신뢰도 및 기타 상태란?',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF9C7CFF)),
               ),
+              const SizedBox(height: 8),
+              const Text(
+                '리뷰 수와 신뢰도(0~100%)에 따라 매장의 검증 상태가 달라집니다.',
+                style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              _buildScoreTier("일반 배지", "신뢰도 66% 이상, 리뷰 10개 이상"),
+              _buildScoreTier("OO 맛집 후보", "신뢰도 65% 이하 (추가 검증 필요)"),
+              _buildScoreTier("회색 배지", "리뷰 10개 미만 (검증 미완료)"),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -638,33 +648,15 @@ class _RankingScreenState extends State<RankingScreen> {
     );
   }
 
-  Widget _buildInfoItem(String title, String description, IconData icon, Color color) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: const TextStyle(fontSize: 13, color: Color(0xFF666666), height: 1.4),
-              ),
-            ],
-          ),
-        ),
-      ],
+  Widget _buildScoreTier(String score, String desc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text("👉 $score : ", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          Expanded(child: Text(desc, style: const TextStyle(fontSize: 13, color: Colors.black87))),
+        ],
+      ),
     );
   }
 

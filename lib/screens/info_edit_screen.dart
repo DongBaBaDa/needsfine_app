@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:needsfine_app/screens/email_login_screen.dart';
+import 'package:needsfine_app/screens/initial_screen.dart'; // Added import
 import 'package:needsfine_app/screens/password_change_screen.dart';
 import 'package:needsfine_app/screens/terms_screen.dart';
 import 'package:needsfine_app/screens/language_settings_screen.dart';
@@ -176,7 +177,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> with WidgetsBindingObse
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const EmailLoginScreen()),
+        MaterialPageRoute(builder: (context) => const InitialScreen()),
             (route) => false,
       );
     }
@@ -223,7 +224,7 @@ class _InfoEditScreenState extends State<InfoEditScreen> with WidgetsBindingObse
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(const SnackBar(content: Text("회원 탈퇴 처리가 완료되었습니다.")));
-          Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+          Navigator.of(context).pushNamedAndRemoveUntil('/initial', (route) => false);
         }
       } catch (e) {
         if (mounted) {

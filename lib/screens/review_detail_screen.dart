@@ -521,7 +521,6 @@ class _ReviewDetailScreenState extends State<ReviewDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 니즈파인 배지
                         _buildBadges(l10n),
                         const SizedBox(height: 12),
                         Row(

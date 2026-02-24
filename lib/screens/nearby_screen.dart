@@ -16,7 +16,7 @@ import 'package:needsfine_app/screens/store_info_screen.dart'; // ✅ 매장 정
 
 // ✅ 서비스 임포트 추가
 import 'package:needsfine_app/services/review_service.dart';
-import 'package:needsfine_app/services/naver_search_service.dart'; // ✅ Import added for GeocodingService
+
 import 'package:needsfine_app/models/ranking_models.dart' hide Review; // ✅ 모델 임포트 추가
 
 // ✅ Supabase 조회
@@ -83,6 +83,8 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
 
   // ✅ 클러스터링 관련 변수
   List<StoreRanking> _allStoreRankings = [];
+  bool _personalFilterEnabled = false; // ✅ 추가
+  bool _showNoPersonalReviewHint = false; // ✅ 추가
   double _currentZoom = 7.0;
   Set<NOverlay> _clusterOverlays = {};
   Timer? _clusterDebounce;
@@ -209,16 +211,39 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   Future<void> _fetchAndShowStoreMarkers() async {
     print("🗺️🗺️🗺️ _fetchAndShowStoreMarkers 시작!");
     try {
-      // reviews 테이블에서 직접 좌표 포함 조회 (사진, 작성일 추가)
-      final response = await _supabase
-          .from('reviews')
-          .select('id, store_name, store_address, store_lat, store_lng, needsfine_score, trust_level, is_hidden, photo_urls, created_at');
+      final currentUserId = _supabase.auth.currentUser?.id;
 
+      // 로그인 안 된 상태에서 개인 필터 켜면 -> 빈 화면 + 힌트
+      if (_personalFilterEnabled && currentUserId == null) {
+        setState(() {
+          _allStoreRankings = [];
+          _showNoPersonalReviewHint = true;
+        });
+        _updateClusters();
+        return;
+      }
+
+      // reviews 테이블에서 직접 좌표 포함 조회 (사진, 작성일 추가)
+      dynamic query = _supabase
+          .from('reviews')
+          .select('id, store_name, store_address, store_lat, store_lng, needsfine_score, trust_level, is_hidden, photo_urls, created_at, user_id'); // user_id 추가
+
+      if (_personalFilterEnabled && currentUserId != null) {
+        query = query.eq('user_id', currentUserId);
+      }
+
+      final response = await query;
       final List<dynamic> data = response as List<dynamic>;
       print("🗺️ 리뷰 원본 데이터 로드: ${data.length}건");
 
       if (data.isEmpty) {
+        setState(() {
+          _allStoreRankings = [];
+          // 개인 필터 켜져있으면 힌트 표시
+          _showNoPersonalReviewHint = _personalFilterEnabled;
+        });
         print("🗺️ 리뷰 데이터 없음!");
+        _updateClusters();
         return;
       }
 
@@ -248,7 +273,12 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       print("🗺️ 필터 후 유효 리뷰: ${validData.length}건 (원본 ${data.length}건)");
 
       if (validData.isEmpty) {
+        setState(() {
+          _allStoreRankings = [];
+          _showNoPersonalReviewHint = _personalFilterEnabled;
+        });
         print("🗺️ 유효한 좌표가 있는 리뷰 없음!");
+        _updateClusters();
         return;
       }
 
@@ -280,12 +310,8 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
             final photos = r['photo_urls'];
             if (photos is List && photos.isNotEmpty) {
                 latestPhotoUrl = photos[0].toString();
-                // debugPrint("📷 [Nearby Marker] Found photo for ${entry.key}: $latestPhotoUrl");
                 break; // 가장 최신 1개만 찾으면 됨
             }
-        }
-        if (latestPhotoUrl == null) {
-             // debugPrint("📷 [Nearby Marker] No photo for ${entry.key}");
         }
 
         for (final r in reviews) {
@@ -310,6 +336,11 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
       }).toList();
 
       print("🗺️ ✅ 매장 ${_allStoreRankings.length}개 로드 완료!");
+      if (mounted) {
+        setState(() {
+          _showNoPersonalReviewHint = _personalFilterEnabled && _allStoreRankings.isEmpty;
+        });
+      }
       _updateClusters();
     } catch (e, stack) {
       print("❌❌❌ 매장 마커 로드 실패: $e");
@@ -381,12 +412,13 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
   }
 
   int _getClusterLevel(double zoom) {
-    if (zoom >= 14) return 4; // 개별 매장
-    if (zoom >= 11) return 3; // 읍면동
+    if (zoom >= 11) return 4; // ✅ [수정] 13 -> 11: 읍면동 레벨(3)부터 바로 매장(4) 표시
+    // if (zoom >= 11) return 3; // 읍면동 (삭제됨 - 바로 매장으로 건너뜀)
     if (zoom >= 8) return 2;  // 시군구
     if (zoom >= 6) return 1;  // 시도
     return 0;                  // 대한민국 전체
   }
+
 
   // ✅ 주소에서 행정구역 토큰 추출
   String _getClusterKey(String? address, int level) {
@@ -582,7 +614,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
           if (level == 0) targetZoom = 7;       // 대한민국 → 시도
           else if (level == 1) targetZoom = 9;   // 시도 → 시군구
           else if (level == 2) targetZoom = 12;  // 시군구 → 읍면동
-          else targetZoom = 14;                   // 읍면동 → 개별
+          else targetZoom = 14;                   // 읍면동 → 개별 (이동)
 
           final ctrl = await _controller.future;
           ctrl.updateCamera(
@@ -764,7 +796,7 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
         ],
 
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), // ✅ [수정] 여백 축소 (14,10 -> 8,6)
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -1431,6 +1463,66 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
     }
   }
 
+  void _onSelectAllFilter() {
+    if (!_personalFilterEnabled) return;
+    setState(() {
+      _personalFilterEnabled = false;
+      _showNoPersonalReviewHint = false;
+    });
+    _fetchAndShowStoreMarkers();
+  }
+
+  void _onTogglePersonalFilter(bool selected) {
+    setState(() {
+      _personalFilterEnabled = selected;
+      _showNoPersonalReviewHint = false;
+    });
+    _fetchAndShowStoreMarkers();
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF9C7CFF) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF9C7CFF) : Colors.grey.shade300,
+            width: 1.5,
+          ),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(
+                color: const Color(0xFF9C7CFF).withOpacity(0.3),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            if (!isSelected)
+               BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+          ],
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -1511,6 +1603,42 @@ class _NearbyScreenState extends State<NearbyScreen> with AutomaticKeepAliveClie
                               },
                             );
                           },
+                        ),
+                      ),
+
+                    
+                    // ✅ [New] 필터 칩 (전체 / 개인)
+                    const SizedBox(height: 10),
+                    // ✅ [New] 필터 칩 (전체 / 개인) - 디자인 개선
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Row(
+                        children: [
+                          _buildFilterChip(
+                            label: '전체',
+                            isSelected: !_personalFilterEnabled,
+                            onTap: () => _onSelectAllFilter(),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildFilterChip(
+                            label: '개인',
+                            isSelected: _personalFilterEnabled,
+                            onTap: () => _onTogglePersonalFilter(true),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_showNoPersonalReviewHint)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, left: 4),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '아직 리뷰 작성한 가게가 없어요.',
+                            style: TextStyle(fontSize: 11, color: Colors.black54),
+                          ),
                         ),
                       ),
                   ],

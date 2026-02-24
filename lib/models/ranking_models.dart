@@ -21,6 +21,9 @@ class Review {
   final int saveCount;
   final int viewCount;
   
+  // ✅ [추가] 방명록(N번째 방문) 횟수 추가
+  final int visitCount;
+  
   // ✅ [추가] 거리 필드 (계산 후 주입)
   final double? distance;
 
@@ -51,6 +54,7 @@ class Review {
     this.commentCount = 0,
     this.saveCount = 0,
     this.viewCount = 0, // ✅ 기본값
+    this.visitCount = 1, // ✅ 기본 방문 횟수
     this.distance,      // ✅ 초기화
     this.userEmail,
     this.myCommentText,
@@ -135,6 +139,7 @@ class Review {
       commentCount: (json['comment_count'] as int?) ?? parseCount(json['comments']),
       saveCount: (json['save_count'] as int?) ?? parseCount(json['review_saves']),
       viewCount: (json['view_count'] as int?) ?? 0, // ✅ 조회수 파싱
+      visitCount: (json['visit_count'] as int?) ?? 1, // ✅ N번째 리뷰
       distance: (json['distance'] as num?)?.toDouble(), // ✅ 거리 파싱 (있으면)
 
       myCommentText: json['comment_content']?.toString(),

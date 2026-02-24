@@ -1612,4 +1612,39 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get storePhoto => '매장 사진 (1장)';
+
+  @override
+  String get guideNearbyTitle => '내 주변 (Nearby)';
+
+  @override
+  String get guideNearbyContent =>
+      '• **지도 위 숫자**: 해당 지역에 있는 맛집의 개수입니다. 지도를 확대하면 개별 가게가 나옵니다.\n• **필터 (전체/개인)**:\n  - **전체**: 다른 사용자들의 리뷰가 포함된 모든 맛집을 보여줍니다.\n  - **개인**: 내가 직접 리뷰를 남긴 맛집만 지도에 표시합니다. 나만의 맛집 지도를 만들어보세요!';
+
+  @override
+  String get guideRankTitle => '매장 랭킹 (Store Ranking)';
+
+  @override
+  String get guideRankContent =>
+      '• **니즈파인 점수**: 맛, 서비스, 위생, 분위기 등 다양한 요소를 종합하여 니즈파인 로직이 분석한 맛집 점수입니다. (5.0 만점)\n• **신뢰도**: 광고성 리뷰를 걸러내고 진짜 맛집을 찾기 위한 니즈파인만의 기준입니다.\n• **정렬 기준**:\n  - **니즈파인 랭킹순**: 점수와 신뢰도를 종합하여 추천하는 순서입니다.\n  - **리뷰 많은 순**: 리뷰 수가 많은 인기 매장 순서입니다.\n  - **거리순**: 현재 내 위치에서 가까운 순서입니다.';
+
+  @override
+  String get guideReviewTitle => '리뷰 작성 (Writing Reviews)';
+
+  @override
+  String get guideReviewContent =>
+      '• **니즈파인 로직 분석**: 리뷰를 작성하면 니즈파인 로직이 텍스트와 사진을 분석하여 맛, 위생, 서비스 등의 키워드를 추출하고 점수를 매깁니다.\n• **사진 업로드**: 매장 사진, 음식 사진, 메뉴판 사진을 업로드하여 다른 사용자들에게 생생한 정보를 전달해주세요.\n• **솔직한 리뷰**: 니즈파인은 솔직하고 신뢰할 수 있는 리뷰를 지향합니다.';
+
+  @override
+  String get guideMyPageTitle => '마이파인 (My Fine)';
+
+  @override
+  String get guideMyPageContent =>
+      '• **내 정보**: 나의 닉네임, 소개, 활동 지역을 수정할 수 있습니다.\n• **나만의 리스트**: 내가 좋아하는 맛집들을 테마별로 리스트에 담아 관리할 수 있습니다.\n• **친구 초대**: 친구를 초대하여 함께 니즈파인을 즐겨보세요!';
+
+  @override
+  String get guideSearchTitle => '검색 (Search)';
+
+  @override
+  String get guideSearchContent =>
+      '• **매장 검색**: 매장 이름이나 주소로 원하는 맛집을 찾아보세요.\n• **자동 완성**: 검색어를 입력하면 관련된 매장이나 주소를 자동으로 추천해줍니다.';
 }

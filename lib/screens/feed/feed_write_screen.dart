@@ -59,7 +59,11 @@ class _FeedWriteScreenState extends State<FeedWriteScreen> with SingleTickerProv
       _initEditMode();
     }
 
-    _tabController.addListener(() => setState(() {}));
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging || !_tabController.index.isNaN) {
+        if (mounted) setState(() {});
+      }
+    });
   }
 
   void _initEditMode() {

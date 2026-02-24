@@ -49,6 +49,20 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
     // Note: We'll set the correct list in didChangeDependencies where context is available
     _passwordController.addListener(_validatePassword);
     _confirmPasswordController.addListener(_validateConfirmPassword);
+
+    // ✅ 소셜(OAuth) 로그인으로 진입 시 이메일/비밀번호 단계를 건너뜀
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        // 이메일, 비밀번호 단계 패스 (Region 단계로 이동)
+        setState(() {
+          _isEmailVerified = true;
+          _isPasswordValid = true;
+          _isConfirmPasswordValid = true;
+        });
+        _pageController.jumpToPage(2);
+      }
+    });
   }
 
   @override
@@ -244,9 +258,11 @@ class _UserJoinScreenState extends State<UserJoinScreen> {
       final currentUser = _supabase.auth.currentUser;
 
       if (currentUser != null) {
-        await _supabase.auth.updateUser(
-            UserAttributes(password: _passwordController.text.trim())
-        );
+        if (_passwordController.text.isNotEmpty) {
+          await _supabase.auth.updateUser(
+              UserAttributes(password: _passwordController.text.trim())
+          );
+        }
 
         // 영문 선택 시 한글로 변환하여 DB 저장 (일관성 유지)
         final locale = Localizations.localeOf(context).languageCode;

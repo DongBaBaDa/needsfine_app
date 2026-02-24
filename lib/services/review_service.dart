@@ -147,26 +147,46 @@ class ReviewService {
   }
 
   // --- 수정 (Update) ---
-  // ✅ tags 파라미터 추가됨
+  // ✅ 리뷰 수정 시 서버 분석 재호출 후 점수 반영
   static Future<void> updateReview({
     required String reviewId,
     required String content,
     required double rating,
     required List<String> photoUrls,
-    List<String>? tags, // ✅ 태그 파라미터 추가
+    List<String>? tags,
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) throw Exception('로그인이 필요합니다.');
 
-      // ✅ RLS 정책이 있더라도 명시적으로 user_id 체크
-      await _supabase.from('reviews').update({
+      // ✅ 서버에 재분석 요청 (점수/신뢰도 재계산)
+      final Map<String, dynamic> updateData = {
         'review_text': content,
         'user_rating': rating,
         'photo_urls': photoUrls,
-        'tags': tags ?? [], // ✅ 업데이트 시 태그 포함
+        'tags': tags ?? [],
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', reviewId).eq('user_id', userId); // 내 글인지 확인
+      };
+
+      try {
+        final analysis = await analyzeReview(
+          text: content,
+          userRating: rating,
+          hasPhoto: photoUrls.isNotEmpty,
+          tags: tags ?? [],
+        );
+        // 분석 성공 시 점수도 함께 업데이트
+        if (analysis['needsfine_score'] != null && analysis['needsfine_score'] != 0.0) {
+          updateData['needsfine_score'] = analysis['needsfine_score'];
+          updateData['trust_level'] = analysis['trust_level'];
+        }
+      } catch (e) {
+        debugPrint('⚠️ 분석 재호출 실패 (점수 유지): $e');
+        // 분석 실패해도 텍스트/사진 등은 업데이트 진행
+      }
+
+      await _supabase.from('reviews').update(updateData)
+          .eq('id', reviewId).eq('user_id', userId);
 
     } catch (e) {
       print('❌ 리뷰 수정 실패: $e');
@@ -272,6 +292,7 @@ class ReviewService {
           'reviewText': text,
           'userRating': userRating,
           'hasPhoto': hasPhoto,
+          'tags': tags, // ✅ 배달/포장 태그 전달 (서버 피드백 우선순위용)
         },
       ).timeout(const Duration(milliseconds: 10000));
 

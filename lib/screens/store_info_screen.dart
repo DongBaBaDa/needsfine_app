@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:needsfine_app/screens/admin/store_edit_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class StoreInfoScreen extends StatefulWidget {
   final String storeName;
@@ -663,7 +664,37 @@ class _StoreInfoScreenState extends State<StoreInfoScreen> {
             // Note: The select() triggers '*' usually. standard column is 'phone_number'.
             // But code used data['phone']. I will keep it consistent with what I see, but I suspect it might be data['phone_number'].
             // Let's use data['phone_number'] if available fallback to 'phone'
-             _buildFieldRow('전화번호', data['phone_number'] ?? data['phone'] ?? ''),
+            // Let's use data['phone_number'] if available fallback to 'phone'
+            _buildFieldRow(
+              '전화번호', 
+              data['phone_number'] ?? data['phone'] ?? '',
+              trailing: (data['phone_number'] ?? data['phone'])?.toString().isNotEmpty == true
+                  ? GestureDetector(
+                      onTap: () async {
+                        final phoneStr = (data['phone_number'] ?? data['phone']).toString();
+                        final uri = Uri.parse('tel:$phoneStr');
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.phone, size: 12, color: Colors.green),
+                            SizedBox(width: 4),
+                            Text('전화하기', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
             _divider(),
             _buildFieldRow('카테고리', data['category'] ?? ''),
             _divider(),
@@ -787,7 +818,7 @@ class _StoreInfoScreenState extends State<StoreInfoScreen> {
     );
   }
 
-  Widget _buildFieldRow(String label, String value, {String? fieldName, bool canEdit = false}) {
+  Widget _buildFieldRow(String label, String value, {String? fieldName, bool canEdit = false, Widget? trailing}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -800,6 +831,7 @@ class _StoreInfoScreenState extends State<StoreInfoScreen> {
               style: TextStyle(fontSize: 14, color: value.isEmpty ? const Color(0xFFCCCCCC) : const Color(0xFF2D2D3A)),
             ),
           ),
+          if (trailing != null) trailing,
           if (canEdit && fieldName != null)
             GestureDetector(
               onTap: () => _editField(fieldName, label),

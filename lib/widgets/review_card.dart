@@ -189,6 +189,20 @@ class _ReviewCardState extends State<ReviewCard> {
                             ),
                           ),
                         ),
+                        if (review.visitCount >= 1) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF7C4DFF).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${review.visitCount}번째 방문',
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF7C4DFF)),
+                            ),
+                          ),
+                        ],
                         const SizedBox(width: 8),
                         Icon(Icons.star, size: 14, color: Colors.amber.withOpacity(0.4)),
                         const SizedBox(width: 2),

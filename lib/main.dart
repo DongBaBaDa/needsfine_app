@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
@@ -13,6 +14,7 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // ✅ 저장 기능
 import 'package:firebase_core/firebase_core.dart'; // ✅ Firebase
 import 'package:needsfine_app/services/notification_service.dart'; // ✅ 푸시 알림
+import 'package:app_links/app_links.dart'; // ✅ App Links (딥링크 처리)
 
 // ✅ 다국어 자동 생성 패키지
 import 'package:needsfine_app/l10n/app_localizations.dart';
@@ -21,9 +23,13 @@ import 'package:needsfine_app/l10n/app_localizations.dart';
 import 'package:needsfine_app/screens/notification_screen.dart';
 import 'package:needsfine_app/screens/notice_detail_screen.dart';
 import 'package:needsfine_app/screens/inquiry_detail_screen.dart';
+import 'package:needsfine_app/screens/shared_list_screen.dart'; // ✅ 공유 리스트 읽기 전용 화면
 
 // ✅ 앱 전체 언어 상태를 관리하는 전역 변수
 final ValueNotifier<Locale?> appLocaleNotifier = ValueNotifier(null);
+
+// ✅ 딥링크 처리를 위한 글로벌 네비게이터 키
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,8 +89,73 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late AppLinks _appLinks;
+  StreamSubscription<Uri>? _linkSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+  }
+
+  Future<void> _initDeepLinks() async {
+    _appLinks = AppLinks();
+    
+    // ✅ 앱이 꺼진 상태에서 링크로 열렸을 때 (초기 딥링크)
+    try {
+      final initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) {
+        _handleDeepLink(initialUri);
+      }
+    } catch (e) {
+      debugPrint("Failed to get initial uri: $e");
+    }
+
+    // ✅ 앱이 실행 중이거나 백그라운드에 있을 때 링크 클릭 방지
+    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
+      _handleDeepLink(uri);
+    }, onError: (err) {
+      debugPrint("Deep link stream error: $err");
+    });
+  }
+
+  void _handleDeepLink(Uri uri) {
+    debugPrint("🔗 딥링크 감지: $uri");
+    String? listId;
+
+    // 1. 커스텀 스킴: needsfine://list/리스트ID
+    if (uri.scheme == 'needsfine' && uri.host == 'list') {
+      listId = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    }
+    // 2. 유니버셜/앱 링크: https://needsfine.com/list?id=리스트ID
+    else if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host.contains('needsfine.com') &&
+        uri.path == '/list') {
+      listId = uri.queryParameters['id'];
+    }
+
+    if (listId != null && listId.isNotEmpty && navigatorKey.currentState != null) {
+      navigatorKey.currentState!.push(
+        MaterialPageRoute(
+          builder: (context) => SharedListScreen(listId: listId!),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _linkSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +164,7 @@ class MyApp extends StatelessWidget {
       valueListenable: appLocaleNotifier,
       builder: (context, locale, child) {
         return MaterialApp(
+          navigatorKey: navigatorKey, // ✅ 전역 네비게이터 키 설정
           title: 'NeedsFine',
           theme: needsFineTheme,
           debugShowCheckedModeBanner: false,
